@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Users, ListChecks } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Users, ListChecks, Sparkles, Loader2 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,8 +19,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { RecipeStatusBadge } from '@/components/recipes/RecipeStatusBadge';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
-import { useRecipe, useDeleteRecipe, useToggleFavorite } from '@/hooks/useRecipes';
+import { useRecipe, useDeleteRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +31,8 @@ export default function RecipeDetail() {
   const { data: recipe, isLoading } = useRecipe(id || '');
   const deleteRecipe = useDeleteRecipe();
   const toggleFavorite = useToggleFavorite();
+  const updateRecipe = useUpdateRecipe();
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleDelete = async () => {
     if (!id) return;
@@ -51,6 +56,44 @@ export default function RecipeDetail() {
   const handleToggleFavorite = () => {
     if (!recipe) return;
     toggleFavorite.mutate({ id: recipe.id, is_favorite: !recipe.is_favorite });
+  };
+
+  const handleAnalyze = async () => {
+    if (!recipe) return;
+    
+    setIsAnalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-recipe', {
+        body: {
+          title: recipe.title,
+          ingredients: recipe.ingredients,
+          steps: recipe.steps,
+        },
+      });
+
+      if (error) throw error;
+
+      await updateRecipe.mutateAsync({
+        id: recipe.id,
+        ai_summary: data.ai_summary,
+        nutrition_tags: data.nutrition_tags,
+        calorie_score: data.calorie_score,
+      });
+
+      toast({
+        title: 'Analyse terminée',
+        description: 'Le résumé nutritionnel a été généré',
+      });
+    } catch (error) {
+      console.error('Error analyzing recipe:', error);
+      toast({
+        title: 'Erreur',
+        description: "Impossible d'analyser la recette",
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   if (isLoading) {
@@ -108,6 +151,18 @@ export default function RecipeDetail() {
           </div>
           
           <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
+            >
+              {isAnalyzing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              Analyser
+            </Button>
             <Button variant="outline" size="icon" asChild>
               <Link to={`/recipes/${recipe.id}/edit`}>
                 <Edit className="h-4 w-4" />
@@ -136,6 +191,21 @@ export default function RecipeDetail() {
             </AlertDialog>
           </div>
         </div>
+
+        {recipe.nutrition_tags && recipe.nutrition_tags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {recipe.nutrition_tags.map((tag, index) => (
+              <Badge key={index} variant="secondary">
+                {tag}
+              </Badge>
+            ))}
+            {recipe.calorie_score && (
+              <Badge variant="outline">
+                Score calorique: {recipe.calorie_score}/5
+              </Badge>
+            )}
+          </div>
+        )}
 
         <Card>
           <CardHeader>
