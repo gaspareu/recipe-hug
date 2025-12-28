@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, ListChecks } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Users, ListChecks, Leaf } from 'lucide-react';
 import { RecipeStatusBadge } from './RecipeStatusBadge';
 import { FavoriteToggle } from './FavoriteToggle';
 import type { Recipe } from '@/types/recipe';
@@ -42,9 +43,24 @@ export function RecipeCard({ recipe, onToggleFavorite, isTogglingFavorite }: Rec
             </div>
           </div>
           {recipe.season && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              🍂 {recipe.season}
-            </p>
+            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+              <Leaf className="h-3 w-3" />
+              <span>{recipe.season}</span>
+            </div>
+          )}
+          {recipe.nutrition_tags && recipe.nutrition_tags.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {recipe.nutrition_tags.slice(0, 3).map((tag) => (
+                <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0">
+                  {tag}
+                </Badge>
+              ))}
+              {recipe.nutrition_tags.length > 3 && (
+                <Badge variant="outline" className="text-xs px-1.5 py-0">
+                  +{recipe.nutrition_tags.length - 3}
+                </Badge>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
