@@ -1,10 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getAnonymousUserId } from '@/lib/anonymous-user';
 import type { Recipe, RecipeFormData, Ingredient, Step } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
-
-const userId = getAnonymousUserId();
 
 // Helper pour parser les données Supabase vers notre type Recipe
 function parseRecipe(data: any): Recipe {
@@ -17,12 +14,14 @@ function parseRecipe(data: any): Recipe {
 
 export function useRecipes() {
   return useQuery({
-    queryKey: ['recipes', userId],
+    queryKey: ['recipes'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      
       const { data, error } = await supabase
         .from('recipes')
         .select('*')
-        .eq('user_id', userId)
         .order('updated_at', { ascending: false });
       
       if (error) throw error;
@@ -54,6 +53,9 @@ export function useCreateRecipe() {
   
   return useMutation({
     mutationFn: async (recipe: RecipeFormData) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      
       const { data, error } = await supabase
         .from('recipes')
         .insert([{
@@ -69,7 +71,7 @@ export function useCreateRecipe() {
           ai_summary: recipe.ai_summary,
           source_type: recipe.source_type,
           source_image_url: recipe.source_image_url,
-          user_id: userId,
+          user_id: user.id,
         }])
         .select()
         .single();
