@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        playfair: ['"Playfair Display"', 'serif'],
+        gowun: ['"Gowun Dodum"', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
