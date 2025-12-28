@@ -177,12 +177,12 @@ export default function RecipeEdit() {
 
             <div className="space-y-2">
               <Label htmlFor="season">Saison</Label>
-              <Select value={season} onValueChange={setSeason}>
+              <Select value={season || "none"} onValueChange={(v) => setSeason(v === "none" ? "" : v)}>
                 <SelectTrigger id="season">
                   <SelectValue placeholder="Sélectionner une saison" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Aucune</SelectItem>
+                  <SelectItem value="none">Aucune</SelectItem>
                   {SEASONS.map(s => (
                     <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
                   ))}
