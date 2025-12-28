@@ -1,4 +1,4 @@
-import { Star } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -6,9 +6,10 @@ interface FavoriteToggleProps {
   isFavorite: boolean;
   onToggle: () => void;
   disabled?: boolean;
+  variant?: 'default' | 'overlay';
 }
 
-export function FavoriteToggle({ isFavorite, onToggle, disabled }: FavoriteToggleProps) {
+export function FavoriteToggle({ isFavorite, onToggle, disabled, variant = 'default' }: FavoriteToggleProps) {
   return (
     <Button
       variant="ghost"
@@ -19,12 +20,17 @@ export function FavoriteToggle({ isFavorite, onToggle, disabled }: FavoriteToggl
         onToggle();
       }}
       disabled={disabled}
-      className="h-8 w-8"
+      className={cn(
+        'h-8 w-8 transition-all duration-200',
+        variant === 'overlay' && 'bg-background/80 backdrop-blur-sm hover:bg-background/90 rounded-full shadow-sm'
+      )}
     >
-      <Star
+      <Heart
         className={cn(
-          'h-4 w-4 transition-colors',
-          isFavorite ? 'fill-primary text-primary' : 'text-muted-foreground'
+          'h-4 w-4 transition-all duration-200',
+          isFavorite 
+            ? 'fill-primary text-primary animate-heart-pulse' 
+            : 'text-muted-foreground hover:text-primary'
         )}
       />
     </Button>
