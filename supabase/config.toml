@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.generate-recipe]
 verify_jwt = false
+
+[functions.analyze-recipe]
+verify_jwt = false
