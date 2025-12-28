@@ -16,6 +16,9 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<RecipeStatus | 'all'>('all');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [seasonFilter, setSeasonFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [tagFilter, setTagFilter] = useState('all');
 
   const filteredRecipes = useMemo(() => {
     if (!recipes) return [];
@@ -33,9 +36,21 @@ export default function Dashboard() {
       if (favoritesOnly && !recipe.is_favorite) {
         return false;
       }
+      // Filtre par saison
+      if (seasonFilter !== 'all' && recipe.season !== seasonFilter) {
+        return false;
+      }
+      // Filtre par source
+      if (sourceFilter !== 'all' && recipe.source_type !== sourceFilter) {
+        return false;
+      }
+      // Filtre par tag nutritionnel
+      if (tagFilter !== 'all' && (!recipe.nutrition_tags || !recipe.nutrition_tags.includes(tagFilter))) {
+        return false;
+      }
       return true;
     });
-  }, [recipes, search, statusFilter, favoritesOnly]);
+  }, [recipes, search, statusFilter, favoritesOnly, seasonFilter, sourceFilter, tagFilter]);
 
   const handleToggleFavorite = (id: string, isFavorite: boolean) => {
     toggleFavorite.mutate({ id, is_favorite: isFavorite });
@@ -48,7 +63,7 @@ export default function Dashboard() {
           <div>
             <h1 className="text-2xl font-bold">Mes Recettes</h1>
             <p className="text-muted-foreground">
-              {recipes?.length || 0} recette{(recipes?.length || 0) !== 1 ? 's' : ''}
+              {filteredRecipes.length} sur {recipes?.length || 0} recette{(recipes?.length || 0) !== 1 ? 's' : ''}
             </p>
           </div>
           <Button asChild>
@@ -66,6 +81,12 @@ export default function Dashboard() {
           onStatusFilterChange={setStatusFilter}
           favoritesOnly={favoritesOnly}
           onFavoritesOnlyChange={setFavoritesOnly}
+          seasonFilter={seasonFilter}
+          onSeasonFilterChange={setSeasonFilter}
+          sourceFilter={sourceFilter}
+          onSourceFilterChange={setSourceFilter}
+          tagFilter={tagFilter}
+          onTagFilterChange={setTagFilter}
         />
 
         {isLoading ? (
