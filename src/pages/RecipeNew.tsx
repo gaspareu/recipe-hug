@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { IngredientEditor } from '@/components/recipes/IngredientEditor';
 import { StepsEditor } from '@/components/recipes/StepsEditor';
 import { RecipeFromImage } from '@/components/recipes/RecipeFromImage';
+import { RecipeFromAI } from '@/components/recipes/RecipeFromAI';
 import { useCreateRecipe } from '@/hooks/useRecipes';
 import { useToast } from '@/hooks/use-toast';
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
@@ -90,7 +91,7 @@ export default function RecipeNew() {
               <Camera className="mr-1 h-4 w-4" />
               Capture
             </TabsTrigger>
-            <TabsTrigger value="ai" disabled>
+            <TabsTrigger value="ai">
               <Sparkles className="mr-1 h-4 w-4" />
               IA
             </TabsTrigger>
@@ -153,11 +154,7 @@ export default function RecipeNew() {
           </TabsContent>
 
           <TabsContent value="ai" className="mt-6">
-            <div className="text-center py-12 text-muted-foreground">
-              <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Génération IA à venir</p>
-              <p className="text-sm">Décrivez une recette et laissez l'IA la créer</p>
-            </div>
+            <RecipeFromAI />
           </TabsContent>
         </Tabs>
       </div>
