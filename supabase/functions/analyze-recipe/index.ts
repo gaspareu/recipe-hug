@@ -34,7 +34,7 @@ serve(async (req) => {
 
     const stepsList = steps?.map((s: any) => s.text).join(" ") || "";
 
-    const prompt = `Analyse cette recette et génère un résumé déscriptif ainsi que des tags nutritionnels.
+    const prompt = `Analyse cette recette et génère un résumé descriptif, des tags nutritionnels et la saison idéale.
 
 Recette: ${title}
 Ingrédients: ${ingredientsList}
@@ -42,19 +42,19 @@ Préparation: ${stepsList}
 
 Réponds en JSON avec ce format exact:
 {
-  "ai_summary": "Un résumé de 2-3 phrases décrivant la recette, son origine, ces particularités",
-  "nutrition_tags": ["tag1", "tag2", "tag3"],
-  "calorie_score": 3
+  "ai_summary": "Description courte et générique de la recette en 1-2 phrases",
+  "nutrition_tags": ["tag1", "tag2"],
+  "calorie_score": 3,
+  "season": "printemps"
 }
 
-Pour nutrition_tags, choisis 1-3 tags pertinents parmi: "riche en protéines", "riche en fibres", "faible en calories", "végétarien", "végan", "sans gluten", "sans lactose", "riche en vitamines", "riche en fer", "antioxydants", "oméga-3", "comfort food", "léger", "énergétique", "détox"
+Pour ai_summary: Une description courte et générique du plat (type de cuisine, caractéristiques principales). Évite les détails trop spécifiques.
 
-Pour calorie_score, donne une note de 1 à 5:
-- 1: Très calorique (>600 kcal/portion)
-- 2: Calorique (400-600 kcal)
-- 3: Modéré (250-400 kcal)
-- 4: Léger (150-250 kcal)
-- 5: Très léger (<150 kcal)
+Pour nutrition_tags: Choisis 1 à 3 tags maximum parmi: "protéines", "fibres", "léger", "végétarien", "végan", "sans gluten", "sans lactose", "vitamines", "fer", "oméga-3", "énergétique", "réconfortant"
+
+Pour calorie_score: Note de 1 à 5 (1=très calorique >600kcal, 5=très léger <150kcal)
+
+Pour season: Détermine la saison idéale en fonction de la saisonnalité des ingrédients en France. Choisis parmi: "printemps", "été", "automne", "hiver", "toutes saisons". Base-toi sur les calendriers de production française des fruits, légumes et autres ingrédients.
 
 Réponds uniquement avec le JSON, sans markdown ni texte supplémentaire.`;
 
