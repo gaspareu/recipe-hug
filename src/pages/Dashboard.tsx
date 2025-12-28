@@ -61,7 +61,7 @@ export default function Dashboard() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Mes Recettes</h1>
+            <h1 className="text-2xl font-playfair font-bold">Mes Recettes</h1>
             <p className="text-muted-foreground">
               {filteredRecipes.length} sur {recipes?.length || 0} recette{(recipes?.length || 0) !== 1 ? 's' : ''}
             </p>
@@ -90,13 +90,19 @@ export default function Dashboard() {
         />
 
         {isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-stagger">
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-[140px] rounded-lg" />
+              <div key={i} className="rounded-lg overflow-hidden bg-card border">
+                <Skeleton className="h-40 w-full rounded-none" />
+                <div className="p-4 space-y-2">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                </div>
+              </div>
             ))}
           </div>
         ) : filteredRecipes.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="text-center py-12 animate-fade-in-up">
             <p className="text-muted-foreground">
               {recipes?.length === 0
                 ? "Aucune recette pour l'instant. Créez votre première recette !"
@@ -112,7 +118,7 @@ export default function Dashboard() {
             )}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-stagger">
             {filteredRecipes.map((recipe) => (
               <RecipeCard
                 key={recipe.id}
