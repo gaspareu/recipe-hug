@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, X, Plus } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -19,6 +20,14 @@ import { useRecipe, useUpdateRecipe } from '@/hooks/useRecipes';
 import { useToast } from '@/hooks/use-toast';
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
+const AVAILABLE_TAGS = [
+  'protéines', 'fibres', 'léger', 'végétarien', 'végan', 
+  'sans gluten', 'sans lactose', 'vitamines', 'fer', 
+  'oméga-3', 'énergétique', 'réconfortant'
+];
+
+const SEASONS = ['printemps', 'été', 'automne', 'hiver', 'toutes saisons'];
+
 export default function RecipeEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -32,6 +41,8 @@ export default function RecipeEdit() {
   const [status, setStatus] = useState<RecipeStatus>('draft');
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [steps, setSteps] = useState<Step[]>([]);
+  const [nutritionTags, setNutritionTags] = useState<string[]>([]);
+  const [season, setSeason] = useState<string>('');
 
   useEffect(() => {
     if (recipe) {
@@ -40,8 +51,20 @@ export default function RecipeEdit() {
       setStatus(recipe.status);
       setIngredients(recipe.ingredients);
       setSteps(recipe.steps);
+      setNutritionTags(recipe.nutrition_tags || []);
+      setSeason(recipe.season || '');
     }
   }, [recipe]);
+
+  const addTag = (tag: string) => {
+    if (!nutritionTags.includes(tag) && nutritionTags.length < 3) {
+      setNutritionTags([...nutritionTags, tag]);
+    }
+  };
+
+  const removeTag = (tag: string) => {
+    setNutritionTags(nutritionTags.filter(t => t !== tag));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +86,8 @@ export default function RecipeEdit() {
         servings: servings || null,
         ingredients,
         steps,
+        nutrition_tags: nutritionTags.length > 0 ? nutritionTags : null,
+        season: season || null,
       });
       
       toast({
@@ -148,6 +173,47 @@ export default function RecipeEdit() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="season">Saison</Label>
+              <Select value={season} onValueChange={setSeason}>
+                <SelectTrigger id="season">
+                  <SelectValue placeholder="Sélectionner une saison" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Aucune</SelectItem>
+                  {SEASONS.map(s => (
+                    <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tags nutritionnels (max 3)</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {nutritionTags.map(tag => (
+                  <Badge key={tag} variant="secondary" className="gap-1">
+                    {tag}
+                    <button type="button" onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+              {nutritionTags.length < 3 && (
+                <Select onValueChange={addTag} value="">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Ajouter un tag..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AVAILABLE_TAGS.filter(t => !nutritionTags.includes(t)).map(tag => (
+                      <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
 
