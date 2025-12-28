@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import RecipeNew from "./pages/RecipeNew";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeEdit from "./pages/RecipeEdit";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,11 @@ const App = () => (
             <Route path="/recipes/:id/edit" element={
               <ProtectedRoute>
                 <RecipeEdit />
+              </ProtectedRoute>
+            } />
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             } />
             <Route path="*" element={<NotFound />} />
