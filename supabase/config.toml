@@ -1,1 +1,4 @@
 project_id = "ggtkirrfgihghlmenrfd"
+
+[functions.parse-recipe-image]
+verify_jwt = false
