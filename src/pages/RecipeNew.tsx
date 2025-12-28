@@ -15,6 +15,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { IngredientEditor } from '@/components/recipes/IngredientEditor';
 import { StepsEditor } from '@/components/recipes/StepsEditor';
+import { RecipeFromImage } from '@/components/recipes/RecipeFromImage';
 import { useCreateRecipe } from '@/hooks/useRecipes';
 import { useToast } from '@/hooks/use-toast';
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
@@ -85,7 +86,7 @@ export default function RecipeNew() {
         <Tabs defaultValue="manual" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="manual">✍️ Manuel</TabsTrigger>
-            <TabsTrigger value="capture" disabled>
+            <TabsTrigger value="capture">
               <Camera className="mr-1 h-4 w-4" />
               Capture
             </TabsTrigger>
@@ -148,11 +149,7 @@ export default function RecipeNew() {
           </TabsContent>
 
           <TabsContent value="capture" className="mt-6">
-            <div className="text-center py-12 text-muted-foreground">
-              <Camera className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Capture photo à venir</p>
-              <p className="text-sm">Prenez une photo de votre recette manuscrite</p>
-            </div>
+            <RecipeFromImage />
           </TabsContent>
 
           <TabsContent value="ai" className="mt-6">
