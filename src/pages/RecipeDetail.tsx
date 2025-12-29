@@ -6,19 +6,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { RecipeStatusBadge } from '@/components/recipes/RecipeStatusBadge';
+import { RecipeStatusSelect } from '@/components/recipes/RecipeStatusSelect';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-
+import type { RecipeStatus } from '@/types/recipe';
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -32,6 +33,11 @@ export default function RecipeDetail() {
   const handleToggleFavorite = () => {
     if (!recipe) return;
     toggleFavorite.mutate({ id: recipe.id, is_favorite: !recipe.is_favorite });
+  };
+
+  const handleStatusChange = (newStatus: RecipeStatus) => {
+    if (!recipe) return;
+    updateRecipe.mutate({ id: recipe.id, status: newStatus });
   };
 
   const handleAnalyze = async () => {
@@ -149,30 +155,45 @@ export default function RecipeDetail() {
           </Button>
         </div>
 
-        <div className="flex items-center gap-2 ml-14">
-          <RecipeStatusBadge status={recipe.status} />
-        </div>
-
-        {(recipe.nutrition_tags?.length || recipe.season) && (
-          <div className="flex flex-wrap gap-2">
+        <div className="ml-14 overflow-x-auto">
+          <div className="flex items-center gap-2 min-w-max">
+            <RecipeStatusSelect 
+              status={recipe.status} 
+              onStatusChange={handleStatusChange}
+              disabled={updateRecipe.isPending}
+            />
+            
             {recipe.season && (
-              <Badge variant="outline" className="flex items-center gap-1">
-                <Leaf className="h-3 w-3" />
-                {recipe.season}
-              </Badge>
+              <>
+                <Separator orientation="vertical" className="h-4" />
+                <Badge variant="outline" className="flex items-center gap-1 shrink-0">
+                  <Leaf className="h-3 w-3" />
+                  {recipe.season}
+                </Badge>
+              </>
             )}
-            {recipe.nutrition_tags?.map((tag, index) => (
-              <Badge key={index} variant="secondary">
-                {tag}
-              </Badge>
-            ))}
+            
+            {recipe.nutrition_tags && recipe.nutrition_tags.length > 0 && (
+              <>
+                <Separator orientation="vertical" className="h-4" />
+                {recipe.nutrition_tags.map((tag, index) => (
+                  <Badge key={index} variant="secondary" className="shrink-0">
+                    {tag}
+                  </Badge>
+                ))}
+              </>
+            )}
+            
             {recipe.calorie_score && (
-              <Badge variant="outline">
-                Score calorique: {recipe.calorie_score}/5
-              </Badge>
+              <>
+                <Separator orientation="vertical" className="h-4" />
+                <Badge variant="outline" className="shrink-0">
+                  Score: {recipe.calorie_score}/5
+                </Badge>
+              </>
             )}
           </div>
-        )}
+        </div>
 
         {recipe.ai_summary && (
           <p className="text-sm text-muted-foreground ml-14">{recipe.ai_summary}</p>
