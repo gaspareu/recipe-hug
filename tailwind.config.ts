@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        solitreo: ['"Solitreo"', 'cursive'],
+        caveat: ['"Caveat"', 'cursive'],
       },
       colors: {
         border: "hsl(var(--border))",
