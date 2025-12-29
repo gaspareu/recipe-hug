@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { CheckCheck, RotateCcw } from 'lucide-react';
 import { Ingredient } from '@/types/recipe';
 import {
@@ -13,18 +13,14 @@ interface CheckedState {
   [key: string]: boolean;
 }
 
-interface IngredientChecklistProps {
-  ingredients: Ingredient[];
-  toggleButton?: React.ReactNode;
-}
-
-// Hook for managing checklist state - can be used externally to control the button
+// Hook for managing checklist state
 export function useIngredientChecklist(ingredients: Ingredient[]) {
   const [checked, setChecked] = useState<CheckedState>({});
 
   const allChecked = useMemo(() => {
     if (ingredients.length === 0) return false;
-    return ingredients.every((ingredient, index) => {
+    return ingredients.every((_, index) => {
+      const ingredient = ingredients[index];
       const key = `${index}-${ingredient.name}`;
       return checked[key];
     });
@@ -50,7 +46,6 @@ export function useIngredientChecklist(ingredients: Ingredient[]) {
   const isChecked = (key: string) => checked[key] ?? false;
 
   return {
-    checked,
     allChecked,
     checkAll,
     uncheckAll,
@@ -91,13 +86,34 @@ export function IngredientToggleButton({
   );
 }
 
-// Main checklist component - includes its own state
-export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
-  const { allChecked, checkAll, uncheckAll, toggleChecked, isChecked } = useIngredientChecklist(ingredients);
+// Hook for managing category collapse state
+function useCategoryState(categories: string[]) {
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
-  // Group ingredients by category
-  const groupedIngredients = useMemo(() => {
+  useEffect(() => {
+    const initial: Record<string, boolean> = {};
+    let hasNew = false;
+    categories.forEach(category => {
+      if (openCategories[category] === undefined) {
+        initial[category] = true;
+        hasNew = true;
+      }
+    });
+    if (hasNew) {
+      setOpenCategories(prev => ({ ...initial, ...prev }));
+    }
+  }, [categories]);
+
+  const toggleCategory = (category: string) => {
+    setOpenCategories(prev => ({ ...prev, [category]: !prev[category] }));
+  };
+
+  return { openCategories, toggleCategory };
+}
+
+// Group ingredients by category
+function useGroupedIngredients(ingredients: Ingredient[]) {
+  return useMemo(() => {
     const groups: Record<string, (Ingredient & { _index: number })[]> = {};
     
     ingredients.forEach((ingredient, index) => {
@@ -108,7 +124,6 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
       groups[category].push({ ...ingredient, _index: index });
     });
 
-    // Sort categories alphabetically, but put "Autres" at the end
     const sortedCategories = Object.keys(groups).sort((a, b) => {
       if (a === 'Autres') return 1;
       if (b === 'Autres') return -1;
@@ -120,133 +135,158 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
       ingredients: groups[category],
     }));
   }, [ingredients]);
+}
 
-  // Initialize all categories as open
-  useMemo(() => {
-    const initial: Record<string, boolean> = {};
-    groupedIngredients.forEach(group => {
-      if (openCategories[group.category] === undefined) {
-        initial[group.category] = true;
+// Shared ingredient item component
+function IngredientItem({ 
+  ingredient, 
+  checked, 
+  onToggle 
+}: { 
+  ingredient: Ingredient & { _index: number }; 
+  checked: boolean; 
+  onToggle: () => void;
+}) {
+  return (
+    <li 
+      onClick={onToggle}
+      className="flex items-center gap-3 py-1.5 cursor-pointer group"
+    >
+      <div 
+        className={cn(
+          "relative h-5 w-5 border-2 rounded-sm transition-all",
+          checked 
+            ? "border-primary bg-primary/10" 
+            : "border-muted-foreground/40 group-hover:border-primary/60"
+        )}
+        style={{ transform: 'rotate(-2deg)' }}
+      >
+        {checked && (
+          <svg
+            className="absolute inset-0 text-primary overflow-visible"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ transform: 'rotate(2deg) scale(1.3)' }}
+          >
+            <path 
+              d="M4 12 L9 18 L20 5" 
+              className="checkmark-path"
+              style={{
+                strokeDasharray: 30,
+                strokeDashoffset: 30,
+                animation: 'draw-check 0.3s ease-out forwards',
+              }}
+            />
+          </svg>
+        )}
+      </div>
+      
+      <span 
+        className={cn(
+          "transition-all duration-200",
+          checked && "line-through text-muted-foreground/60"
+        )}
+      >
+        <span className="font-medium">{ingredient.quantity} {ingredient.unit}</span>
+        {' '}
+        <span>{ingredient.name}</span>
+      </span>
+    </li>
+  );
+}
+
+// Category group component
+function CategoryGroup({ 
+  category, 
+  ingredients, 
+  isOpen, 
+  onToggle, 
+  isChecked, 
+  onToggleItem 
+}: { 
+  category: string;
+  ingredients: (Ingredient & { _index: number })[];
+  isOpen: boolean;
+  onToggle: () => void;
+  isChecked: (key: string) => boolean;
+  onToggleItem: (key: string) => void;
+}) {
+  return (
+    <Collapsible open={isOpen} onOpenChange={onToggle}>
+      <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
+        <span 
+          className={cn(
+            "text-sm font-solitreo text-primary transition-transform duration-200",
+            isOpen ? "rotate-0" : "-rotate-90"
+          )}
+        >
+          ▼
+        </span>
+        <span className="text-sm font-solitreo text-primary border-b border-dashed border-primary/30 flex-1">
+          {category}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          ({ingredients.length})
+        </span>
+      </CollapsibleTrigger>
+      
+      <CollapsibleContent className="mt-2">
+        <ul className="space-y-1 pl-6">
+          {ingredients.map((ingredient) => {
+            const key = `${ingredient._index}-${ingredient.name}`;
+            return (
+              <IngredientItem
+                key={key}
+                ingredient={ingredient}
+                checked={isChecked(key)}
+                onToggle={() => onToggleItem(key)}
+              />
+            );
+          })}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// CSS for checkmark animation (rendered once)
+function CheckmarkStyles() {
+  return (
+    <style>{`
+      @keyframes draw-check {
+        from { stroke-dashoffset: 30; }
+        to { stroke-dashoffset: 0; }
       }
-    });
-    if (Object.keys(initial).length > 0) {
-      setOpenCategories(prev => ({ ...initial, ...prev }));
-    }
-  }, [groupedIngredients]);
+    `}</style>
+  );
+}
 
-  const toggleCategory = (category: string) => {
-    setOpenCategories(prev => ({ ...prev, [category]: !prev[category] }));
-  };
-
-  const getIngredientKey = (ingredient: Ingredient & { _index: number }) => {
-    return `${ingredient._index}-${ingredient.name}`;
-  };
+// Main checklist component
+export function IngredientChecklist({ ingredients }: { ingredients: Ingredient[] }) {
+  const { allChecked, checkAll, uncheckAll, toggleChecked, isChecked } = useIngredientChecklist(ingredients);
+  const groupedIngredients = useGroupedIngredients(ingredients);
+  const { openCategories, toggleCategory } = useCategoryState(
+    groupedIngredients.map(g => g.category)
+  );
 
   return (
     <div className="space-y-4">
       {groupedIngredients.map(({ category, ingredients: categoryIngredients }) => (
-        <Collapsible
+        <CategoryGroup
           key={category}
-          open={openCategories[category] ?? true}
-          onOpenChange={() => toggleCategory(category)}
-        >
-            <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
-              <span 
-                className={cn(
-                  "text-sm font-solitreo text-primary transition-transform duration-200",
-                  openCategories[category] ? "rotate-0" : "-rotate-90"
-                )}
-              >
-                ▼
-              </span>
-              <span className="text-sm font-solitreo text-primary border-b border-dashed border-primary/30 flex-1">
-                {category}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                ({categoryIngredients.length})
-              </span>
-            </CollapsibleTrigger>
-          
-          <CollapsibleContent className="mt-2">
-            <ul className="space-y-1 pl-6">
-              {categoryIngredients.map((ingredient) => {
-                const key = getIngredientKey(ingredient);
-                const checked = isChecked(key);
-                
-                return (
-                  <li 
-                    key={key}
-                    onClick={() => toggleChecked(key)}
-                    className="flex items-center gap-3 py-1.5 cursor-pointer group"
-                  >
-                    {/* Handwritten-style checkbox */}
-                    <div 
-                      className={cn(
-                        "relative h-5 w-5 border-2 rounded-sm transition-all",
-                        checked 
-                          ? "border-primary bg-primary/10" 
-                          : "border-muted-foreground/40 group-hover:border-primary/60"
-                      )}
-                      style={{
-                        transform: 'rotate(-2deg)',
-                      }}
-                    >
-                      {checked && (
-                        <svg
-                          className="absolute inset-0 text-primary overflow-visible"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          style={{
-                            transform: 'rotate(2deg) scale(1.3)',
-                          }}
-                        >
-                          <path 
-                            d="M4 12 L9 18 L20 5" 
-                            className="checkmark-path"
-                            style={{
-                              strokeDasharray: 30,
-                              strokeDashoffset: 30,
-                              animation: 'draw-check 0.3s ease-out forwards',
-                            }}
-                          />
-                        </svg>
-                      )}
-                    </div>
-                    
-                    {/* Ingredient text */}
-                    <span 
-                      className={cn(
-                        "transition-all duration-200",
-                        checked && "line-through text-muted-foreground/60"
-                      )}
-                    >
-                      <span className="font-medium">{ingredient.quantity} {ingredient.unit}</span>
-                      {' '}
-                      <span>{ingredient.name}</span>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </CollapsibleContent>
-        </Collapsible>
+          category={category}
+          ingredients={categoryIngredients}
+          isOpen={openCategories[category] ?? true}
+          onToggle={() => toggleCategory(category)}
+          isChecked={isChecked}
+          onToggleItem={toggleChecked}
+        />
       ))}
-
-      {/* CSS for checkmark animation */}
-      <style>{`
-        @keyframes draw-check {
-          from {
-            stroke-dashoffset: 30;
-          }
-          to {
-            stroke-dashoffset: 0;
-          }
-        }
-      `}</style>
+      <CheckmarkStyles />
     </div>
   );
 }
@@ -260,7 +300,10 @@ export function IngredientChecklistWithHeader({
   renderHeader?: (toggleButton: React.ReactNode) => React.ReactNode;
 }) {
   const { allChecked, checkAll, uncheckAll, toggleChecked, isChecked } = useIngredientChecklist(ingredients);
-  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
+  const groupedIngredients = useGroupedIngredients(ingredients);
+  const { openCategories, toggleCategory } = useCategoryState(
+    groupedIngredients.map(g => g.category)
+  );
 
   const toggleButton = (
     <IngredientToggleButton 
@@ -270,154 +313,22 @@ export function IngredientChecklistWithHeader({
     />
   );
 
-  // Group ingredients by category
-  const groupedIngredients = useMemo(() => {
-    const groups: Record<string, (Ingredient & { _index: number })[]> = {};
-    
-    ingredients.forEach((ingredient, index) => {
-      const category = ingredient.category || 'Autres';
-      if (!groups[category]) {
-        groups[category] = [];
-      }
-      groups[category].push({ ...ingredient, _index: index });
-    });
-
-    const sortedCategories = Object.keys(groups).sort((a, b) => {
-      if (a === 'Autres') return 1;
-      if (b === 'Autres') return -1;
-      return a.localeCompare(b, 'fr');
-    });
-
-    return sortedCategories.map(category => ({
-      category,
-      ingredients: groups[category],
-    }));
-  }, [ingredients]);
-
-  useMemo(() => {
-    const initial: Record<string, boolean> = {};
-    groupedIngredients.forEach(group => {
-      if (openCategories[group.category] === undefined) {
-        initial[group.category] = true;
-      }
-    });
-    if (Object.keys(initial).length > 0) {
-      setOpenCategories(prev => ({ ...initial, ...prev }));
-    }
-  }, [groupedIngredients]);
-
-  const toggleCategory = (category: string) => {
-    setOpenCategories(prev => ({ ...prev, [category]: !prev[category] }));
-  };
-
-  const getIngredientKey = (ingredient: Ingredient & { _index: number }) => {
-    return `${ingredient._index}-${ingredient.name}`;
-  };
-
   return (
     <>
-      {renderHeader && renderHeader(toggleButton)}
+      {renderHeader?.(toggleButton)}
       <div className={cn("space-y-4", renderHeader && "px-6 pb-6")}>
         {groupedIngredients.map(({ category, ingredients: categoryIngredients }) => (
-          <Collapsible
+          <CategoryGroup
             key={category}
-            open={openCategories[category] ?? true}
-            onOpenChange={() => toggleCategory(category)}
-          >
-            <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
-              <span 
-                className={cn(
-                  "text-sm font-solitreo text-primary transition-transform duration-200",
-                  openCategories[category] ? "rotate-0" : "-rotate-90"
-                )}
-              >
-                ▼
-              </span>
-              <span className="text-sm font-solitreo text-primary border-b border-dashed border-primary/30 flex-1">
-                {category}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                ({categoryIngredients.length})
-              </span>
-            </CollapsibleTrigger>
-            
-            <CollapsibleContent className="mt-2">
-              <ul className="space-y-1 pl-6">
-                {categoryIngredients.map((ingredient) => {
-                  const key = getIngredientKey(ingredient);
-                  const checked = isChecked(key);
-                  
-                  return (
-                    <li 
-                      key={key}
-                      onClick={() => toggleChecked(key)}
-                      className="flex items-center gap-3 py-1.5 cursor-pointer group"
-                    >
-                      <div 
-                        className={cn(
-                          "relative h-5 w-5 border-2 rounded-sm transition-all",
-                          checked 
-                            ? "border-primary bg-primary/10" 
-                            : "border-muted-foreground/40 group-hover:border-primary/60"
-                        )}
-                        style={{
-                          transform: 'rotate(-2deg)',
-                        }}
-                      >
-                        {checked && (
-                          <svg
-                            className="absolute inset-0 text-primary overflow-visible"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{
-                              transform: 'rotate(2deg) scale(1.3)',
-                            }}
-                          >
-                            <path 
-                              d="M4 12 L9 18 L20 5" 
-                              className="checkmark-path"
-                              style={{
-                                strokeDasharray: 30,
-                                strokeDashoffset: 30,
-                                animation: 'draw-check 0.3s ease-out forwards',
-                              }}
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      
-                      <span 
-                        className={cn(
-                          "transition-all duration-200",
-                          checked && "line-through text-muted-foreground/60"
-                        )}
-                      >
-                        <span className="font-medium">{ingredient.quantity} {ingredient.unit}</span>
-                        {' '}
-                        <span>{ingredient.name}</span>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </CollapsibleContent>
-          </Collapsible>
+            category={category}
+            ingredients={categoryIngredients}
+            isOpen={openCategories[category] ?? true}
+            onToggle={() => toggleCategory(category)}
+            isChecked={isChecked}
+            onToggleItem={toggleChecked}
+          />
         ))}
-
-        <style>{`
-          @keyframes draw-check {
-            from {
-              stroke-dashoffset: 30;
-            }
-            to {
-              stroke-dashoffset: 0;
-            }
-          }
-        `}</style>
+        <CheckmarkStyles />
       </div>
     </>
   );
