@@ -54,6 +54,7 @@ export default function RecipeDetail() {
         ai_summary: data.ai_summary,
         nutrition_tags: data.nutrition_tags,
         calorie_score: data.calorie_score,
+        season: data.season,
       });
 
       toast({
@@ -173,6 +174,10 @@ export default function RecipeDetail() {
           </div>
         )}
 
+        {recipe.ai_summary && (
+          <p className="text-sm text-muted-foreground ml-14">{recipe.ai_summary}</p>
+        )}
+
         {recipe.ingredients.length === 0 ? (
           <Card>
             <CardHeader>
@@ -228,16 +233,6 @@ export default function RecipeDetail() {
           </CardContent>
         </Card>
 
-        {recipe.ai_summary && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Résumé IA</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{recipe.ai_summary}</p>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </MainLayout>
   );
