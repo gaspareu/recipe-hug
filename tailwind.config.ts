@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        gowun: ['"Gowun Dodum"', 'sans-serif'],
+        solitreo: ['"Solitreo"', 'cursive'],
       },
       colors: {
         border: "hsl(var(--border))",
