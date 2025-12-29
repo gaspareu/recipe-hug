@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -159,9 +159,15 @@ export default function RecipeDetail() {
           )}
         </div>
 
-        {recipe.nutrition_tags && recipe.nutrition_tags.length > 0 && (
+        {(recipe.nutrition_tags?.length || recipe.season) && (
           <div className="flex flex-wrap gap-2">
-            {recipe.nutrition_tags.map((tag, index) => (
+            {recipe.season && (
+              <Badge variant="outline" className="flex items-center gap-1">
+                <Leaf className="h-3 w-3" />
+                {recipe.season}
+              </Badge>
+            )}
+            {recipe.nutrition_tags?.map((tag, index) => (
               <Badge key={index} variant="secondary">
                 {tag}
               </Badge>
