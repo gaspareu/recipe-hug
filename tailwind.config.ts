@@ -138,40 +138,55 @@ export default {
   					transform: 'scale(1)'
   				}
   			},
-  			'heart-pulse': {
-  				'0%': {
-  					transform: 'scale(1)'
-  				},
-  				'25%': {
-  					transform: 'scale(1.3)'
-  				},
-  				'50%': {
-  					transform: 'scale(1)'
-  				},
-  				'75%': {
-  					transform: 'scale(1.15)'
-  				},
-  				'100%': {
-  					transform: 'scale(1)'
-  				}
-  			},
-  			'shimmer': {
-  				'0%': {
-  					backgroundPosition: '-200% 0'
-  				},
-  				'100%': {
-  					backgroundPosition: '200% 0'
-  				}
-  			}
+			'heart-pulse': {
+				'0%': {
+					transform: 'scale(1)'
+				},
+				'25%': {
+					transform: 'scale(1.3)'
+				},
+				'50%': {
+					transform: 'scale(1)'
+				},
+				'75%': {
+					transform: 'scale(1.15)'
+				},
+				'100%': {
+					transform: 'scale(1)'
+				}
+			},
+			'favorite-pop': {
+				'0%': {
+					transform: 'scale(1)'
+				},
+				'30%': {
+					transform: 'scale(1.4)'
+				},
+				'60%': {
+					transform: 'scale(0.9)'
+				},
+				'100%': {
+					transform: 'scale(1)'
+				}
+			},
+			'shimmer': {
+				'0%': {
+					backgroundPosition: '-200% 0'
+				},
+				'100%': {
+					backgroundPosition: '200% 0'
+				}
+			}
   		},
-  		animation: {
-  			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out',
-  			'fade-in-up': 'fade-in-up 0.4s ease-out',
-  			'scale-bounce': 'scale-bounce 0.3s ease-out',
-  			'heart-pulse': 'heart-pulse 0.4s ease-out',
-  			'shimmer': 'shimmer 2s infinite linear'
-  		}
+		animation: {
+			'accordion-down': 'accordion-down 0.2s ease-out',
+			'accordion-up': 'accordion-up 0.2s ease-out',
+			'fade-in-up': 'fade-in-up 0.4s ease-out',
+			'scale-bounce': 'scale-bounce 0.3s ease-out',
+			'heart-pulse': 'heart-pulse 0.4s ease-out',
+			'favorite-pop': 'favorite-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+			'shimmer': 'shimmer 2s infinite linear'
+		}
   	}
   },
   plugins: [require("tailwindcss-animate")],
