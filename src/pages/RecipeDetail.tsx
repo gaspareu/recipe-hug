@@ -151,12 +151,6 @@ export default function RecipeDetail() {
 
         <div className="flex items-center gap-2 ml-14">
           <RecipeStatusBadge status={recipe.status} />
-          {recipe.servings && (
-            <span className="text-sm text-muted-foreground flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              {recipe.servings} portions
-            </span>
-          )}
         </div>
 
         {(recipe.nutrition_tags?.length || recipe.season) && (
@@ -189,7 +183,13 @@ export default function RecipeDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ListChecks className="h-5 w-5" />
-                Ingrédients (0)
+                Ingrédients
+                {recipe.servings && (
+                  <span className="text-sm font-normal text-muted-foreground flex items-center gap-1">
+                    <Users className="h-3 w-3" />
+                    {recipe.servings} portions
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -205,7 +205,13 @@ export default function RecipeDetail() {
                   <CardTitle className="flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <ListChecks className="h-5 w-5" />
-                      Ingrédients ({recipe.ingredients.length})
+                      Ingrédients
+                      {recipe.servings && (
+                        <span className="text-sm font-normal text-muted-foreground flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          {recipe.servings} portions
+                        </span>
+                      )}
                     </span>
                     {toggleButton}
                   </CardTitle>
