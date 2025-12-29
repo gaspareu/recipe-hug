@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, X, Plus } from 'lucide-react';
+import { ArrowLeft, Save, X, Trash2 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,10 +13,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { IngredientEditor } from '@/components/recipes/IngredientEditor';
 import { StepsEditor } from '@/components/recipes/StepsEditor';
-import { useRecipe, useUpdateRecipe } from '@/hooks/useRecipes';
+import { useRecipe, useUpdateRecipe, useDeleteRecipe } from '@/hooks/useRecipes';
 import { useToast } from '@/hooks/use-toast';
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
@@ -35,6 +46,7 @@ export default function RecipeEdit() {
   
   const { data: recipe, isLoading } = useRecipe(id || '');
   const updateRecipe = useUpdateRecipe();
+  const deleteRecipe = useDeleteRecipe();
 
   const [title, setTitle] = useState('');
   const [servings, setServings] = useState<number | ''>('');
@@ -99,6 +111,25 @@ export default function RecipeEdit() {
       toast({
         title: 'Erreur',
         description: 'Impossible de mettre à jour la recette',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id) return;
+    
+    try {
+      await deleteRecipe.mutateAsync(id);
+      toast({
+        title: 'Succès',
+        description: 'Recette supprimée',
+      });
+      navigate('/dashboard');
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de supprimer la recette',
         variant: 'destructive',
       });
     }
@@ -221,10 +252,35 @@ export default function RecipeEdit() {
           
           <StepsEditor steps={steps} onChange={setSteps} />
 
-          <Button type="submit" className="w-full" disabled={updateRecipe.isPending}>
-            <Save className="mr-2 h-4 w-4" />
-            {updateRecipe.isPending ? 'Enregistrement...' : 'Enregistrer les modifications'}
-          </Button>
+          <div className="flex gap-4">
+            <Button type="submit" className="flex-1" disabled={updateRecipe.isPending}>
+              <Save className="mr-2 h-4 w-4" />
+              {updateRecipe.isPending ? 'Enregistrement...' : 'Enregistrer les modifications'}
+            </Button>
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="outline" className="text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Supprimer
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Supprimer cette recette ?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Cette action est irréversible. La recette "{recipe.title}" sera définitivement supprimée.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+                    Supprimer
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </form>
       </div>
     </MainLayout>

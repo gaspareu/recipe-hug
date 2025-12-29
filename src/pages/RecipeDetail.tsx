@@ -1,26 +1,15 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Users, ListChecks, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { RecipeStatusBadge } from '@/components/recipes/RecipeStatusBadge';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
-import { useRecipe, useDeleteRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
+import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -30,29 +19,9 @@ export default function RecipeDetail() {
   const { toast } = useToast();
   
   const { data: recipe, isLoading } = useRecipe(id || '');
-  const deleteRecipe = useDeleteRecipe();
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  const handleDelete = async () => {
-    if (!id) return;
-    
-    try {
-      await deleteRecipe.mutateAsync(id);
-      toast({
-        title: 'Succès',
-        description: 'Recette supprimée',
-      });
-      navigate('/dashboard');
-    } catch (error) {
-      toast({
-        title: 'Erreur',
-        description: 'Impossible de supprimer la recette',
-        variant: 'destructive',
-      });
-    }
-  };
 
   const handleToggleFavorite = () => {
     if (!recipe) return;
@@ -125,20 +94,13 @@ export default function RecipeDetail() {
   return (
     <MainLayout>
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mt-1">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold">{recipe.title}</h1>
-                <FavoriteToggle
-                  isFavorite={recipe.is_favorite}
-                  onToggle={handleToggleFavorite}
-                  disabled={toggleFavorite.isPending}
-                />
-              </div>
+              <h1 className="text-2xl font-bold">{recipe.title}</h1>
               <div className="flex items-center gap-2 mt-1">
                 <RecipeStatusBadge status={recipe.status} />
                 {recipe.servings && (
@@ -151,7 +113,13 @@ export default function RecipeDetail() {
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2">
+            <FavoriteToggle
+              isFavorite={recipe.is_favorite}
+              onToggle={handleToggleFavorite}
+              disabled={toggleFavorite.isPending}
+              size="default"
+            />
             <Button 
               variant="outline" 
               onClick={handleAnalyze}
@@ -164,32 +132,12 @@ export default function RecipeDetail() {
               )}
               Analyser
             </Button>
-            <Button variant="outline" size="icon" asChild>
+            <Button variant="outline" asChild>
               <Link to={`/recipes/${recipe.id}/edit`}>
-                <Edit className="h-4 w-4" />
+                <Edit className="h-4 w-4 mr-2" />
+                Éditer
               </Link>
             </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" size="icon" className="text-destructive">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Supprimer cette recette ?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Cette action est irréversible. La recette "{recipe.title}" sera définitivement supprimée.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Annuler</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-                    Supprimer
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
         </div>
 
