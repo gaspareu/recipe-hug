@@ -101,6 +101,9 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground font-crimson;
+    background-image: url('/src/assets/paper-texture.jpg');
+    background-repeat: repeat;
+    background-size: 512px 512px;
   }
 
   h1, h2, h3, h4, h5, h6 {
