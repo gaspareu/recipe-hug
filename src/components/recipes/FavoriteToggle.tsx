@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
 
 interface FavoriteToggleProps {
   isFavorite: boolean;
@@ -25,19 +24,6 @@ export function FavoriteToggle({ isFavorite, onToggle, disabled, variant = 'defa
     
     // Call toggle
     onToggle();
-    
-    // Show toast
-    if (isFavorite) {
-      toast('Retiré des favoris', {
-        icon: '💔',
-        duration: 2000,
-      });
-    } else {
-      toast('Ajouté aux favoris', {
-        icon: '❤️',
-        duration: 2000,
-      });
-    }
   };
 
   if (size === 'default') {
