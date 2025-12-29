@@ -84,17 +84,17 @@ export default function RecipeNew() {
           <h1 className="text-2xl font-bold">Nouvelle Recette</h1>
         </div>
 
-        <Tabs defaultValue="manual" className="w-full">
+        <Tabs defaultValue="ai" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="manual">✍️ Manuel</TabsTrigger>
-            <TabsTrigger value="capture">
-              <Camera className="mr-1 h-4 w-4" />
-              Capture
-            </TabsTrigger>
             <TabsTrigger value="ai">
               <Sparkles className="mr-1 h-4 w-4" />
               IA
             </TabsTrigger>
+            <TabsTrigger value="capture">
+              <Camera className="mr-1 h-4 w-4" />
+              Capture
+            </TabsTrigger>
+            <TabsTrigger value="manual">✍️ Manuel</TabsTrigger>
           </TabsList>
 
           <TabsContent value="manual" className="mt-6">
