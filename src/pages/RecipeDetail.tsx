@@ -155,7 +155,7 @@ export default function RecipeDetail() {
           </Button>
         </div>
 
-        <div className="ml-14 overflow-x-auto">
+        <div className="overflow-x-auto">
           <div className="flex items-center gap-2 min-w-max">
             <RecipeStatusSelect 
               status={recipe.status} 
@@ -196,7 +196,7 @@ export default function RecipeDetail() {
         </div>
 
         {recipe.ai_summary && (
-          <p className="text-sm text-muted-foreground ml-14">{recipe.ai_summary}</p>
+          <p className="text-sm text-muted-foreground">{recipe.ai_summary}</p>
         )}
 
         {recipe.ingredients.length === 0 ? (
