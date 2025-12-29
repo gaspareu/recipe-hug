@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Check } from 'lucide-react';
+import { CheckCheck, RotateCcw } from 'lucide-react';
 import { Ingredient } from '@/types/recipe';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface IngredientChecklistProps {
@@ -22,15 +23,14 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
 
   // Group ingredients by category
   const groupedIngredients = useMemo(() => {
-    const groups: Record<string, Ingredient[]> = {};
+    const groups: Record<string, (Ingredient & { _index: number })[]> = {};
     
     ingredients.forEach((ingredient, index) => {
       const category = ingredient.category || 'Autres';
       if (!groups[category]) {
         groups[category] = [];
       }
-      // Add original index to track uniqueness
-      groups[category].push({ ...ingredient, _index: index } as Ingredient & { _index: number });
+      groups[category].push({ ...ingredient, _index: index });
     });
 
     // Sort categories alphabetically, but put "Autres" at the end
@@ -67,12 +67,58 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
     setOpenCategories(prev => ({ ...prev, [category]: !prev[category] }));
   };
 
-  const getIngredientKey = (ingredient: Ingredient & { _index?: number }) => {
-    return `${ingredient._index ?? ''}-${ingredient.name}`;
+  const getIngredientKey = (ingredient: Ingredient & { _index: number }) => {
+    return `${ingredient._index}-${ingredient.name}`;
+  };
+
+  // Check if all ingredients are checked
+  const allChecked = useMemo(() => {
+    return ingredients.every((_, index) => {
+      const ingredient = ingredients[index];
+      const key = `${index}-${ingredient.name}`;
+      return checked[key];
+    });
+  }, [ingredients, checked]);
+
+  // Check all ingredients
+  const checkAll = () => {
+    const newChecked: CheckedState = {};
+    ingredients.forEach((ingredient, index) => {
+      const key = `${index}-${ingredient.name}`;
+      newChecked[key] = true;
+    });
+    setChecked(newChecked);
+  };
+
+  // Uncheck all ingredients
+  const uncheckAll = () => {
+    setChecked({});
   };
 
   return (
     <div className="space-y-4">
+      {/* Toggle all button */}
+      <div className="flex justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={allChecked ? uncheckAll : checkAll}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          {allChecked ? (
+            <>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Tout décocher
+            </>
+          ) : (
+            <>
+              <CheckCheck className="h-4 w-4 mr-2" />
+              Tout cocher
+            </>
+          )}
+        </Button>
+      </div>
+
       {groupedIngredients.map(({ category, ingredients: categoryIngredients }) => (
         <Collapsible
           key={category}
@@ -82,7 +128,7 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
           <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group">
             <span 
               className={cn(
-                "text-lg font-solitreo text-primary transition-transform",
+                "text-lg font-solitreo text-primary transition-transform duration-200",
                 openCategories[category] ? "rotate-0" : "-rotate-90"
               )}
             >
@@ -99,7 +145,7 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
           <CollapsibleContent className="mt-2">
             <ul className="space-y-1 pl-6">
               {categoryIngredients.map((ingredient) => {
-                const key = getIngredientKey(ingredient as Ingredient & { _index: number });
+                const key = getIngredientKey(ingredient);
                 const isChecked = checked[key] ?? false;
                 
                 return (
@@ -122,7 +168,7 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
                     >
                       {isChecked && (
                         <svg
-                          className="absolute inset-0 text-primary"
+                          className="absolute inset-0 text-primary overflow-visible"
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -133,13 +179,13 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
                             transform: 'rotate(2deg) scale(1.3)',
                           }}
                         >
-                          {/* Handwritten-style checkmark path */}
                           <path 
                             d="M4 12 L9 18 L20 5" 
-                            className="animate-[draw_0.3s_ease-out_forwards]"
+                            className="checkmark-path"
                             style={{
                               strokeDasharray: 30,
-                              strokeDashoffset: 0,
+                              strokeDashoffset: 30,
+                              animation: 'draw-check 0.3s ease-out forwards',
                             }}
                           />
                         </svg>
@@ -149,7 +195,7 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
                     {/* Ingredient text */}
                     <span 
                       className={cn(
-                        "transition-all",
+                        "transition-all duration-200",
                         isChecked && "line-through text-muted-foreground/60"
                       )}
                     >
@@ -164,6 +210,18 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
           </CollapsibleContent>
         </Collapsible>
       ))}
+
+      {/* CSS for checkmark animation */}
+      <style>{`
+        @keyframes draw-check {
+          from {
+            stroke-dashoffset: 30;
+          }
+          to {
+            stroke-dashoffset: 0;
+          }
+        }
+      `}</style>
     </div>
   );
 }
