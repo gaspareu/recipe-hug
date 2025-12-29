@@ -150,22 +150,22 @@ export function IngredientChecklist({ ingredients }: IngredientChecklistProps) {
           open={openCategories[category] ?? true}
           onOpenChange={() => toggleCategory(category)}
         >
-          <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group">
-            <span 
-              className={cn(
-                "text-lg font-solitreo text-primary transition-transform duration-200",
-                openCategories[category] ? "rotate-0" : "-rotate-90"
-              )}
-            >
-              ▼
-            </span>
-            <span className="text-lg font-solitreo text-primary border-b border-dashed border-primary/30 flex-1">
-              {category}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              ({categoryIngredients.length})
-            </span>
-          </CollapsibleTrigger>
+            <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
+              <span 
+                className={cn(
+                  "text-sm font-solitreo text-primary transition-transform duration-200",
+                  openCategories[category] ? "rotate-0" : "-rotate-90"
+                )}
+              >
+                ▼
+              </span>
+              <span className="text-sm font-solitreo text-primary border-b border-dashed border-primary/30 flex-1">
+                {category}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                ({categoryIngredients.length})
+              </span>
+            </CollapsibleTrigger>
           
           <CollapsibleContent className="mt-2">
             <ul className="space-y-1 pl-6">
@@ -324,19 +324,19 @@ export function IngredientChecklistWithHeader({
             open={openCategories[category] ?? true}
             onOpenChange={() => toggleCategory(category)}
           >
-            <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group">
+            <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
               <span 
                 className={cn(
-                  "text-lg font-solitreo text-primary transition-transform duration-200",
+                  "text-sm font-solitreo text-primary transition-transform duration-200",
                   openCategories[category] ? "rotate-0" : "-rotate-90"
                 )}
               >
                 ▼
               </span>
-              <span className="text-lg font-solitreo text-primary border-b border-dashed border-primary/30 flex-1">
+              <span className="text-sm font-solitreo text-primary border-b border-dashed border-primary/30 flex-1">
                 {category}
               </span>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 ({categoryIngredients.length})
               </span>
             </CollapsibleTrigger>
