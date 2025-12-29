@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { RecipeStatusBadge } from '@/components/recipes/RecipeStatusBadge';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
-import { IngredientChecklist } from '@/components/recipes/IngredientChecklist';
+import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { useRecipe, useDeleteRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -208,21 +208,36 @@ export default function RecipeDetail() {
           </div>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ListChecks className="h-5 w-5" />
-              Ingrédients ({recipe.ingredients.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recipe.ingredients.length === 0 ? (
+        {recipe.ingredients.length === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ListChecks className="h-5 w-5" />
+                Ingrédients (0)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
               <p className="text-muted-foreground text-sm">Aucun ingrédient</p>
-            ) : (
-              <IngredientChecklist ingredients={recipe.ingredients} />
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <IngredientChecklistWithHeader 
+              ingredients={recipe.ingredients}
+              renderHeader={(toggleButton) => (
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <ListChecks className="h-5 w-5" />
+                      Ingrédients ({recipe.ingredients.length})
+                    </span>
+                    {toggleButton}
+                  </CardTitle>
+                </CardHeader>
+              )}
+            />
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
