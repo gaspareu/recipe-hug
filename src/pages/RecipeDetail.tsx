@@ -207,8 +207,8 @@ export default function RecipeDetail() {
                       <ListChecks className="h-5 w-5" />
                       Ingrédients
                       {recipe.servings && (
-                        <span className="text-sm font-normal text-muted-foreground flex items-center gap-1">
-                          <Users className="h-3 w-3" />
+                        <span className="text-sm font-normal text-muted-foreground flex items-center gap-1 ml-1">
+                          <Users className="h-3.5 w-3.5" />
                           {recipe.servings} portions
                         </span>
                       )}
