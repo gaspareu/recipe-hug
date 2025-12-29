@@ -14,7 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        caveat: ['"Caveat"', 'cursive'],
+        solitreo: ['"Solitreo"', 'cursive'],
+        crimson: ['"Crimson Text"', 'serif'],
       },
       colors: {
         border: "hsl(var(--border))",
