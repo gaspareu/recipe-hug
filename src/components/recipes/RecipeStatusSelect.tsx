@@ -1,3 +1,4 @@
+import { Pencil } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -14,11 +15,11 @@ interface RecipeStatusSelectProps {
   disabled?: boolean;
 }
 
-const statusConfig: Record<RecipeStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  draft: { label: 'Brouillon', variant: 'secondary' },
-  tested: { label: 'Testé', variant: 'outline' },
-  validated: { label: 'Validé', variant: 'default' },
-  archived: { label: 'Archivé', variant: 'destructive' },
+const statusConfig: Record<RecipeStatus, { label: string; className: string }> = {
+  draft: { label: 'Brouillon', className: 'bg-background text-foreground border border-border' },
+  tested: { label: 'Testé', className: 'bg-accent text-accent-foreground' },
+  validated: { label: 'Validé', className: 'bg-primary text-primary-foreground' },
+  archived: { label: 'Archivé', className: 'bg-destructive text-destructive-foreground' },
 };
 
 const statusOrder: RecipeStatus[] = ['draft', 'tested', 'validated', 'archived'];
@@ -30,8 +31,9 @@ export function RecipeStatusSelect({ status, onStatusChange, disabled }: RecipeS
     <Select value={status} onValueChange={(value) => onStatusChange(value as RecipeStatus)} disabled={disabled}>
       <SelectTrigger className="w-auto h-auto border-0 p-0 shadow-none focus:ring-0 [&>svg]:hidden">
         <SelectValue>
-          <Badge variant={config.variant} className="cursor-pointer">
+          <Badge className={`cursor-pointer flex items-center gap-1 ${config.className}`}>
             {config.label}
+            <Pencil className="h-3 w-3" />
           </Badge>
         </SelectValue>
       </SelectTrigger>
@@ -40,7 +42,7 @@ export function RecipeStatusSelect({ status, onStatusChange, disabled }: RecipeS
           const cfg = statusConfig[s];
           return (
             <SelectItem key={s} value={s}>
-              <Badge variant={cfg.variant}>{cfg.label}</Badge>
+              <Badge className={cfg.className}>{cfg.label}</Badge>
             </SelectItem>
           );
         })}
