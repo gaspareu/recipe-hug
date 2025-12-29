@@ -38,7 +38,7 @@ export function FavoriteToggle({ isFavorite, onToggle, disabled, variant = 'defa
       onClick={handleClick}
       disabled={disabled}
       className={cn(
-        'h-8 w-8 transition-all duration-200 overflow-hidden',
+        'h-9 w-9 transition-all duration-200 overflow-hidden',
         variant === 'overlay' && 'bg-background/80 backdrop-blur-sm hover:bg-background/90 rounded-full shadow-sm'
       )}
     >

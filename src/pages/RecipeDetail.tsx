@@ -123,7 +123,7 @@ export default function RecipeDetail() {
                         size="icon"
                         onClick={handleAnalyze}
                         disabled={isAnalyzing}
-                        className="h-8 w-8"
+                        className="h-9 w-9"
                       >
                         {isAnalyzing ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
