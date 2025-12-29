@@ -6,6 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { RecipeStatusBadge } from '@/components/recipes/RecipeStatusBadge';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
@@ -99,46 +105,57 @@ export default function RecipeDetail() {
             <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mt-1">
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div>
+            <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">{recipe.title}</h1>
-              <div className="flex items-center gap-2 mt-1">
-                <RecipeStatusBadge status={recipe.status} />
-                {recipe.servings && (
-                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Users className="h-3 w-3" />
-                    {recipe.servings} portions
-                  </span>
-                )}
-              </div>
+              <TooltipProvider>
+                <div className="flex items-center gap-1">
+                  <FavoriteToggle
+                    isFavorite={recipe.is_favorite}
+                    onToggle={handleToggleFavorite}
+                    disabled={toggleFavorite.isPending}
+                    tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                  />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={handleAnalyze}
+                        disabled={isAnalyzing}
+                        className="h-8 w-8"
+                      >
+                        {isAnalyzing ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Analyser</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
             </div>
           </div>
           
-          <div className="flex flex-col gap-2">
-            <FavoriteToggle
-              isFavorite={recipe.is_favorite}
-              onToggle={handleToggleFavorite}
-              disabled={toggleFavorite.isPending}
-              size="default"
-            />
-            <Button 
-              variant="outline" 
-              onClick={handleAnalyze}
-              disabled={isAnalyzing}
-            >
-              {isAnalyzing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4 mr-2" />
-              )}
-              Analyser
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to={`/recipes/${recipe.id}/edit`}>
-                <Edit className="h-4 w-4 mr-2" />
-                Éditer
-              </Link>
-            </Button>
-          </div>
+          <Button variant="outline" asChild>
+            <Link to={`/recipes/${recipe.id}/edit`}>
+              <Edit className="h-4 w-4 mr-2" />
+              Éditer
+            </Link>
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2 ml-14">
+          <RecipeStatusBadge status={recipe.status} />
+          {recipe.servings && (
+            <span className="text-sm text-muted-foreground flex items-center gap-1">
+              <Users className="h-3 w-3" />
+              {recipe.servings} portions
+            </span>
+          )}
         </div>
 
         {recipe.nutrition_tags && recipe.nutrition_tags.length > 0 && (
