@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { RecipeStatusBadge } from '@/components/recipes/RecipeStatusBadge';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
+import { IngredientChecklist } from '@/components/recipes/IngredientChecklist';
 import { useRecipe, useDeleteRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -218,21 +219,7 @@ export default function RecipeDetail() {
             {recipe.ingredients.length === 0 ? (
               <p className="text-muted-foreground text-sm">Aucun ingrédient</p>
             ) : (
-              <ul className="space-y-2">
-                {recipe.ingredients.map((ingredient, index) => (
-                  <li key={index} className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-primary" />
-                    <span>
-                      {ingredient.quantity} {ingredient.unit} {ingredient.name}
-                      {ingredient.category && (
-                        <span className="text-muted-foreground text-sm ml-1">
-                          ({ingredient.category})
-                        </span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <IngredientChecklist ingredients={recipe.ingredients} />
             )}
           </CardContent>
         </Card>
