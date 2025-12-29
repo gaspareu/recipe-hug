@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface FavoriteToggleProps {
@@ -8,10 +13,10 @@ interface FavoriteToggleProps {
   onToggle: () => void;
   disabled?: boolean;
   variant?: 'default' | 'overlay';
-  size?: 'icon' | 'default';
+  tooltipText?: string;
 }
 
-export function FavoriteToggle({ isFavorite, onToggle, disabled, variant = 'default', size = 'icon' }: FavoriteToggleProps) {
+export function FavoriteToggle({ isFavorite, onToggle, disabled, variant = 'default', tooltipText }: FavoriteToggleProps) {
   const [isAnimating, setIsAnimating] = useState(false);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -26,29 +31,7 @@ export function FavoriteToggle({ isFavorite, onToggle, disabled, variant = 'defa
     onToggle();
   };
 
-  if (size === 'default') {
-    return (
-      <Button
-        variant="outline"
-        onClick={handleClick}
-        disabled={disabled}
-        className="overflow-hidden"
-      >
-        <Heart
-          className={cn(
-            'h-4 w-4 mr-2 transition-all duration-200',
-            isFavorite 
-              ? 'fill-primary text-primary' 
-              : 'text-muted-foreground',
-            isAnimating && 'animate-favorite-pop'
-          )}
-        />
-        {isFavorite ? 'Favori' : 'Ajouter aux favoris'}
-      </Button>
-    );
-  }
-
-  return (
+  const button = (
     <Button
       variant="ghost"
       size="icon"
@@ -70,4 +53,19 @@ export function FavoriteToggle({ isFavorite, onToggle, disabled, variant = 'defa
       />
     </Button>
   );
+
+  if (tooltipText) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {button}
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltipText}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return button;
 }
