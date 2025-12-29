@@ -2,10 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, RotateCcw, Loader2 } from 'lucide-react';
-import { useRecipeChat } from '@/hooks/useRecipeChat';
+import { Send, RotateCcw, Loader2, History, Trash2, MessageSquare } from 'lucide-react';
+import { useRecipeChat, type Conversation } from '@/hooks/useRecipeChat';
 import { RecipePreviewCard } from './RecipePreviewCard';
 import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 const QUICK_SUGGESTIONS = [
   "Une recette végétarienne rapide",
@@ -20,14 +22,19 @@ export function RecipeChatInterface() {
     isStreaming,
     extractedRecipe,
     isSaving,
+    recentConversations,
+    isLoadingHistory,
+    currentConversationId,
     sendMessage,
     saveRecipe,
     resetChat,
+    loadConversation,
+    deleteConversation,
   } = useRecipeChat();
 
   const [input, setInput] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -43,6 +50,7 @@ export function RecipeChatInterface() {
     if (!input.trim() || isStreaming) return;
     sendMessage(input);
     setInput('');
+    setShowHistory(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -54,25 +62,94 @@ export function RecipeChatInterface() {
 
   const handleSuggestionClick = (suggestion: string) => {
     sendMessage(suggestion);
+    setShowHistory(false);
   };
 
-  const showSuggestions = messages.length === 1; // Only welcome message
+  const handleLoadConversation = (conversation: Conversation) => {
+    loadConversation(conversation);
+    setShowHistory(false);
+  };
+
+  const showSuggestions = messages.length === 1 && !showHistory; // Only welcome message
 
   return (
     <div className="flex flex-col h-[600px] border rounded-lg bg-card">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b">
         <h3 className="font-medium text-sm">Assistant Culinaire IA</h3>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={resetChat}
-          disabled={isStreaming || messages.length === 1}
-        >
-          <RotateCcw className="h-4 w-4 mr-1" />
-          Nouveau
-        </Button>
+        <div className="flex items-center gap-1">
+          {recentConversations.length > 0 && (
+            <Button
+              variant={showHistory ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setShowHistory(!showHistory)}
+              disabled={isStreaming}
+            >
+              <History className="h-4 w-4 mr-1" />
+              Historique
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetChat}
+            disabled={isStreaming || messages.length === 1}
+          >
+            <RotateCcw className="h-4 w-4 mr-1" />
+            Nouveau
+          </Button>
+        </div>
       </div>
+
+      {/* History Panel */}
+      {showHistory && (
+        <div className="border-b p-3 bg-muted/30">
+          <p className="text-xs text-muted-foreground mb-2">Conversations récentes :</p>
+          {isLoadingHistory ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : recentConversations.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-2">
+              Aucune conversation
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {recentConversations.map((conv) => (
+                <div
+                  key={conv.id}
+                  className={cn(
+                    "flex items-center gap-2 p-2 rounded-md hover:bg-muted transition-colors group",
+                    currentConversationId === conv.id && "bg-muted"
+                  )}
+                >
+                  <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <button
+                    onClick={() => handleLoadConversation(conv)}
+                    className="flex-1 text-left min-w-0"
+                  >
+                    <p className="text-sm font-medium truncate">{conv.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(conv.updatedAt, { addSuffix: true, locale: fr })}
+                    </p>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteConversation(conv.id);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Messages */}
       <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
@@ -150,7 +227,6 @@ export function RecipeChatInterface() {
       <div className="p-3 border-t">
         <div className="flex gap-2">
           <Textarea
-            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}

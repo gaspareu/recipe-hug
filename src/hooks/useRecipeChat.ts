@@ -1,7 +1,9 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreateRecipe } from './useRecipes';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import type { Json } from '@/integrations/supabase/types';
 
 export interface ChatMessage {
   id: string;
@@ -25,6 +27,14 @@ export interface ExtractedRecipe {
   }>;
 }
 
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  extractedRecipe: ExtractedRecipe | null;
+  updatedAt: Date;
+}
+
 const WELCOME_MESSAGE: ChatMessage = {
   id: 'welcome',
   role: 'assistant',
@@ -34,15 +44,146 @@ const WELCOME_MESSAGE: ChatMessage = {
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-recipe`;
 
+// Parse DB conversation to our type
+function parseConversation(data: any): Conversation {
+  const messages = (data.messages as any[]).map((m: any) => ({
+    ...m,
+    timestamp: new Date(m.timestamp),
+  }));
+  
+  return {
+    id: data.id,
+    title: data.title,
+    messages,
+    extractedRecipe: data.extracted_recipe as ExtractedRecipe | null,
+    updatedAt: new Date(data.updated_at),
+  };
+}
+
 export function useRecipeChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [extractedRecipe, setExtractedRecipe] = useState<ExtractedRecipe | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [recentConversations, setRecentConversations] = useState<Conversation[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const navigate = useNavigate();
   const createRecipe = useCreateRecipe();
+
+  // Load recent conversations on mount
+  useEffect(() => {
+    loadRecentConversations();
+  }, []);
+
+  const loadRecentConversations = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setIsLoadingHistory(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('ai_conversations')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(3);
+
+      if (error) throw error;
+
+      setRecentConversations((data || []).map(parseConversation));
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  // Auto-save conversation after changes (debounced)
+  const saveConversation = useCallback(async (
+    msgs: ChatMessage[], 
+    recipe: ExtractedRecipe | null,
+    convId: string | null
+  ) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      // Filter out welcome message for storage
+      const messagesToSave = msgs.filter(m => m.id !== 'welcome').map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp.toISOString(),
+      }));
+
+      // Generate title from first user message
+      const firstUserMessage = msgs.find(m => m.role === 'user');
+      const title = firstUserMessage 
+        ? firstUserMessage.content.slice(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '')
+        : 'Nouvelle conversation';
+
+      if (convId) {
+        // Update existing conversation
+        const { error } = await supabase
+          .from('ai_conversations')
+          .update({
+            title,
+            messages: messagesToSave as unknown as Json,
+            extracted_recipe: recipe as unknown as Json,
+          })
+          .eq('id', convId);
+
+        if (error) throw error;
+        return convId;
+      } else {
+        // Create new conversation
+        const { data, error } = await supabase
+          .from('ai_conversations')
+          .insert({
+            user_id: user.id,
+            title,
+            messages: messagesToSave as unknown as Json,
+            extracted_recipe: recipe as unknown as Json,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data.id;
+      }
+    } catch (error) {
+      console.error('Error saving conversation:', error);
+      return null;
+    }
+  }, []);
+
+  // Debounced save
+  const debouncedSave = useCallback((msgs: ChatMessage[], recipe: ExtractedRecipe | null) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      const newId = await saveConversation(msgs, recipe, currentConversationId);
+      if (newId && !currentConversationId) {
+        setCurrentConversationId(newId);
+      }
+      // Refresh history
+      loadRecentConversations();
+    }, 1000);
+  }, [currentConversationId, saveConversation]);
+
+  const loadConversation = useCallback((conversation: Conversation) => {
+    // Add welcome message back at the start
+    setMessages([WELCOME_MESSAGE, ...conversation.messages]);
+    setExtractedRecipe(conversation.extractedRecipe);
+    setCurrentConversationId(conversation.id);
+  }, []);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;
@@ -55,11 +196,12 @@ export function useRecipeChat() {
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setIsStreaming(true);
 
     // Prepare messages for API (exclude welcome message id, just send role/content)
-    const apiMessages = [...messages.filter(m => m.id !== 'welcome'), userMessage].map(m => ({
+    const apiMessages = newMessages.filter(m => m.id !== 'welcome').map(m => ({
       role: m.role,
       content: m.content,
     }));
@@ -90,17 +232,19 @@ export function useRecipeChat() {
       const decoder = new TextDecoder();
       let assistantContent = '';
       let toolCallArguments = '';
-      let isToolCall = false;
       let buffer = '';
+      let newExtractedRecipe: ExtractedRecipe | null = null;
 
       // Create assistant message placeholder
       const assistantMessageId = crypto.randomUUID();
-      setMessages(prev => [...prev, {
+      const assistantMessage: ChatMessage = {
         id: assistantMessageId,
         role: 'assistant',
         content: '',
         timestamp: new Date(),
-      }]);
+      };
+      
+      setMessages(prev => [...prev, assistantMessage]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -138,7 +282,6 @@ export function useRecipeChat() {
 
               // Handle tool calls
               if (delta.tool_calls) {
-                isToolCall = true;
                 for (const toolCall of delta.tool_calls) {
                   if (toolCall.function?.arguments) {
                     toolCallArguments += toolCall.function.arguments;
@@ -153,6 +296,7 @@ export function useRecipeChat() {
               try {
                 const recipe = JSON.parse(toolCallArguments);
                 console.log('Recipe extracted:', recipe);
+                newExtractedRecipe = recipe;
                 setExtractedRecipe(recipe);
                 
                 // Add a message about the recipe being ready
@@ -176,6 +320,13 @@ export function useRecipeChat() {
         }
       }
 
+      // Save conversation after streaming completes
+      setMessages(prev => {
+        const finalMessages = prev;
+        debouncedSave(finalMessages, newExtractedRecipe || extractedRecipe);
+        return finalMessages;
+      });
+
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
         console.log('Request aborted');
@@ -187,7 +338,7 @@ export function useRecipeChat() {
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
-  }, [messages, isStreaming]);
+  }, [messages, isStreaming, extractedRecipe, debouncedSave]);
 
   const saveRecipe = useCallback(async () => {
     if (!extractedRecipe || isSaving) return;
@@ -217,6 +368,14 @@ export function useRecipeChat() {
         source_image_url: null,
       });
 
+      // Delete the conversation after saving the recipe
+      if (currentConversationId) {
+        await supabase
+          .from('ai_conversations')
+          .delete()
+          .eq('id', currentConversationId);
+      }
+
       toast.success('Recette enregistrée avec succès !');
       navigate('/');
     } catch (error) {
@@ -225,24 +384,55 @@ export function useRecipeChat() {
     } finally {
       setIsSaving(false);
     }
-  }, [extractedRecipe, isSaving, createRecipe, navigate]);
+  }, [extractedRecipe, isSaving, createRecipe, navigate, currentConversationId]);
 
   const resetChat = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
     setMessages([WELCOME_MESSAGE]);
     setExtractedRecipe(null);
+    setCurrentConversationId(null);
     setIsStreaming(false);
   }, []);
+
+  const deleteConversation = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('ai_conversations')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setRecentConversations(prev => prev.filter(c => c.id !== id));
+      
+      if (currentConversationId === id) {
+        resetChat();
+      }
+
+      toast.success('Conversation supprimée');
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      toast.error('Erreur lors de la suppression');
+    }
+  }, [currentConversationId, resetChat]);
 
   return {
     messages,
     isStreaming,
     extractedRecipe,
     isSaving,
+    recentConversations,
+    isLoadingHistory,
+    currentConversationId,
     sendMessage,
     saveRecipe,
     resetChat,
+    loadConversation,
+    deleteConversation,
   };
 }
