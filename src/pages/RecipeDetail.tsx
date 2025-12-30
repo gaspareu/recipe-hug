@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, Send, RotateCcw } from 'lucide-react';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -8,19 +8,29 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { RecipeStatusSelect } from '@/components/recipes/RecipeStatusSelect';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
+import { useCookingAssistant, ChatMessage } from '@/hooks/useCookingAssistant';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import type { RecipeStatus } from '@/types/recipe';
+import type { RecipeStatus, Step } from '@/types/recipe';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +41,11 @@ export default function RecipeDetail() {
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // Cooking assistant state
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const handleToggleFavorite = () => {
     if (!recipe) return;
@@ -81,6 +96,33 @@ export default function RecipeDetail() {
     }
   };
 
+  const handleStepToggle = (stepOrder: number) => {
+    setCompletedSteps(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(stepOrder)) {
+        newSet.delete(stepOrder);
+      } else {
+        newSet.add(stepOrder);
+      }
+      return newSet;
+    });
+  };
+
+  const handleAdvanceStep = () => {
+    if (!recipe) return;
+    const steps = recipe.steps as Step[];
+    const sortedSteps = [...steps].sort((a, b) => a.order - b.order);
+    
+    // Find next uncompleted step
+    for (let i = 0; i < sortedSteps.length; i++) {
+      if (!completedSteps.has(sortedSteps[i].order)) {
+        setCompletedSteps(prev => new Set([...prev, sortedSteps[i].order]));
+        setCurrentStepIndex(i + 1);
+        return;
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -105,6 +147,11 @@ export default function RecipeDetail() {
       </MainLayout>
     );
   }
+
+  const steps = (recipe.steps || []) as Step[];
+  const sortedSteps = [...steps].sort((a, b) => a.order - b.order);
+  const totalSteps = steps.length;
+  const isComplete = completedSteps.size === totalSteps && totalSteps > 0;
 
   return (
     <MainLayout>
@@ -246,30 +293,176 @@ export default function RecipeDetail() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Étapes ({recipe.steps.length})</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Étapes</span>
+              <Sheet open={chatOpen} onOpenChange={setChatOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" title="Assistant culinaire">
+                    <MessageCircle className="h-4 w-4" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="w-[400px] sm:w-[540px] flex flex-col p-0">
+                  <SheetHeader className="p-4 pb-2 border-b">
+                    <SheetTitle className="flex items-center gap-2">
+                      <span>👨‍🍳</span>
+                      Assistant
+                    </SheetTitle>
+                  </SheetHeader>
+                  <ChatInterface recipe={recipe} />
+                </SheetContent>
+              </Sheet>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {recipe.steps.length === 0 ? (
+            {steps.length === 0 ? (
               <p className="text-muted-foreground text-sm">Aucune étape</p>
             ) : (
-              <ol className="space-y-4">
-                {recipe.steps
-                  .sort((a, b) => a.order - b.order)
-                  .map((step) => (
-                    <li key={step.order} className="flex gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                        {step.order}
-                      </span>
-                      <p className="text-sm leading-relaxed pt-0.5">{step.text}</p>
+              <ol className="space-y-3">
+                {sortedSteps.map((step, index) => {
+                  const isDone = completedSteps.has(step.order);
+                  const isCurrent = index === currentStepIndex && !isDone;
+                  
+                  return (
+                    <li key={step.order}>
+                      <button
+                        onClick={() => handleStepToggle(step.order)}
+                        className={`w-full text-left flex gap-3 p-3 rounded-lg border transition-colors hover:bg-accent/50 ${
+                          isCurrent 
+                            ? 'border-primary bg-primary/5' 
+                            : isDone 
+                              ? 'border-muted bg-muted/30' 
+                              : 'border-border'
+                        }`}
+                      >
+                        <span className="flex-shrink-0 mt-0.5">
+                          {isDone ? (
+                            <CheckCircle className="h-5 w-5 text-primary" />
+                          ) : (
+                            <Circle className={`h-5 w-5 ${isCurrent ? 'text-primary' : 'text-muted-foreground'}`} />
+                          )}
+                        </span>
+                        <span className={`text-sm leading-relaxed ${isDone ? 'text-muted-foreground line-through' : ''}`}>
+                          {step.text}
+                        </span>
+                      </button>
                     </li>
-                  ))}
+                  );
+                })}
               </ol>
             )}
           </CardContent>
         </Card>
 
-        <CookingAssistantButton recipeId={recipe.id} />
+        {totalSteps > 0 && (
+          <CookingAssistantButton
+            currentStep={currentStepIndex}
+            totalSteps={totalSteps}
+            onAdvance={handleAdvanceStep}
+            isComplete={isComplete}
+          />
+        )}
       </div>
     </MainLayout>
+  );
+}
+
+// Chat Interface Component
+function ChatInterface({ recipe }: { recipe: NonNullable<ReturnType<typeof useRecipe>['data']> }) {
+  const { messages, isStreaming, sendMessage, resetChat } = useCookingAssistant(recipe);
+  const [input, setInput] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (input.trim() && !isStreaming) {
+      sendMessage(input);
+      setInput('');
+    }
+  };
+
+  const quickSuggestions = [
+    "C'est parti !",
+    "Explique-moi la première étape",
+    "Des conseils pour cette recette ?",
+  ];
+
+  const showSuggestions = messages.length <= 1;
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0">
+      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <div className="space-y-4">
+          {messages.map((message) => (
+            <MessageBubble key={message.id} message={message} />
+          ))}
+          {isStreaming && (
+            <div className="flex justify-start">
+              <div className="bg-muted rounded-lg px-3 py-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      <div className="p-4 border-t space-y-3">
+        {showSuggestions && (
+          <div className="flex flex-wrap gap-2">
+            {quickSuggestions.map((suggestion) => (
+              <Button
+                key={suggestion}
+                variant="outline"
+                size="sm"
+                onClick={() => sendMessage(suggestion)}
+                disabled={isStreaming}
+                className="text-xs"
+              >
+                {suggestion}
+              </Button>
+            ))}
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Posez une question..."
+            disabled={isStreaming}
+            className="flex-1"
+          />
+          <Button type="submit" size="icon" disabled={isStreaming || !input.trim()}>
+            <Send className="h-4 w-4" />
+          </Button>
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="icon" 
+            onClick={resetChat}
+            title="Réinitialiser"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MessageBubble({ message }: { message: ChatMessage }) {
+  const isUser = message.role === 'user';
+  
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[85%] rounded-lg px-3 py-2 ${
+          isUser
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted'
+        }`}
+      >
+        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+      </div>
+    </div>
   );
 }
