@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.chat-recipe]
 verify_jwt = false
+
+[functions.cooking-assistant]
+verify_jwt = false
