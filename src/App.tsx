@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import RecipeNew from "./pages/RecipeNew";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeEdit from "./pages/RecipeEdit";
+import CookingAssistant from "./pages/CookingAssistant";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
@@ -43,6 +44,11 @@ const App = () => (
             <Route path="/recipes/:id/edit" element={
               <ProtectedRoute>
                 <RecipeEdit />
+              </ProtectedRoute>
+            } />
+            <Route path="/recipes/:id/assistant" element={
+              <ProtectedRoute>
+                <CookingAssistant />
               </ProtectedRoute>
             } />
             <Route path="/profile" element={

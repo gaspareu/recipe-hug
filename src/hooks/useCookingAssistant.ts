@@ -13,17 +13,33 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cooking-assi
 const createWelcomeMessage = (recipeTitle: string): ChatMessage => ({
   id: 'welcome',
   role: 'assistant',
-  content: `Bonjour ! 👨‍🍳 Je suis là pour vous accompagner dans la réalisation de "${recipeTitle}". Posez-moi vos questions sur les ingrédients, les techniques, ou dites-moi simplement "C'est parti !" pour commencer !`,
+  content: `Bonjour ! 👨‍🍳 Je suis là pour vous accompagner dans la réalisation de "**${recipeTitle}**". 
+
+Posez-moi vos questions sur les ingrédients, les techniques, ou dites-moi simplement "C'est parti !" pour commencer !`,
   timestamp: new Date(),
 });
 
 export function useCookingAssistant(recipe: Recipe) {
   const [messages, setMessages] = useState<ChatMessage[]>([createWelcomeMessage(recipe.title)]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const totalSteps = recipe.steps.length;
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;
+
+    // Track step progression
+    const stepMatch = text.match(/étape\s*(\d+)/i);
+    if (stepMatch) {
+      const stepNum = parseInt(stepMatch[1], 10);
+      if (stepNum > 0 && stepNum <= totalSteps) {
+        setCurrentStepIndex(stepNum);
+      }
+    } else if (text.toLowerCase().includes("c'est parti") || text.toLowerCase().includes("commencer")) {
+      setCurrentStepIndex(1);
+    }
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -138,13 +154,14 @@ export function useCookingAssistant(recipe: Recipe) {
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
-  }, [messages, isStreaming, recipe]);
+  }, [messages, isStreaming, recipe, totalSteps]);
 
   const resetChat = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     setMessages([createWelcomeMessage(recipe.title)]);
+    setCurrentStepIndex(0);
     setIsStreaming(false);
   }, [recipe.title]);
 
@@ -153,5 +170,7 @@ export function useCookingAssistant(recipe: Recipe) {
     isStreaming,
     sendMessage,
     resetChat,
+    currentStepIndex,
+    totalSteps,
   };
 }
