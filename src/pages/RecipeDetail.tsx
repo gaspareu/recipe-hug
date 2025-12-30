@@ -308,7 +308,7 @@ export default function RecipeDetail() {
                       Assistant
                     </SheetTitle>
                   </SheetHeader>
-                  <ChatInterface recipe={recipe} />
+                  <ChatInterface recipe={recipe} completedSteps={completedSteps} />
                 </SheetContent>
               </Sheet>
             </CardTitle>
@@ -367,8 +367,8 @@ export default function RecipeDetail() {
 }
 
 // Chat Interface Component
-function ChatInterface({ recipe }: { recipe: NonNullable<ReturnType<typeof useRecipe>['data']> }) {
-  const { messages, isStreaming, sendMessage, resetChat } = useCookingAssistant(recipe);
+function ChatInterface({ recipe, completedSteps }: { recipe: NonNullable<ReturnType<typeof useRecipe>['data']>; completedSteps: Set<number> }) {
+  const { messages, isStreaming, sendMessage, resetChat } = useCookingAssistant(recipe, completedSteps);
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
