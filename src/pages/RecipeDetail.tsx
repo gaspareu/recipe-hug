@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf } from 'lucide-react';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
-import { CookingAssistantModal } from '@/components/recipes/CookingAssistantModal';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,6 +21,7 @@ import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipe
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { RecipeStatus } from '@/types/recipe';
+
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -31,7 +31,6 @@ export default function RecipeDetail() {
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
 
   const handleToggleFavorite = () => {
     if (!recipe) return;
@@ -269,13 +268,7 @@ export default function RecipeDetail() {
           </CardContent>
         </Card>
 
-        <CookingAssistantButton onClick={() => setIsAssistantOpen(true)} />
-        
-        <CookingAssistantModal
-          recipe={recipe}
-          isOpen={isAssistantOpen}
-          onClose={() => setIsAssistantOpen(false)}
-        />
+        <CookingAssistantButton recipeId={recipe.id} />
       </div>
     </MainLayout>
   );

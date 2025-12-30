@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,16 +9,18 @@ import {
 } from '@/components/ui/tooltip';
 
 interface CookingAssistantButtonProps {
-  onClick: () => void;
+  recipeId: string;
 }
 
-export function CookingAssistantButton({ onClick }: CookingAssistantButtonProps) {
+export function CookingAssistantButton({ recipeId }: CookingAssistantButtonProps) {
+  const navigate = useNavigate();
+
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            onClick={onClick}
+            onClick={() => navigate(`/recipes/${recipeId}/assistant`)}
             size="lg"
             className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-50 md:right-[calc(50%-20rem+1.5rem)]"
           >
