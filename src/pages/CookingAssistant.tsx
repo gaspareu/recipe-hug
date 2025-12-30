@@ -94,10 +94,18 @@ function CookingAssistantContent({ recipe, onBack }: CookingAssistantContentProp
     }
   };
 
+  const [sheetOpen, setSheetOpen] = useState(false);
+
   const showSuggestions = messages.length <= 1;
   const showNextStepButton = !isStreaming && currentStepIndex < totalSteps && messages.length > 1;
 
   const steps = (recipe.steps || []) as Step[];
+
+  const handleStepClick = (step: Step, index: number) => {
+    const message = `Explique-moi l'étape ${index + 1} : "${step.text}"`;
+    sendMessage(message);
+    setSheetOpen(false);
+  };
 
   return (
     <MainLayout>
@@ -114,7 +122,7 @@ function CookingAssistantContent({ recipe, onBack }: CookingAssistantContentProp
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <Sheet>
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" title="Voir les étapes">
                   <List className="h-4 w-4" />
@@ -129,7 +137,8 @@ function CookingAssistantContent({ recipe, onBack }: CookingAssistantContentProp
                 </SheetHeader>
                 <StepsSidebar 
                   steps={steps} 
-                  currentStepIndex={currentStepIndex} 
+                  currentStepIndex={currentStepIndex}
+                  onStepClick={handleStepClick}
                 />
               </SheetContent>
             </Sheet>
@@ -266,9 +275,10 @@ function MessageBubble({ message, showNextStep, onNextStep, currentStep, totalSt
 interface StepsSidebarProps {
   steps: Step[];
   currentStepIndex: number;
+  onStepClick: (step: Step, index: number) => void;
 }
 
-function StepsSidebar({ steps, currentStepIndex }: StepsSidebarProps) {
+function StepsSidebar({ steps, currentStepIndex, onStepClick }: StepsSidebarProps) {
   return (
     <ScrollArea className="h-[calc(100vh-8rem)] mt-6">
       <div className="space-y-3 pr-4">
@@ -280,9 +290,10 @@ function StepsSidebar({ steps, currentStepIndex }: StepsSidebarProps) {
             const isCurrent = index === currentStepIndex;
             
             return (
-              <div
+              <button
                 key={step.order}
-                className={`flex gap-3 p-3 rounded-lg border transition-colors ${
+                onClick={() => onStepClick(step, index)}
+                className={`w-full text-left flex gap-3 p-3 rounded-lg border transition-colors hover:bg-accent/50 cursor-pointer ${
                   isCurrent 
                     ? 'border-primary bg-primary/5' 
                     : isDone 
@@ -306,7 +317,7 @@ function StepsSidebar({ steps, currentStepIndex }: StepsSidebarProps) {
                 <p className={`text-sm ${isDone ? 'text-muted-foreground line-through' : ''}`}>
                   {step.text}
                 </p>
-              </div>
+              </button>
             );
           })
         )}
