@@ -303,9 +303,14 @@ export default function RecipeDetail() {
                 </SheetTrigger>
                 <SheetContent className="w-[400px] sm:w-[540px] flex flex-col p-0">
                   <SheetHeader className="p-4 pb-2 border-b">
-                    <SheetTitle className="flex items-center gap-2">
-                      <span>👨‍🍳</span>
-                      Assistant
+                    <SheetTitle className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <span>👨‍🍳</span>
+                        Assistant
+                      </span>
+                      <span className="text-sm font-normal text-muted-foreground">
+                        Étape {Math.min(completedSteps.size + 1, totalSteps)}/{totalSteps}
+                      </span>
                     </SheetTitle>
                   </SheetHeader>
                   <ChatInterface recipe={recipe} completedSteps={completedSteps} />
@@ -355,9 +360,9 @@ export default function RecipeDetail() {
 
         {totalSteps > 0 && (
           <CookingAssistantButton
-            currentStep={currentStepIndex}
+            currentStep={completedSteps.size}
             totalSteps={totalSteps}
-            onAdvance={handleAdvanceStep}
+            onPress={() => setChatOpen(true)}
             isComplete={isComplete}
           />
         )}
