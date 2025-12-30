@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Send, RotateCcw, ChefHat, Loader2, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Send, RotateCcw, ChefHat, Loader2, ChevronRight, List, X, CheckCircle2 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useCookingAssistant, type ChatMessage } from '@/hooks/useCookingAssistant';
+import type { Step } from '@/types/recipe';
 import { useRecipe } from '@/hooks/useRecipes';
 
 const QUICK_SUGGESTIONS = [
@@ -95,6 +97,8 @@ function CookingAssistantContent({ recipe, onBack }: CookingAssistantContentProp
   const showSuggestions = messages.length <= 1;
   const showNextStepButton = !isStreaming && currentStepIndex < totalSteps && messages.length > 1;
 
+  const steps = (recipe.steps || []) as Step[];
+
   return (
     <MainLayout>
       <div className="max-w-2xl mx-auto flex flex-col h-[calc(100vh-8rem)]">
@@ -109,14 +113,35 @@ function CookingAssistantContent({ recipe, onBack }: CookingAssistantContentProp
               <h1 className="text-lg font-semibold truncate">{recipe.title}</h1>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={resetChat}
-            title="Recommencer"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" title="Voir les étapes">
+                  <List className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[320px] sm:w-[400px]">
+                <SheetHeader>
+                  <SheetTitle className="flex items-center gap-2">
+                    <List className="h-5 w-5" />
+                    Étapes de la recette
+                  </SheetTitle>
+                </SheetHeader>
+                <StepsSidebar 
+                  steps={steps} 
+                  currentStepIndex={currentStepIndex} 
+                />
+              </SheetContent>
+            </Sheet>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={resetChat}
+              title="Recommencer"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Chat area */}
@@ -235,6 +260,58 @@ function MessageBubble({ message, showNextStep, onNextStep, currentStep, totalSt
         </Button>
       )}
     </div>
+  );
+}
+
+interface StepsSidebarProps {
+  steps: Step[];
+  currentStepIndex: number;
+}
+
+function StepsSidebar({ steps, currentStepIndex }: StepsSidebarProps) {
+  return (
+    <ScrollArea className="h-[calc(100vh-8rem)] mt-6">
+      <div className="space-y-3 pr-4">
+        {steps.length === 0 ? (
+          <p className="text-muted-foreground text-sm">Aucune étape définie</p>
+        ) : (
+          steps.map((step, index) => {
+            const isDone = index < currentStepIndex;
+            const isCurrent = index === currentStepIndex;
+            
+            return (
+              <div
+                key={step.order}
+                className={`flex gap-3 p-3 rounded-lg border transition-colors ${
+                  isCurrent 
+                    ? 'border-primary bg-primary/5' 
+                    : isDone 
+                      ? 'border-muted bg-muted/30' 
+                      : 'border-border'
+                }`}
+              >
+                <div className="shrink-0 mt-0.5">
+                  {isDone ? (
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                  ) : (
+                    <span className={`flex items-center justify-center h-5 w-5 rounded-full text-xs font-medium ${
+                      isCurrent 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {index + 1}
+                    </span>
+                  )}
+                </div>
+                <p className={`text-sm ${isDone ? 'text-muted-foreground line-through' : ''}`}>
+                  {step.text}
+                </p>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </ScrollArea>
   );
 }
 
