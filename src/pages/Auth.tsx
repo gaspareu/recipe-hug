@@ -14,7 +14,7 @@ const emailSchema = z.string().email('Email invalide');
 const passwordSchema = z.string().min(6, 'Le mot de passe doit contenir au moins 6 caractères');
 
 export default function Auth() {
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, loading, signIn, signUp, resetPassword } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -24,6 +24,8 @@ export default function Auth() {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupDisplayName, setSignupDisplayName] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [showResetForm, setShowResetForm] = useState(false);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -55,16 +57,70 @@ export default function Auth() {
 
     if (error) {
       let message = 'Erreur de connexion';
-      if (error.message.includes('Invalid login credentials')) {
+      const errorMsg = error.message.toLowerCase();
+      
+      if (errorMsg.includes('invalid login credentials') || errorMsg.includes('invalid_credentials')) {
         message = 'Email ou mot de passe incorrect';
-      } else if (error.message.includes('Email not confirmed')) {
-        message = 'Veuillez confirmer votre email';
+      } else if (errorMsg.includes('email not confirmed')) {
+        message = 'Veuillez confirmer votre email avant de vous connecter';
+      } else if (errorMsg.includes('too many requests') || errorMsg.includes('rate limit')) {
+        message = 'Trop de tentatives. Veuillez réessayer dans quelques minutes';
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+        message = 'Erreur de connexion réseau. Vérifiez votre connexion internet';
+      } else if (errorMsg.includes('user not found')) {
+        message = 'Aucun compte trouvé avec cet email';
       }
+      
+      toast({
+        title: 'Erreur de connexion',
+        description: message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      emailSchema.parse(resetEmail);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        toast({
+          title: 'Erreur de validation',
+          description: err.errors[0].message,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    const { error } = await resetPassword(resetEmail);
+    setIsSubmitting(false);
+
+    if (error) {
+      let message = 'Erreur lors de la réinitialisation';
+      const errorMsg = error.message.toLowerCase();
+      
+      if (errorMsg.includes('rate limit') || errorMsg.includes('too many requests')) {
+        message = 'Trop de demandes. Veuillez réessayer dans quelques minutes';
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+        message = 'Erreur de connexion réseau';
+      }
+      
       toast({
         title: 'Erreur',
         description: message,
         variant: 'destructive',
       });
+    } else {
+      toast({
+        title: 'Email envoyé',
+        description: 'Consultez votre boîte mail pour réinitialiser votre mot de passe',
+      });
+      setShowResetForm(false);
+      setResetEmail('');
     }
   };
 
@@ -91,11 +147,22 @@ export default function Auth() {
 
     if (error) {
       let message = "Erreur lors de l'inscription";
-      if (error.message.includes('already registered')) {
-        message = 'Cet email est déjà utilisé';
+      const errorMsg = error.message.toLowerCase();
+      
+      if (errorMsg.includes('already registered') || errorMsg.includes('already exists')) {
+        message = 'Un compte existe déjà avec cet email';
+      } else if (errorMsg.includes('weak password') || errorMsg.includes('password')) {
+        message = 'Le mot de passe est trop faible. Utilisez au moins 6 caractères';
+      } else if (errorMsg.includes('invalid email')) {
+        message = 'Adresse email invalide';
+      } else if (errorMsg.includes('rate limit') || errorMsg.includes('too many requests')) {
+        message = 'Trop de tentatives. Veuillez réessayer plus tard';
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+        message = 'Erreur de connexion réseau';
       }
+      
       toast({
-        title: 'Erreur',
+        title: "Erreur d'inscription",
         description: message,
         variant: 'destructive',
       });
@@ -135,38 +202,83 @@ export default function Auth() {
           </TabsList>
           
           <TabsContent value="login">
-            <form onSubmit={handleLogin}>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
-                  <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="votre@email.com"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Mot de passe</Label>
-                  <Input
-                    id="login-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    required
-                  />
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Se connecter
-                </Button>
-              </CardFooter>
-            </form>
+            {showResetForm ? (
+              <form onSubmit={handleResetPassword}>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reset-email">Email</Label>
+                    <Input
+                      id="reset-email"
+                      type="email"
+                      placeholder="votre@email.com"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Un email vous sera envoyé avec un lien pour réinitialiser votre mot de passe.
+                  </p>
+                </CardContent>
+                <CardFooter className="flex flex-col gap-2">
+                  <Button type="submit" className="w-full" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Envoyer le lien
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    className="w-full"
+                    onClick={() => setShowResetForm(false)}
+                  >
+                    Retour à la connexion
+                  </Button>
+                </CardFooter>
+              </form>
+            ) : (
+              <form onSubmit={handleLogin}>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-email">Email</Label>
+                    <Input
+                      id="login-email"
+                      type="email"
+                      placeholder="votre@email.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="login-password">Mot de passe</Label>
+                      <Button 
+                        type="button"
+                        variant="link" 
+                        className="px-0 h-auto text-xs text-muted-foreground"
+                        onClick={() => setShowResetForm(true)}
+                      >
+                        Mot de passe oublié ?
+                      </Button>
+                    </div>
+                    <Input
+                      id="login-password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button type="submit" className="w-full" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Se connecter
+                  </Button>
+                </CardFooter>
+              </form>
+            )}
           </TabsContent>
           
           <TabsContent value="signup">
