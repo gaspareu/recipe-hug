@@ -62,9 +62,15 @@ serve(async (req) => {
       
       if (recipeContext.steps && recipeContext.steps.length > 0) {
         contextMessage += `\nÉtapes :\n`;
-        const sortedSteps = [...recipeContext.steps].sort((a, b) => a.order - b.order);
+        const sortedSteps = [...recipeContext.steps].sort((a: any, b: any) => a.order - b.order);
         for (const step of sortedSteps) {
-          contextMessage += `${step.order}. ${step.text}\n`;
+          const status = step.completed ? '✓' : '○';
+          contextMessage += `${status} ${step.order}. ${step.text}\n`;
+        }
+        
+        // Add progress summary
+        if (recipeContext.completedStepsCount !== undefined) {
+          contextMessage += `\nProgression : ${recipeContext.completedStepsCount}/${recipeContext.totalSteps} étapes terminées`;
         }
       }
       

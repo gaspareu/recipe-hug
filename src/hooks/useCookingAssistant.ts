@@ -19,7 +19,7 @@ Posez-moi vos questions sur les ingrédients, les techniques, ou dites-moi simpl
   timestamp: new Date(),
 });
 
-export function useCookingAssistant(recipe: Recipe) {
+export function useCookingAssistant(recipe: Recipe, completedSteps: Set<number> = new Set()) {
   const [messages, setMessages] = useState<ChatMessage[]>([createWelcomeMessage(recipe.title)]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -57,12 +57,20 @@ export function useCookingAssistant(recipe: Recipe) {
       content: m.content,
     }));
 
+    // Build steps with completion status
+    const stepsWithStatus = recipe.steps.map((step: any) => ({
+      ...step,
+      completed: completedSteps.has(step.order),
+    }));
+
     const recipeContext = {
       title: recipe.title,
       servings: recipe.servings,
       season: recipe.season,
       ingredients: recipe.ingredients,
-      steps: recipe.steps,
+      steps: stepsWithStatus,
+      completedStepsCount: completedSteps.size,
+      totalSteps: recipe.steps.length,
     };
 
     try {
@@ -154,7 +162,7 @@ export function useCookingAssistant(recipe: Recipe) {
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
-  }, [messages, isStreaming, recipe, totalSteps]);
+  }, [messages, isStreaming, recipe, totalSteps, completedSteps]);
 
   const resetChat = useCallback(() => {
     if (abortControllerRef.current) {
