@@ -362,7 +362,7 @@ export default function RecipeDetail() {
           <CookingAssistantButton
             currentStep={completedSteps.size}
             totalSteps={totalSteps}
-            onPress={() => setChatOpen(true)}
+            onPress={() => setChatOpen(!chatOpen)}
             isComplete={isComplete}
           />
         )}
