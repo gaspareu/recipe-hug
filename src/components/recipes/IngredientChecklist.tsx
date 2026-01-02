@@ -7,6 +7,12 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface CheckedState {
@@ -65,24 +71,27 @@ export function IngredientToggleButton({
   onUncheckAll: () => void;
 }) {
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={allChecked ? onUncheckAll : onCheckAll}
-      className="text-muted-foreground hover:text-foreground"
-    >
-      {allChecked ? (
-        <>
-          <RotateCcw className="h-4 w-4 mr-2" />
-          Tout décocher
-        </>
-      ) : (
-        <>
-          <CheckCheck className="h-4 w-4 mr-2" />
-          Tout cocher
-        </>
-      )}
-    </Button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={allChecked ? onUncheckAll : onCheckAll}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            {allChecked ? (
+              <RotateCcw className="h-4 w-4" />
+            ) : (
+              <CheckCheck className="h-4 w-4" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{allChecked ? 'Tout décocher' : 'Tout cocher'}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
