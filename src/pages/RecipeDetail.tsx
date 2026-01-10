@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, Send, RotateCcw } from 'lucide-react';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,7 +38,7 @@ export default function RecipeDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  const { data: recipe, isLoading } = useRecipe(id || '');
+  const { data: recipe, isLoading, refetch } = useRecipe(id || '');
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -55,6 +56,69 @@ export default function RecipeDetail() {
   const handleStatusChange = (newStatus: RecipeStatus) => {
     if (!recipe) return;
     updateRecipe.mutate({ id: recipe.id, status: newStatus });
+  };
+
+  const handleImageChange = async (file: File) => {
+    if (!recipe) return;
+    
+    try {
+      // Upload image to storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${recipe.id}-${Date.now()}.${fileExt}`;
+      const filePath = `recipe-images/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('recipes')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('recipes')
+        .getPublicUrl(filePath);
+
+      // Update recipe with new image URL
+      await updateRecipe.mutateAsync({
+        id: recipe.id,
+        source_image_url: publicUrl,
+      });
+
+      toast({
+        title: 'Image mise à jour',
+        description: 'L\'image de la recette a été modifiée',
+      });
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast({
+        title: 'Erreur',
+        description: "Impossible de télécharger l'image",
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleImageRemove = async () => {
+    if (!recipe) return;
+    
+    try {
+      await updateRecipe.mutateAsync({
+        id: recipe.id,
+        source_image_url: null,
+      });
+
+      toast({
+        title: 'Image supprimée',
+        description: 'L\'image de la recette a été retirée',
+      });
+    } catch (error) {
+      console.error('Error removing image:', error);
+      toast({
+        title: 'Erreur',
+        description: "Impossible de supprimer l'image",
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleAnalyze = async () => {
@@ -205,6 +269,14 @@ export default function RecipeDetail() {
             </Button>
           </div>
         </div>
+
+        {/* Recipe Image */}
+        <RecipeImageDisplay
+          recipeId={recipe.id}
+          imageUrl={recipe.source_image_url}
+          onImageChange={handleImageChange}
+          onImageRemove={handleImageRemove}
+        />
 
         <div className="overflow-x-auto">
           <div className="flex items-center gap-2 min-w-max">
