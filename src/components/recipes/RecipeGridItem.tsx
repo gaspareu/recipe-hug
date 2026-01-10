@@ -1,10 +1,10 @@
-import { Link } from 'react-router-dom';
-import { FavoriteToggle } from './FavoriteToggle';
-import type { Recipe } from '@/types/recipe';
+import { Link } from "react-router-dom";
+import { FavoriteToggle } from "./FavoriteToggle";
+import type { Recipe } from "@/types/recipe";
 
-import placeholderLivre from '@/assets/placeholder_livre.jpg';
-import placeholderSalade from '@/assets/placeholder_salade.jpg';
-import placeholderPlat from '@/assets/placeholder_plat.jpg';
+import placeholderLivre from "@/assets/placeholder_livre.jpg";
+import placeholderSalade from "@/assets/placeholder_salade.jpg";
+import placeholderPlat from "@/assets/placeholder_plat.jpg";
 
 const placeholderImages = [placeholderLivre, placeholderSalade, placeholderPlat];
 
@@ -19,46 +19,34 @@ interface RecipeGridItemProps {
   isTogglingFavorite?: boolean;
 }
 
-export function RecipeGridItem({
-  recipe,
-  onToggleFavorite,
-  isTogglingFavorite
-}: RecipeGridItemProps) {
+export function RecipeGridItem({ recipe, onToggleFavorite, isTogglingFavorite }: RecipeGridItemProps) {
   return (
-    <Link 
-      to={`/recipes/${recipe.id}`}
-      className="relative aspect-square overflow-hidden group"
-    >
+    <Link to={`/recipes/${recipe.id}`} className="relative aspect-square overflow-hidden group">
       {/* Image */}
-      <img 
-        src={getPlaceholderImage(recipe.id)} 
+      <img
+        src={getPlaceholderImage(recipe.id)}
         alt={recipe.title}
         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
       />
-      
+
       {/* Overlay sombre au hover pour améliorer lisibilité */}
       <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300" />
-      
+
       {/* Titre centré avec ombre pour lisibilité */}
       <div className="absolute inset-0 flex items-center justify-center p-3">
-        <h3 
-          className="text-center font-playfair font-bold text-sm sm:text-base leading-tight line-clamp-3 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white"
-          style={{
-            textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.7)'
-          }}
-        >
+        <h3 className="text-center font-playfair font-bold text-sm sm:text-base leading-tight line-clamp-3 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white">
           {recipe.title}
         </h3>
       </div>
-      
+
       {/* Bouton favoris en overlay (visible au hover) */}
-      <div 
+      <div
         className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
         onClick={(e) => e.preventDefault()}
       >
-        <FavoriteToggle 
-          isFavorite={recipe.is_favorite ?? false} 
-          onToggle={() => onToggleFavorite(recipe.id, !recipe.is_favorite)} 
+        <FavoriteToggle
+          isFavorite={recipe.is_favorite ?? false}
+          onToggle={() => onToggleFavorite(recipe.id, !recipe.is_favorite)}
           disabled={isTogglingFavorite}
           variant="overlay"
         />
