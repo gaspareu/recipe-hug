@@ -19,6 +19,7 @@ import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
 import { useCookingAssistant, ChatMessage } from '@/hooks/useCookingAssistant';
+import { useSwipeClose } from '@/hooks/useSwipeClose';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { RecipeStatus, Step } from '@/types/recipe';
@@ -314,18 +315,12 @@ export default function RecipeDetail() {
                   </Button>
                 </SheetTrigger>
                 <SheetContent className="w-full sm:w-[400px] md:w-[540px] max-w-full flex flex-col p-0">
-                  <SheetHeader className="p-4 pb-2 border-b">
-                    <SheetTitle className="flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <span>👨‍🍳</span>
-                        Assistant
-                      </span>
-                      <span className="text-sm font-normal text-muted-foreground px-0 pr-[17px]">
-                        Étape {Math.min(completedSteps.size + 1, totalSteps)}/{totalSteps}
-                      </span>
-                    </SheetTitle>
-                  </SheetHeader>
-                  <ChatInterface recipe={recipe} completedSteps={completedSteps} />
+                  <AssistantSheetContent 
+                    recipe={recipe} 
+                    completedSteps={completedSteps} 
+                    totalSteps={totalSteps}
+                    onClose={() => setChatOpen(false)}
+                  />
                 </SheetContent>
               </Sheet>
             </CardTitle>
@@ -353,6 +348,38 @@ export default function RecipeDetail() {
         {totalSteps > 0 && <CookingAssistantButton currentStep={completedSteps.size} totalSteps={totalSteps} onPress={() => setChatOpen(!chatOpen)} isComplete={isComplete} />}
       </div>
     </MainLayout>;
+}
+
+// Assistant Sheet Content with swipe support
+function AssistantSheetContent({
+  recipe,
+  completedSteps,
+  totalSteps,
+  onClose
+}: {
+  recipe: NonNullable<ReturnType<typeof useRecipe>['data']>;
+  completedSteps: Set<number>;
+  totalSteps: number;
+  onClose: () => void;
+}) {
+  const swipeHandlers = useSwipeClose({ onClose, direction: 'right', threshold: 80 });
+
+  return (
+    <div className="flex flex-col h-full" {...swipeHandlers}>
+      <SheetHeader className="p-4 pb-2 border-b">
+        <SheetTitle className="flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <span>👨‍🍳</span>
+            Assistant
+          </span>
+          <span className="text-sm font-normal text-muted-foreground px-0 pr-[17px]">
+            Étape {Math.min(completedSteps.size + 1, totalSteps)}/{totalSteps}
+          </span>
+        </SheetTitle>
+      </SheetHeader>
+      <ChatInterface recipe={recipe} completedSteps={completedSteps} />
+    </div>
+  );
 }
 
 // Chat Interface Component
