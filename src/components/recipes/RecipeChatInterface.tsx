@@ -8,6 +8,7 @@ import { RecipePreviewCard } from './RecipePreviewCard';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import ReactMarkdown from 'react-markdown';
 
 const QUICK_SUGGESTIONS = [
   "Une recette végétarienne rapide",
@@ -164,13 +165,21 @@ export function RecipeChatInterface() {
             >
               <div
                 className={cn(
-                  "max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap",
+                  "max-w-[85%] rounded-lg px-3 py-2 text-sm",
                   message.role === 'user'
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-primary text-primary-foreground whitespace-pre-wrap"
                     : "bg-muted"
                 )}
               >
-                {message.content || (
+                {message.content ? (
+                  message.role === 'user' ? (
+                    message.content
+                  ) : (
+                    <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:m-0 [&>ul]:my-1 [&>ol]:my-1">
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    </div>
+                  )
+                ) : (
                   <span className="flex items-center gap-1 text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" />
                     Réflexion...
