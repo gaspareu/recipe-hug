@@ -19,9 +19,11 @@ export function RecipeGridItem({
   onToggleFavorite,
   isTogglingFavorite
 }: RecipeGridItemProps) {
+  const imageUrl = recipe.source_image_url || getPlaceholderImage(recipe.id);
+
   return <Link to={`/recipes/${recipe.id}`} className="relative aspect-square overflow-hidden group">
       {/* Image */}
-      <img src={getPlaceholderImage(recipe.id)} alt={recipe.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+      <img src={imageUrl} alt={recipe.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
 
       {/* Overlay sombre au hover pour améliorer lisibilité */}
       <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300" />
