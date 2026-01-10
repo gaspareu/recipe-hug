@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
 import type { RecipeStatus } from '@/types/recipe';
-const SEASONS = ['printemps', 'été', 'automne', 'hiver', 'toutes saisons'];
+const SEASONS = ['printemps', 'été', 'automne', 'hiver'];
 interface FilterBarProps {
   search: string;
   onSearchChange: (value: string) => void;
