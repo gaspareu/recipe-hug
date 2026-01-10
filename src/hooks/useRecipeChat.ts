@@ -327,6 +327,25 @@ export function useRecipeChat() {
         return finalMessages;
       });
 
+      // Trigger preference extraction in background (non-blocking)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const allMessages = newMessages.filter(m => m.id !== 'welcome').map(m => ({
+          role: m.role,
+          content: m.content,
+        }));
+        
+        // Fire and forget - don't await
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-user-preferences`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ messages: allMessages, userId: user.id }),
+        }).catch(err => console.log('Preference extraction failed (non-critical):', err));
+      }
+
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
         console.log('Request aborted');

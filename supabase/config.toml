@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.cooking-assistant]
 verify_jwt = false
+
+[functions.extract-user-preferences]
+verify_jwt = false

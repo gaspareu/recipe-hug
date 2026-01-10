@@ -125,6 +125,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_culinary_preferences: {
+        Row: {
+          created_at: string
+          culinary_style: Json
+          dietary_constraints: Json
+          id: string
+          kitchen_equipment: Json
+          taste_preferences: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          culinary_style?: Json
+          dietary_constraints?: Json
+          id?: string
+          kitchen_equipment?: Json
+          taste_preferences?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          culinary_style?: Json
+          dietary_constraints?: Json
+          id?: string
+          kitchen_equipment?: Json
+          taste_preferences?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
