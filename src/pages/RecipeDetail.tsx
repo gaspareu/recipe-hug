@@ -362,10 +362,10 @@ function AssistantSheetContent({
   totalSteps: number;
   onClose: () => void;
 }) {
-  const swipeHandlers = useSwipeClose({ onClose, direction: 'right', threshold: 80 });
+  const { style: swipeStyle, ...swipeHandlers } = useSwipeClose({ onClose, direction: 'right', threshold: 80 });
 
   return (
-    <div className="flex flex-col h-full" {...swipeHandlers}>
+    <div className="flex flex-col h-full" style={swipeStyle} {...swipeHandlers}>
       <SheetHeader className="p-4 pb-2 border-b">
         <SheetTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">

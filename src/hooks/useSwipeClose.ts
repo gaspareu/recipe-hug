@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 
 interface UseSwipeCloseOptions {
   onClose: () => void;
@@ -13,27 +13,47 @@ export function useSwipeClose({
 }: UseSwipeCloseOptions) {
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+  const isHorizontalSwipe = useRef<boolean | null>(null);
+  const [translateX, setTranslateX] = useState(0);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
+    isHorizontalSwipe.current = null;
   }, []);
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (touchStartX.current === null || touchStartY.current === null) return;
 
-    const touchEndX = e.changedTouches[0].clientX;
-    const touchEndY = e.changedTouches[0].clientY;
+    const touchCurrentX = e.touches[0].clientX;
+    const touchCurrentY = e.touches[0].clientY;
     
-    const deltaX = touchEndX - touchStartX.current;
-    const deltaY = Math.abs(touchEndY - touchStartY.current);
+    const deltaX = touchCurrentX - touchStartX.current;
+    const deltaY = Math.abs(touchCurrentY - touchStartY.current);
 
-    // Only trigger if horizontal swipe is dominant (not scrolling vertically)
-    if (deltaY > Math.abs(deltaX)) {
-      touchStartX.current = null;
-      touchStartY.current = null;
+    // Determine if this is a horizontal swipe on first significant movement
+    if (isHorizontalSwipe.current === null && (Math.abs(deltaX) > 10 || deltaY > 10)) {
+      isHorizontalSwipe.current = Math.abs(deltaX) > deltaY;
+    }
+
+    // Only apply translation for horizontal swipes in the correct direction
+    if (isHorizontalSwipe.current) {
+      if (direction === 'right' && deltaX > 0) {
+        setTranslateX(deltaX);
+      } else if (direction === 'left' && deltaX < 0) {
+        setTranslateX(deltaX);
+      }
+    }
+  }, [direction]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) {
+      setTranslateX(0);
       return;
     }
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const deltaX = touchEndX - touchStartX.current;
 
     const isSwipeRight = deltaX > threshold;
     const isSwipeLeft = deltaX < -threshold;
@@ -45,12 +65,20 @@ export function useSwipeClose({
       onClose();
     }
 
+    // Reset
+    setTranslateX(0);
     touchStartX.current = null;
     touchStartY.current = null;
+    isHorizontalSwipe.current = null;
   }, [onClose, direction, threshold]);
 
   return {
     onTouchStart: handleTouchStart,
+    onTouchMove: handleTouchMove,
     onTouchEnd: handleTouchEnd,
+    style: {
+      transform: translateX !== 0 ? `translateX(${translateX}px)` : undefined,
+      transition: translateX === 0 ? 'transform 0.2s ease-out' : undefined,
+    },
   };
 }
