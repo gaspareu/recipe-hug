@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
-import { RecipeCard } from '@/components/recipes/RecipeCard';
+import { RecipeGridItem } from '@/components/recipes/RecipeGridItem';
 import { FilterBar } from '@/components/recipes/FilterBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRecipes, useToggleFavorite } from '@/hooks/useRecipes';
@@ -76,15 +76,9 @@ export default function Dashboard() {
         />
 
         {isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-stagger">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-lg overflow-hidden bg-card border">
-                <Skeleton className="h-40 w-full rounded-none" />
-                <div className="p-4 space-y-2">
-                  <Skeleton className="h-5 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                </div>
-              </div>
+          <div className="grid grid-cols-3 gap-0.5 animate-stagger">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Skeleton key={i} className="aspect-square rounded-none" />
             ))}
           </div>
         ) : filteredRecipes.length === 0 ? (
@@ -104,9 +98,9 @@ export default function Dashboard() {
             )}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-stagger">
+          <div className="grid grid-cols-3 gap-0.5 animate-stagger">
             {filteredRecipes.map((recipe) => (
-              <RecipeCard
+              <RecipeGridItem
                 key={recipe.id}
                 recipe={recipe}
                 onToggleFavorite={handleToggleFavorite}
