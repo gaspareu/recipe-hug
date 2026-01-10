@@ -45,7 +45,7 @@ Réponds en JSON avec ce format exact:
   "ai_summary": "Description courte et générique de la recette en 1-2 phrases",
   "nutrition_tags": ["tag1", "tag2"],
   "calorie_score": 3,
-  "season": "printemps"
+  "season": "Saison de la recette en fonction des ingrédients"
 }
 
 Pour ai_summary: Une description courte et générique du plat (type de cuisine, caractéristiques principales). Évite les détails trop spécifiques.
