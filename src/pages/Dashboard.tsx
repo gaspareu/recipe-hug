@@ -34,8 +34,8 @@ export default function Dashboard() {
       if (favoritesOnly && !recipe.is_favorite) {
         return false;
       }
-      // Filtre par saison
-      if (seasonFilter !== 'all' && recipe.season !== seasonFilter) {
+      // Filtre par saison (inclut aussi "toutes saisons")
+      if (seasonFilter !== 'all' && recipe.season !== seasonFilter && recipe.season !== 'toutes saisons') {
         return false;
       }
       return true;
