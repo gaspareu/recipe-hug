@@ -313,7 +313,7 @@ export default function RecipeDetail() {
                     <MessageCircle className="h-4 w-4" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent className="w-[400px] sm:w-[540px] flex flex-col p-0">
+                <SheetContent className="w-full sm:w-[400px] md:w-[540px] max-w-full flex flex-col p-0">
                   <SheetHeader className="p-4 pb-2 border-b">
                     <SheetTitle className="flex items-center justify-between">
                       <span className="flex items-center gap-2">
