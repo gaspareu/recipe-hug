@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `Tu es un assistant culinaire qui guide l'utilisateur dans la réalisation d'une recette spécifique.
+const BASE_SYSTEM_PROMPT = `Tu es un assistant culinaire qui guide l'utilisateur dans la réalisation d'une recette spécifique.
 
 Tu as en contexte la recette complète (titre, ingrédients, étapes, portions, saison).
 
@@ -22,6 +23,65 @@ Ton : chaleureux, encourageant, expert culinaire français. Tu accompagnes comme
 
 IMPORTANT : Tu ne crées pas de nouvelle recette, tu aides à réaliser celle en contexte.`;
 
+const PERSONALIZATION_INSTRUCTION = `
+
+IMPORTANT - PROFIL UTILISATEUR :
+Tu as accès au profil culinaire de l'utilisateur. Utilise ces informations pour :
+- Proposer des substitutions adaptées à ses allergies/contraintes
+- Suggérer des alternatives si un équipement lui manque
+- Adapter tes conseils à son niveau de difficulté préféré
+
+Ne mentionne pas explicitement que tu connais ces préférences, intègre-les naturellement.`;
+
+// Format user preferences for context
+function formatPreferencesContext(prefs: any): string {
+  if (!prefs) return '';
+
+  const sections: string[] = [];
+
+  // Focus on constraints and equipment for cooking assistant
+  const equipment = prefs.kitchen_equipment || {};
+  if (equipment.unavailable?.length > 0) {
+    sections.push(`Équipement non disponible : ${equipment.unavailable.join(', ')}`);
+  }
+
+  const diet = prefs.dietary_constraints || {};
+  if (diet.allergies?.length > 0) {
+    sections.push(`⚠️ ALLERGIES : ${diet.allergies.join(', ')}`);
+  }
+  if (diet.diets?.length > 0) {
+    sections.push(`Régime : ${diet.diets.join(', ')}`);
+  }
+  if (diet.restrictions?.length > 0) {
+    sections.push(`Restrictions : ${diet.restrictions.join(', ')}`);
+  }
+
+  const style = prefs.culinary_style || {};
+  if (style.preferred_difficulty) {
+    sections.push(`Niveau culinaire : ${style.preferred_difficulty}`);
+  }
+
+  if (sections.length === 0) return '';
+
+  return `\n\n--- PROFIL UTILISATEUR ---\n${sections.join('\n')}\n--- FIN PROFIL ---`;
+}
+
+// Extract user ID from JWT
+function extractUserIdFromToken(authHeader: string | null): string | null {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  
+  try {
+    const token = authHeader.split(' ')[1];
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    
+    const payload = JSON.parse(atob(parts[1]));
+    return payload.sub || null;
+  } catch {
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -30,6 +90,8 @@ serve(async (req) => {
   try {
     const { messages, recipeContext } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
@@ -39,7 +101,31 @@ serve(async (req) => {
     console.log("Recipe context:", recipeContext?.title);
 
     // Build context message with recipe details
-    let contextMessage = SYSTEM_PROMPT;
+    let contextMessage = BASE_SYSTEM_PROMPT;
+
+    // Try to get user preferences if authenticated
+    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      const authHeader = req.headers.get('authorization');
+      const userId = extractUserIdFromToken(authHeader);
+
+      if (userId) {
+        console.log("Loading preferences for user:", userId);
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+        const { data: prefs } = await supabase
+          .from('user_culinary_preferences')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+        const prefsContext = formatPreferencesContext(prefs);
+
+        if (prefsContext) {
+          contextMessage += PERSONALIZATION_INSTRUCTION + prefsContext;
+          console.log("Added personalization context");
+        }
+      }
+    }
     
     if (recipeContext) {
       contextMessage += `\n\n--- RECETTE EN COURS ---\n`;
