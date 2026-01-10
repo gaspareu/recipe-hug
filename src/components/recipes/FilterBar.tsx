@@ -4,7 +4,12 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
 import type { RecipeStatus } from '@/types/recipe';
-const SEASONS = ['printemps', 'été', 'automne', 'hiver'];
+const SEASONS = [
+  { value: 'printemps', label: 'Printemps' },
+  { value: 'été', label: 'Été' },
+  { value: 'automne', label: 'Automne' },
+  { value: 'hiver', label: 'Hiver' }
+];
 interface FilterBarProps {
   search: string;
   onSearchChange: (value: string) => void;
@@ -59,7 +64,7 @@ export function FilterBar({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Toutes</SelectItem>
-            {SEASONS.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+            {SEASONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
           </SelectContent>
         </Select>
         
