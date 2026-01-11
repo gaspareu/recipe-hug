@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BASE_SYSTEM_PROMPT = `Tu es un assistant culinaire qui guide l'utilisateur dans la réalisation d'une recette spécifique.
+const COOKING_SYSTEM_PROMPT = `Tu es un assistant culinaire qui guide l'utilisateur dans la réalisation d'une recette spécifique.
 
 Tu as en contexte la recette complète (titre, ingrédients, étapes, portions, saison).
 
@@ -23,6 +23,24 @@ Ton : chaleureux, encourageant, expert culinaire français. Tu accompagnes comme
 
 IMPORTANT : Tu ne crées pas de nouvelle recette, tu aides à réaliser celle en contexte.`;
 
+const EDITING_SYSTEM_PROMPT = `Tu es un assistant culinaire qui aide l'utilisateur à MODIFIER et AMÉLIORER une recette existante.
+
+Tu as en contexte la recette complète (titre, ingrédients, étapes, portions).
+
+Comportement :
+- Aide l'utilisateur à adapter la recette selon ses besoins (version végétarienne, sans gluten, etc.)
+- Suggère des modifications d'ingrédients ou d'étapes
+- Réponds aux questions sur les substitutions possibles
+- Propose des améliorations ou variations
+- Quand l'utilisateur est satisfait de la version modifiée, propose-lui de l'enregistrer
+
+IMPORTANT - FORMAT DE RÉPONSE :
+- Quand tu proposes une modification, décris-la clairement dans le texte
+- Si l'utilisateur demande à "enregistrer", "remplacer", "appliquer" les modifications, ou dit "c'est bon", utilise l'outil extract_modified_recipe pour extraire la recette modifiée complète
+- L'outil doit contenir TOUTE la recette avec les modifications intégrées, pas seulement les changements
+
+Ton : créatif, expert culinaire, bienveillant. Tu co-crées avec l'utilisateur.`;
+
 const PERSONALIZATION_INSTRUCTION = `
 
 IMPORTANT - PROFIL UTILISATEUR :
@@ -33,13 +51,61 @@ Tu as accès au profil culinaire de l'utilisateur. Utilise ces informations pour
 
 Ne mentionne pas explicitement que tu connais ces préférences, intègre-les naturellement.`;
 
+// Tool definition for extracting modified recipe
+const EXTRACT_RECIPE_TOOL = {
+  type: "function",
+  function: {
+    name: "extract_modified_recipe",
+    description: "Extrait la recette modifiée complète pour l'enregistrer. Utiliser quand l'utilisateur veut sauvegarder les modifications.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "Titre de la recette (peut être modifié)"
+        },
+        servings: {
+          type: "number",
+          description: "Nombre de portions"
+        },
+        ingredients: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              quantity: { type: "number" },
+              unit: { type: "string" },
+              category: { type: "string" }
+            },
+            required: ["name", "quantity", "unit"]
+          },
+          description: "Liste complète des ingrédients avec les modifications"
+        },
+        steps: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              order: { type: "number" },
+              text: { type: "string" }
+            },
+            required: ["order", "text"]
+          },
+          description: "Liste complète des étapes avec les modifications"
+        }
+      },
+      required: ["title", "servings", "ingredients", "steps"]
+    }
+  }
+};
+
 // Format user preferences for context
 function formatPreferencesContext(prefs: any): string {
   if (!prefs) return '';
 
   const sections: string[] = [];
 
-  // Focus on constraints and equipment for cooking assistant
   const equipment = prefs.kitchen_equipment || {};
   if (equipment.unavailable?.length > 0) {
     sections.push(`Équipement non disponible : ${equipment.unavailable.join(', ')}`);
@@ -88,7 +154,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, recipeContext } = await req.json();
+    const { messages, recipeContext, mode = 'cooking' } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -97,11 +163,12 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    console.log("Cooking assistant request received with", messages.length, "messages");
+    console.log("Cooking assistant request - mode:", mode, "messages:", messages.length);
     console.log("Recipe context:", recipeContext?.title);
 
-    // Build context message with recipe details
-    let contextMessage = BASE_SYSTEM_PROMPT;
+    // Choose system prompt based on mode
+    const basePrompt = mode === 'editing' ? EDITING_SYSTEM_PROMPT : COOKING_SYSTEM_PROMPT;
+    let contextMessage = basePrompt;
 
     // Try to get user preferences if authenticated
     if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
@@ -128,7 +195,7 @@ serve(async (req) => {
     }
     
     if (recipeContext) {
-      contextMessage += `\n\n--- RECETTE EN COURS ---\n`;
+      contextMessage += `\n\n--- RECETTE ${mode === 'editing' ? 'À MODIFIER' : 'EN COURS'} ---\n`;
       contextMessage += `Titre : ${recipeContext.title}\n`;
       
       if (recipeContext.servings) {
@@ -150,17 +217,36 @@ serve(async (req) => {
         contextMessage += `\nÉtapes :\n`;
         const sortedSteps = [...recipeContext.steps].sort((a: any, b: any) => a.order - b.order);
         for (const step of sortedSteps) {
-          const status = step.completed ? '✓' : '○';
-          contextMessage += `${status} ${step.order}. ${step.text}\n`;
+          if (mode === 'cooking') {
+            const status = step.completed ? '✓' : '○';
+            contextMessage += `${status} ${step.order}. ${step.text}\n`;
+          } else {
+            contextMessage += `${step.order}. ${step.text}\n`;
+          }
         }
         
-        // Add progress summary
-        if (recipeContext.completedStepsCount !== undefined) {
+        // Add progress summary only in cooking mode
+        if (mode === 'cooking' && recipeContext.completedStepsCount !== undefined) {
           contextMessage += `\nProgression : ${recipeContext.completedStepsCount}/${recipeContext.totalSteps} étapes terminées`;
         }
       }
       
       contextMessage += `\n--- FIN DE LA RECETTE ---`;
+    }
+
+    // Build request body
+    const requestBody: any = {
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: contextMessage },
+        ...messages,
+      ],
+      stream: true,
+    };
+
+    // Add tool in editing mode
+    if (mode === 'editing') {
+      requestBody.tools = [EXTRACT_RECIPE_TOOL];
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -169,14 +255,7 @@ serve(async (req) => {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: contextMessage },
-          ...messages,
-        ],
-        stream: true,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

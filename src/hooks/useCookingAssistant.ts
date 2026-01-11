@@ -1,44 +1,79 @@
 import { useState, useCallback, useRef } from 'react';
-import type { Recipe } from '@/types/recipe';
+import type { Recipe, Ingredient, Step } from '@/types/recipe';
+
+export type AssistantMode = 'cooking' | 'editing';
 
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  extractedRecipe?: ExtractedRecipeData | null;
+}
+
+export interface ExtractedRecipeData {
+  title: string;
+  servings: number;
+  ingredients: Ingredient[];
+  steps: Step[];
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cooking-assistant`;
 
-const createWelcomeMessage = (recipeTitle: string): ChatMessage => ({
+const createWelcomeMessage = (recipeTitle: string, mode: AssistantMode): ChatMessage => ({
   id: 'welcome',
   role: 'assistant',
-  content: `Bonjour ! 👨‍🍳 Je suis là pour vous accompagner dans la réalisation de "**${recipeTitle}**". 
+  content: mode === 'cooking' 
+    ? `Bonjour ! 👨‍🍳 Je suis là pour vous accompagner dans la réalisation de "**${recipeTitle}**". 
 
-Posez-moi vos questions sur les ingrédients, les techniques, ou dites-moi simplement "C'est parti !" pour commencer !`,
+Posez-moi vos questions sur les ingrédients, les techniques, ou dites-moi simplement "C'est parti !" pour commencer !`
+    : `Bonjour ! ✏️ Je suis là pour vous aider à **modifier** la recette "**${recipeTitle}**".
+
+Dites-moi ce que vous souhaitez changer : version végétarienne, sans gluten, plus épicée, moins d'ingrédients... 
+
+Une fois satisfait, dites "Applique les modifications" et je mettrai à jour votre recette !`,
   timestamp: new Date(),
 });
 
-export function useCookingAssistant(recipe: Recipe, completedSteps: Set<number> = new Set()) {
-  const [messages, setMessages] = useState<ChatMessage[]>([createWelcomeMessage(recipe.title)]);
+export function useCookingAssistant(
+  recipe: Recipe, 
+  completedSteps: Set<number> = new Set(),
+  initialMode: AssistantMode = 'cooking'
+) {
+  const [mode, setMode] = useState<AssistantMode>(initialMode);
+  const [messages, setMessages] = useState<ChatMessage[]>([createWelcomeMessage(recipe.title, initialMode)]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [pendingRecipe, setPendingRecipe] = useState<ExtractedRecipeData | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const totalSteps = recipe.steps.length;
 
+  const changeMode = useCallback((newMode: AssistantMode) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setMode(newMode);
+    setMessages([createWelcomeMessage(recipe.title, newMode)]);
+    setCurrentStepIndex(0);
+    setIsStreaming(false);
+    setPendingRecipe(null);
+  }, [recipe.title]);
+
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;
 
-    // Track step progression
-    const stepMatch = text.match(/étape\s*(\d+)/i);
-    if (stepMatch) {
-      const stepNum = parseInt(stepMatch[1], 10);
-      if (stepNum > 0 && stepNum <= totalSteps) {
-        setCurrentStepIndex(stepNum);
+    // Track step progression in cooking mode
+    if (mode === 'cooking') {
+      const stepMatch = text.match(/étape\s*(\d+)/i);
+      if (stepMatch) {
+        const stepNum = parseInt(stepMatch[1], 10);
+        if (stepNum > 0 && stepNum <= totalSteps) {
+          setCurrentStepIndex(stepNum);
+        }
+      } else if (text.toLowerCase().includes("c'est parti") || text.toLowerCase().includes("commencer")) {
+        setCurrentStepIndex(1);
       }
-    } else if (text.toLowerCase().includes("c'est parti") || text.toLowerCase().includes("commencer")) {
-      setCurrentStepIndex(1);
     }
 
     const userMessage: ChatMessage = {
@@ -82,7 +117,7 @@ export function useCookingAssistant(recipe: Recipe, completedSteps: Set<number> 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: apiMessages, recipeContext }),
+        body: JSON.stringify({ messages: apiMessages, recipeContext, mode }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -99,6 +134,8 @@ export function useCookingAssistant(recipe: Recipe, completedSteps: Set<number> 
       const decoder = new TextDecoder();
       let assistantContent = '';
       let buffer = '';
+      let toolCallArgs = '';
+      let isToolCall = false;
 
       const assistantMessageId = crypto.randomUUID();
       const assistantMessage: ChatMessage = {
@@ -132,6 +169,16 @@ export function useCookingAssistant(recipe: Recipe, completedSteps: Set<number> 
             const parsed = JSON.parse(jsonStr);
             const delta = parsed.choices?.[0]?.delta;
 
+            // Check for tool calls
+            if (delta?.tool_calls) {
+              isToolCall = true;
+              for (const toolCall of delta.tool_calls) {
+                if (toolCall.function?.arguments) {
+                  toolCallArgs += toolCall.function.arguments;
+                }
+              }
+            }
+
             if (delta?.content) {
               assistantContent += delta.content;
               setMessages(prev => prev.map(m => 
@@ -144,6 +191,29 @@ export function useCookingAssistant(recipe: Recipe, completedSteps: Set<number> 
             buffer = line + '\n' + buffer;
             break;
           }
+        }
+      }
+
+      // Process tool call result
+      if (isToolCall && toolCallArgs) {
+        try {
+          const extractedRecipe = JSON.parse(toolCallArgs) as ExtractedRecipeData;
+          console.log('Extracted recipe from tool call:', extractedRecipe);
+          
+          // Store pending recipe
+          setPendingRecipe(extractedRecipe);
+          
+          // Update message with extracted recipe info
+          const confirmationMessage = assistantContent || 
+            `✅ J'ai préparé la version modifiée de votre recette "${extractedRecipe.title}". Cliquez sur "Appliquer les modifications" pour mettre à jour votre recette.`;
+          
+          setMessages(prev => prev.map(m => 
+            m.id === assistantMessageId 
+              ? { ...m, content: confirmationMessage, extractedRecipe }
+              : m
+          ));
+        } catch (e) {
+          console.error('Failed to parse tool call arguments:', e, toolCallArgs);
         }
       }
 
@@ -162,16 +232,21 @@ export function useCookingAssistant(recipe: Recipe, completedSteps: Set<number> 
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
-  }, [messages, isStreaming, recipe, totalSteps, completedSteps]);
+  }, [messages, isStreaming, recipe, totalSteps, completedSteps, mode]);
 
   const resetChat = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    setMessages([createWelcomeMessage(recipe.title)]);
+    setMessages([createWelcomeMessage(recipe.title, mode)]);
     setCurrentStepIndex(0);
     setIsStreaming(false);
-  }, [recipe.title]);
+    setPendingRecipe(null);
+  }, [recipe.title, mode]);
+
+  const clearPendingRecipe = useCallback(() => {
+    setPendingRecipe(null);
+  }, []);
 
   return {
     messages,
@@ -180,5 +255,9 @@ export function useCookingAssistant(recipe: Recipe, completedSteps: Set<number> 
     resetChat,
     currentStepIndex,
     totalSteps,
+    mode,
+    changeMode,
+    pendingRecipe,
+    clearPendingRecipe,
   };
 }
