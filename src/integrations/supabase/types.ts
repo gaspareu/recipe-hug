@@ -68,6 +68,59 @@ export type Database = {
         }
         Relationships: []
       }
+      recipe_versions: {
+        Row: {
+          change_description: string | null
+          created_at: string
+          id: string
+          ingredients: Json
+          nutrition_tags: string[] | null
+          recipe_id: string
+          season: string | null
+          servings: number | null
+          steps: Json
+          title: string
+          user_id: string
+          version_number: number
+        }
+        Insert: {
+          change_description?: string | null
+          created_at?: string
+          id?: string
+          ingredients?: Json
+          nutrition_tags?: string[] | null
+          recipe_id: string
+          season?: string | null
+          servings?: number | null
+          steps?: Json
+          title: string
+          user_id: string
+          version_number: number
+        }
+        Update: {
+          change_description?: string | null
+          created_at?: string
+          id?: string
+          ingredients?: Json
+          nutrition_tags?: string[] | null
+          recipe_id?: string
+          season?: string | null
+          servings?: number | null
+          steps?: Json
+          title?: string
+          user_id?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_versions_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recipes: {
         Row: {
           ai_summary: string | null

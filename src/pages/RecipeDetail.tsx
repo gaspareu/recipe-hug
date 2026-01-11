@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, Send, RotateCcw, ChefHat, Pencil, Save } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, Send, RotateCcw, ChefHat, Pencil, Save, History } from 'lucide-react';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
+import { RecipeVersionHistory } from '@/components/recipes/RecipeVersionHistory';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -19,11 +20,13 @@ import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
 import { useCookingAssistant, ChatMessage, AssistantMode, ExtractedRecipeData } from '@/hooks/useCookingAssistant';
+import { useCreateVersion } from '@/hooks/useRecipeVersions';
+import { useAuth } from '@/hooks/useAuth';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSwipeClose } from '@/hooks/useSwipeClose';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import type { RecipeStatus, Step } from '@/types/recipe';
+import type { RecipeStatus, Step, Ingredient } from '@/types/recipe';
 export default function RecipeDetail() {
   const {
     id
@@ -41,6 +44,8 @@ export default function RecipeDetail() {
   } = useRecipe(id || '');
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
+  const createVersion = useCreateVersion();
+  const { user } = useAuth();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Cooking assistant state
@@ -338,6 +343,21 @@ export default function RecipeDetail() {
                     totalSteps={totalSteps}
                     onClose={() => setChatOpen(false)}
                     onRecipeUpdate={async (data) => {
+                      // Save current version before updating
+                      if (user) {
+                        await createVersion.mutateAsync({
+                          recipeId: recipe.id,
+                          userId: user.id,
+                          title: recipe.title,
+                          servings: recipe.servings,
+                          ingredients: recipe.ingredients as Ingredient[],
+                          steps: recipe.steps as Step[],
+                          season: recipe.season,
+                          nutrition_tags: recipe.nutrition_tags,
+                          changeDescription: 'Avant modification via assistant',
+                        });
+                      }
+                      
                       await updateRecipe.mutateAsync({
                         id: recipe.id,
                         title: data.title,
@@ -347,10 +367,11 @@ export default function RecipeDetail() {
                       });
                       toast({
                         title: 'Recette mise à jour',
-                        description: 'Les modifications ont été appliquées avec succès'
+                        description: 'Les modifications ont été appliquées. Vous pouvez restaurer la version précédente depuis l\'historique.'
                       });
                       refetch();
                     }}
+                    recipeId={recipe.id}
                   />
                 </SheetContent>
               </Sheet>
@@ -387,24 +408,26 @@ function AssistantSheetContent({
   completedSteps,
   totalSteps,
   onClose,
-  onRecipeUpdate
+  onRecipeUpdate,
+  recipeId
 }: {
   recipe: NonNullable<ReturnType<typeof useRecipe>['data']>;
   completedSteps: Set<number>;
   totalSteps: number;
   onClose: () => void;
   onRecipeUpdate: (data: ExtractedRecipeData) => Promise<void>;
+  recipeId: string;
 }) {
   const { style: swipeStyle, ...swipeHandlers } = useSwipeClose({ onClose, direction: 'right', threshold: 80 });
-  const [activeMode, setActiveMode] = useState<AssistantMode>('cooking');
+  const [activeMode, setActiveMode] = useState<AssistantMode | 'history'>('cooking');
 
   return (
     <div className="flex flex-col h-full" style={swipeStyle} {...swipeHandlers}>
       <SheetHeader className="p-4 pb-2 border-b space-y-3">
         <SheetTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
-            <span>{activeMode === 'cooking' ? '👨‍🍳' : '✏️'}</span>
-            Assistant
+            <span>{activeMode === 'cooking' ? '👨‍🍳' : activeMode === 'editing' ? '✏️' : '📜'}</span>
+            {activeMode === 'history' ? 'Historique' : 'Assistant'}
           </span>
           {activeMode === 'cooking' && (
             <span className="text-sm font-normal text-muted-foreground px-0 pr-[17px]">
@@ -414,8 +437,8 @@ function AssistantSheetContent({
         </SheetTitle>
         
         {/* Mode toggle */}
-        <Tabs value={activeMode} onValueChange={(v) => setActiveMode(v as AssistantMode)} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={activeMode} onValueChange={(v) => setActiveMode(v as AssistantMode | 'history')} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="cooking" className="flex items-center gap-1.5">
               <ChefHat className="h-3.5 w-3.5" />
               <span className="text-xs">Cuisiner</span>
@@ -424,16 +447,25 @@ function AssistantSheetContent({
               <Pencil className="h-3.5 w-3.5" />
               <span className="text-xs">Modifier</span>
             </TabsTrigger>
+            <TabsTrigger value="history" className="flex items-center gap-1.5">
+              <History className="h-3.5 w-3.5" />
+              <span className="text-xs">Historique</span>
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </SheetHeader>
-      <ChatInterface 
-        recipe={recipe} 
-        completedSteps={completedSteps} 
-        mode={activeMode}
-        onModeChange={setActiveMode}
-        onRecipeUpdate={onRecipeUpdate}
-      />
+      
+      {activeMode === 'history' ? (
+        <RecipeVersionHistory recipeId={recipeId} onRestore={onClose} />
+      ) : (
+        <ChatInterface 
+          recipe={recipe} 
+          completedSteps={completedSteps} 
+          mode={activeMode}
+          onModeChange={setActiveMode}
+          onRecipeUpdate={onRecipeUpdate}
+        />
+      )}
     </div>
   );
 }
