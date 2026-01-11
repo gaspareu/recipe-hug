@@ -21,6 +21,7 @@ function getPlaceholderForRecipe(recipeId: string): string {
 interface RecipeImageDisplayProps {
   recipeId: string;
   imageUrl: string | null;
+  title?: string;
   onImageChange: (file: File) => Promise<void>;
   onImageRemove: () => Promise<void>;
   isEditable?: boolean;
@@ -29,6 +30,7 @@ interface RecipeImageDisplayProps {
 export function RecipeImageDisplay({
   recipeId,
   imageUrl,
+  title,
   onImageChange,
   onImageRemove,
   isEditable = true,
@@ -74,7 +76,7 @@ export function RecipeImageDisplay({
   return (
     <div
       className={cn(
-        'relative w-full aspect-[16/9] rounded-lg overflow-hidden bg-muted',
+        'relative w-full aspect-[16/9] rounded-lg overflow-hidden bg-muted group',
         isEditable && !isUploading && 'cursor-pointer'
       )}
       onMouseEnter={() => setIsHovered(true)}
@@ -83,9 +85,21 @@ export function RecipeImageDisplay({
     >
       <img
         src={displayUrl}
-        alt="Photo de la recette"
-        className="w-full h-full object-cover"
+        alt={title || "Photo de la recette"}
+        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
       />
+
+      {/* Dark overlay - always visible, darker on hover */}
+      <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300" />
+
+      {/* Title centered on image */}
+      {title && !isHovered && !isUploading && (
+        <div className="absolute inset-0 flex items-center justify-center p-4">
+          <h2 className="text-center font-solitreo text-2xl sm:text-3xl leading-tight line-clamp-3 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white font-bold">
+            {title}
+          </h2>
+        </div>
+      )}
 
       {/* Overlay on hover for editable state */}
       {isEditable && isHovered && !isUploading && (

@@ -242,7 +242,7 @@ export default function RecipeDetail() {
         </div>
 
         {/* Recipe Image */}
-        <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} onImageChange={handleImageChange} onImageRemove={handleImageRemove} />
+        <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={handleImageChange} onImageRemove={handleImageRemove} />
 
         <div className="overflow-x-auto">
           <div className="flex items-center gap-2 min-w-max">
