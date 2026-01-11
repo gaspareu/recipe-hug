@@ -159,16 +159,15 @@ function IngredientItem({
   return (
     <li 
       onClick={onToggle}
-      className="flex items-center gap-3 py-1.5 cursor-pointer group"
+      className="flex items-start gap-3 py-1.5 cursor-pointer group"
     >
       <div 
         className={cn(
-          "relative h-5 w-5 border-2 rounded-sm transition-all",
+          "relative flex-shrink-0 h-5 w-5 min-h-5 min-w-5 max-h-5 max-w-5 border-2 rounded-sm transition-all mt-0.5",
           checked 
             ? "border-primary bg-primary/10" 
             : "border-muted-foreground/40 group-hover:border-primary/60"
         )}
-        style={{ transform: 'rotate(-2deg)' }}
       >
         {checked && (
           <svg
@@ -179,7 +178,6 @@ function IngredientItem({
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
-            style={{ transform: 'rotate(2deg) scale(1.3)' }}
           >
             <path 
               d="M4 12 L9 18 L20 5" 
@@ -196,7 +194,7 @@ function IngredientItem({
       
       <span 
         className={cn(
-          "transition-all duration-200",
+          "transition-all duration-200 leading-6",
           checked && "line-through text-muted-foreground/60"
         )}
       >
