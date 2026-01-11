@@ -206,30 +206,25 @@ export default function RecipeDetail() {
   const isComplete = completedSteps.size === totalSteps && totalSteps > 0;
   return <MainLayout>
       <div className="max-w-2xl mx-auto space-y-6">
-        {/* Header mobile-friendly: titre ligne 1, actions ligne 2 */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h1 className="text-xl sm:text-2xl font-bold line-clamp-2">{recipe.title}</h1>
-          </div>
+        {/* Header mobile-friendly */}
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
           
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
             <TooltipProvider>
-              <div className="flex items-center gap-1">
-                <FavoriteToggle isFavorite={recipe.is_favorite} onToggle={handleToggleFavorite} disabled={toggleFavorite.isPending} tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" onClick={handleAnalyze} disabled={isAnalyzing} className="h-9 w-9">
-                      {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Analyser</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
+              <FavoriteToggle isFavorite={recipe.is_favorite} onToggle={handleToggleFavorite} disabled={toggleFavorite.isPending} tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={handleAnalyze} disabled={isAnalyzing} className="h-9 w-9">
+                    {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Analyser</p>
+                </TooltipContent>
+              </Tooltip>
             </TooltipProvider>
             
             <Button variant="outline" size="sm" asChild>
