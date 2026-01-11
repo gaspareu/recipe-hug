@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, Send, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, Send, RotateCcw, ChefHat, Pencil, Save } from 'lucide-react';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
@@ -18,7 +18,8 @@ import { RecipeStatusSelect } from '@/components/recipes/RecipeStatusSelect';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
-import { useCookingAssistant, ChatMessage } from '@/hooks/useCookingAssistant';
+import { useCookingAssistant, ChatMessage, AssistantMode, ExtractedRecipeData } from '@/hooks/useCookingAssistant';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSwipeClose } from '@/hooks/useSwipeClose';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -336,6 +337,20 @@ export default function RecipeDetail() {
                     completedSteps={completedSteps} 
                     totalSteps={totalSteps}
                     onClose={() => setChatOpen(false)}
+                    onRecipeUpdate={async (data) => {
+                      await updateRecipe.mutateAsync({
+                        id: recipe.id,
+                        title: data.title,
+                        servings: data.servings,
+                        ingredients: data.ingredients,
+                        steps: data.steps,
+                      });
+                      toast({
+                        title: 'Recette mise à jour',
+                        description: 'Les modifications ont été appliquées avec succès'
+                      });
+                      refetch();
+                    }}
                   />
                 </SheetContent>
               </Sheet>
@@ -371,29 +386,54 @@ function AssistantSheetContent({
   recipe,
   completedSteps,
   totalSteps,
-  onClose
+  onClose,
+  onRecipeUpdate
 }: {
   recipe: NonNullable<ReturnType<typeof useRecipe>['data']>;
   completedSteps: Set<number>;
   totalSteps: number;
   onClose: () => void;
+  onRecipeUpdate: (data: ExtractedRecipeData) => Promise<void>;
 }) {
   const { style: swipeStyle, ...swipeHandlers } = useSwipeClose({ onClose, direction: 'right', threshold: 80 });
+  const [activeMode, setActiveMode] = useState<AssistantMode>('cooking');
 
   return (
     <div className="flex flex-col h-full" style={swipeStyle} {...swipeHandlers}>
-      <SheetHeader className="p-4 pb-2 border-b">
+      <SheetHeader className="p-4 pb-2 border-b space-y-3">
         <SheetTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
-            <span>👨‍🍳</span>
+            <span>{activeMode === 'cooking' ? '👨‍🍳' : '✏️'}</span>
             Assistant
           </span>
-          <span className="text-sm font-normal text-muted-foreground px-0 pr-[17px]">
-            Étape {Math.min(completedSteps.size + 1, totalSteps)}/{totalSteps}
-          </span>
+          {activeMode === 'cooking' && (
+            <span className="text-sm font-normal text-muted-foreground px-0 pr-[17px]">
+              Étape {Math.min(completedSteps.size + 1, totalSteps)}/{totalSteps}
+            </span>
+          )}
         </SheetTitle>
+        
+        {/* Mode toggle */}
+        <Tabs value={activeMode} onValueChange={(v) => setActiveMode(v as AssistantMode)} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="cooking" className="flex items-center gap-1.5">
+              <ChefHat className="h-3.5 w-3.5" />
+              <span className="text-xs">Cuisiner</span>
+            </TabsTrigger>
+            <TabsTrigger value="editing" className="flex items-center gap-1.5">
+              <Pencil className="h-3.5 w-3.5" />
+              <span className="text-xs">Modifier</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </SheetHeader>
-      <ChatInterface recipe={recipe} completedSteps={completedSteps} />
+      <ChatInterface 
+        recipe={recipe} 
+        completedSteps={completedSteps} 
+        mode={activeMode}
+        onModeChange={setActiveMode}
+        onRecipeUpdate={onRecipeUpdate}
+      />
     </div>
   );
 }
@@ -401,19 +441,51 @@ function AssistantSheetContent({
 // Chat Interface Component
 function ChatInterface({
   recipe,
-  completedSteps
+  completedSteps,
+  mode,
+  onModeChange,
+  onRecipeUpdate
 }: {
   recipe: NonNullable<ReturnType<typeof useRecipe>['data']>;
   completedSteps: Set<number>;
+  mode: AssistantMode;
+  onModeChange: (mode: AssistantMode) => void;
+  onRecipeUpdate: (data: ExtractedRecipeData) => Promise<void>;
 }) {
   const {
     messages,
     isStreaming,
     sendMessage,
-    resetChat
-  } = useCookingAssistant(recipe, completedSteps);
+    resetChat,
+    mode: hookMode,
+    changeMode,
+    pendingRecipe,
+    clearPendingRecipe
+  } = useCookingAssistant(recipe, completedSteps, mode);
+  
   const [input, setInput] = useState('');
+  const [isApplying, setIsApplying] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Sync mode changes from parent
+  useState(() => {
+    if (mode !== hookMode) {
+      changeMode(mode);
+    }
+  });
+
+  // Handle mode change from parent tabs
+  const handleModeSync = useCallback(() => {
+    if (mode !== hookMode) {
+      changeMode(mode);
+    }
+  }, [mode, hookMode, changeMode]);
+
+  // Effect to sync mode
+  useState(() => {
+    handleModeSync();
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim() && !isStreaming) {
@@ -421,8 +493,25 @@ function ChatInterface({
       setInput('');
     }
   };
-  const quickSuggestions = ["C'est parti !", "Explique-moi la première étape", "Des conseils pour cette recette ?"];
+
+  const handleApplyChanges = async () => {
+    if (!pendingRecipe) return;
+    
+    setIsApplying(true);
+    try {
+      await onRecipeUpdate(pendingRecipe);
+      clearPendingRecipe();
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  const cookingSuggestions = ["C'est parti !", "Explique-moi la première étape", "Des conseils pour cette recette ?"];
+  const editingSuggestions = ["Version végétarienne", "Réduire les calories", "Sans gluten", "Plus simple"];
+  
+  const quickSuggestions = mode === 'cooking' ? cookingSuggestions : editingSuggestions;
   const showSuggestions = messages.length <= 1;
+
   return <div className="flex flex-col flex-1 min-h-0">
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="space-y-4">
@@ -435,6 +524,24 @@ function ChatInterface({
         </div>
       </ScrollArea>
 
+      {/* Apply changes button when pending recipe exists */}
+      {pendingRecipe && (
+        <div className="p-3 border-t bg-primary/5">
+          <Button 
+            onClick={handleApplyChanges} 
+            disabled={isApplying}
+            className="w-full"
+          >
+            {isApplying ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            Appliquer les modifications
+          </Button>
+        </div>
+      )}
+
       <div className="p-4 border-t space-y-3">
         {showSuggestions && <div className="flex flex-wrap gap-2">
             {quickSuggestions.map(suggestion => <Button key={suggestion} variant="outline" size="sm" onClick={() => sendMessage(suggestion)} disabled={isStreaming} className="text-xs">
@@ -443,7 +550,13 @@ function ChatInterface({
           </div>}
         
         <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input value={input} onChange={e => setInput(e.target.value)} placeholder="Posez une question..." disabled={isStreaming} className="flex-1" />
+          <Input 
+            value={input} 
+            onChange={e => setInput(e.target.value)} 
+            placeholder={mode === 'cooking' ? "Posez une question..." : "Décrivez vos modifications..."} 
+            disabled={isStreaming} 
+            className="flex-1" 
+          />
           <Button type="submit" size="icon" disabled={isStreaming || !input.trim()}>
             <Send className="h-4 w-4" />
           </Button>
@@ -454,6 +567,7 @@ function ChatInterface({
       </div>
     </div>;
 }
+
 function MessageBubble({
   message
 }: {
