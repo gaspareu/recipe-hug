@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, Send, RotateCcw, ChefHat, Pencil, Save } from 'lucide-react';
@@ -468,23 +468,11 @@ function ChatInterface({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Sync mode changes from parent
-  useState(() => {
-    if (mode !== hookMode) {
-      changeMode(mode);
-    }
-  });
-
-  // Handle mode change from parent tabs
-  const handleModeSync = useCallback(() => {
+  useEffect(() => {
     if (mode !== hookMode) {
       changeMode(mode);
     }
   }, [mode, hookMode, changeMode]);
-
-  // Effect to sync mode
-  useState(() => {
-    handleModeSync();
-  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
