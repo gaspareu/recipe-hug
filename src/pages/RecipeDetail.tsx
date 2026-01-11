@@ -210,6 +210,9 @@ export default function RecipeDetail() {
         <div className="relative">
           <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={handleImageChange} onImageRemove={handleImageRemove} />
           
+          {/* Dark gradient at top for button readability */}
+          <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/50 to-transparent pointer-events-none rounded-t-lg" />
+          
           {/* Back button - top left */}
           <Button 
             variant="ghost" 
