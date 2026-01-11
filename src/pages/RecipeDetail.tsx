@@ -206,40 +206,55 @@ export default function RecipeDetail() {
   const isComplete = completedSteps.size === totalSteps && totalSteps > 0;
   return <MainLayout>
       <div className="max-w-2xl mx-auto space-y-6">
-        {/* Recipe Image with header overlay */}
-        <div className="space-y-2">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            
-            <div className="flex items-center gap-1">
-              <TooltipProvider>
-                <FavoriteToggle isFavorite={recipe.is_favorite} onToggle={handleToggleFavorite} disabled={toggleFavorite.isPending} tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" onClick={handleAnalyze} disabled={isAnalyzing} className="h-9 w-9">
-                      {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Analyser</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              
-              <Button variant="outline" size="sm" asChild>
-                <Link to={`/recipes/${recipe.id}/edit`}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Éditer
-                </Link>
-              </Button>
-            </div>
-          </div>
-
-          {/* Recipe Image */}
+        {/* Recipe Image with action buttons overlay */}
+        <div className="relative">
           <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={handleImageChange} onImageRemove={handleImageRemove} />
+          
+          {/* Back button - top left */}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate(-1)} 
+            className="absolute top-3 left-3 bg-background/60 backdrop-blur-sm hover:bg-background/80"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          
+          {/* Action buttons - top right */}
+          <div className="absolute top-3 right-3 flex items-center gap-1">
+            <TooltipProvider>
+              <FavoriteToggle 
+                isFavorite={recipe.is_favorite} 
+                onToggle={handleToggleFavorite} 
+                disabled={toggleFavorite.isPending} 
+                tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} 
+                variant="overlay"
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={handleAnalyze} 
+                    disabled={isAnalyzing} 
+                    className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80"
+                  >
+                    {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Analyser</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            <Button variant="outline" size="sm" asChild className="bg-background/60 backdrop-blur-sm hover:bg-background/80 border-background/20">
+              <Link to={`/recipes/${recipe.id}/edit`}>
+                <Edit className="h-4 w-4 mr-2" />
+                Éditer
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
