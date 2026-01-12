@@ -1,9 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, RotateCcw, Loader2, History, Trash2, MessageSquare } from 'lucide-react';
 import { useRecipeChat, type Conversation } from '@/hooks/useRecipeChat';
+import { useVoiceMode } from '@/hooks/useVoiceMode';
+import { VoiceControls } from '@/components/voice/VoiceControls';
 import { RecipePreviewCard } from './RecipePreviewCard';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -36,6 +38,27 @@ export function RecipeChatInterface() {
   const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const lastMessageRef = useRef<string>('');
+
+  // Voice mode with callback for transcribed text
+  const handleVoiceTranscript = useCallback((text: string) => {
+    if (text.trim()) {
+      sendMessage(text);
+      setShowHistory(false);
+    }
+  }, [sendMessage]);
+
+  const {
+    voiceEnabled,
+    isSpeaking,
+    isListening,
+    toggleVoice,
+    speak,
+    stopSpeaking,
+    startListening,
+    stopListening,
+    partialTranscript,
+  } = useVoiceMode(handleVoiceTranscript);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -46,6 +69,23 @@ export function RecipeChatInterface() {
       }
     }
   }, [messages, extractedRecipe]);
+
+  // Speak new assistant messages when voice is enabled
+  useEffect(() => {
+    if (!voiceEnabled) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    if (
+      lastMessage && 
+      lastMessage.role === 'assistant' && 
+      lastMessage.content &&
+      !isStreaming &&
+      lastMessage.content !== lastMessageRef.current
+    ) {
+      lastMessageRef.current = lastMessage.content;
+      speak(lastMessage.content);
+    }
+  }, [messages, isStreaming, voiceEnabled, speak]);
 
   const handleSubmit = () => {
     if (!input.trim() || isStreaming) return;
@@ -233,20 +273,33 @@ export function RecipeChatInterface() {
       </ScrollArea>
 
       {/* Input area */}
-      <div className="p-3 border-t">
+      <div className="p-3 border-t space-y-2">
+        {/* Voice controls */}
+        <VoiceControls
+          voiceEnabled={voiceEnabled}
+          isSpeaking={isSpeaking}
+          isListening={isListening}
+          onToggleVoice={toggleVoice}
+          onStartListening={startListening}
+          onStopListening={stopListening}
+          onStopSpeaking={stopSpeaking}
+          partialTranscript={partialTranscript}
+          compact
+        />
+
         <div className="flex gap-2">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Décrivez ce que vous aimeriez cuisiner..."
+            placeholder={isListening ? "Parlez..." : "Décrivez ce que vous aimeriez cuisiner..."}
             className="min-h-[44px] max-h-[120px] resize-none"
-            disabled={isStreaming}
+            disabled={isStreaming || isListening}
             rows={1}
           />
           <Button
             onClick={handleSubmit}
-            disabled={!input.trim() || isStreaming}
+            disabled={!input.trim() || isStreaming || isListening}
             size="icon"
             className="flex-shrink-0"
           >
@@ -257,7 +310,7 @@ export function RecipeChatInterface() {
             )}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-1.5">
+        <p className="text-xs text-muted-foreground">
           Entrée pour envoyer, Shift+Entrée pour nouvelle ligne
         </p>
       </div>

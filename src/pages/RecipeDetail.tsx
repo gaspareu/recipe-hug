@@ -6,6 +6,7 @@ import { CookingAssistantButton } from '@/components/recipes/CookingAssistantBut
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
 import { RecipeVersionHistory } from '@/components/recipes/RecipeVersionHistory';
+import { VoiceControls } from '@/components/voice/VoiceControls';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,6 +22,7 @@ import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientCh
 import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
 import { useCookingAssistant, ChatMessage, AssistantMode, ExtractedRecipeData } from '@/hooks/useCookingAssistant';
 import { useCreateVersion } from '@/hooks/useRecipeVersions';
+import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { useAuth } from '@/hooks/useAuth';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSwipeClose } from '@/hooks/useSwipeClose';
@@ -498,6 +500,26 @@ function ChatInterface({
   const [input, setInput] = useState('');
   const [isApplying, setIsApplying] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastMessageRef = useRef<string>('');
+
+  // Voice mode with callback for transcribed text
+  const handleVoiceTranscript = useCallback((text: string) => {
+    if (text.trim()) {
+      sendMessage(text);
+    }
+  }, [sendMessage]);
+
+  const {
+    voiceEnabled,
+    isSpeaking,
+    isListening,
+    toggleVoice,
+    speak,
+    stopSpeaking,
+    startListening,
+    stopListening,
+    partialTranscript,
+  } = useVoiceMode(handleVoiceTranscript);
 
   // Sync mode changes from parent
   useEffect(() => {
@@ -505,6 +527,23 @@ function ChatInterface({
       changeMode(mode);
     }
   }, [mode, hookMode, changeMode]);
+
+  // Speak new assistant messages when voice is enabled
+  useEffect(() => {
+    if (!voiceEnabled) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    if (
+      lastMessage && 
+      lastMessage.role === 'assistant' && 
+      lastMessage.content &&
+      !isStreaming &&
+      lastMessage.content !== lastMessageRef.current
+    ) {
+      lastMessageRef.current = lastMessage.content;
+      speak(lastMessage.content);
+    }
+  }, [messages, isStreaming, voiceEnabled, speak]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -563,6 +602,19 @@ function ChatInterface({
       )}
 
       <div className="p-4 border-t space-y-3">
+        {/* Voice controls */}
+        <VoiceControls
+          voiceEnabled={voiceEnabled}
+          isSpeaking={isSpeaking}
+          isListening={isListening}
+          onToggleVoice={toggleVoice}
+          onStartListening={startListening}
+          onStopListening={stopListening}
+          onStopSpeaking={stopSpeaking}
+          partialTranscript={partialTranscript}
+          compact
+        />
+
         {showSuggestions && <div className="flex flex-wrap gap-2">
             {quickSuggestions.map(suggestion => <Button key={suggestion} variant="outline" size="sm" onClick={() => sendMessage(suggestion)} disabled={isStreaming} className="text-xs">
                 {suggestion}
@@ -573,11 +625,11 @@ function ChatInterface({
           <Input 
             value={input} 
             onChange={e => setInput(e.target.value)} 
-            placeholder={mode === 'cooking' ? "Posez une question..." : "Décrivez vos modifications..."} 
-            disabled={isStreaming} 
+            placeholder={isListening ? "Parlez..." : (mode === 'cooking' ? "Posez une question..." : "Décrivez vos modifications...")} 
+            disabled={isStreaming || isListening} 
             className="flex-1" 
           />
-          <Button type="submit" size="icon" disabled={isStreaming || !input.trim()}>
+          <Button type="submit" size="icon" disabled={isStreaming || !input.trim() || isListening}>
             <Send className="h-4 w-4" />
           </Button>
           <Button type="button" variant="ghost" size="icon" onClick={resetChat} title="Réinitialiser">
