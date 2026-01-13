@@ -28,28 +28,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
     },
   });
 
-  // Text-to-speech
-  const speak = useCallback(async (text: string) => {
-    if (!voiceEnabled || !text.trim()) return;
-
-    // Clean text for speech (remove markdown, emojis, etc.)
-    const cleanText = text
-      .replace(/[#*_`~]/g, '') // Remove markdown
-      .replace(/\n+/g, '. ') // Convert newlines to pauses
-      .replace(/[👨‍🍳✨🎉🍽️🥗🍝🥘]/g, '') // Remove emojis
-      .trim();
-
-    if (!cleanText) return;
-
-    // Add to queue
-    audioQueueRef.current.push(cleanText);
-    
-    // Start playing if not already
-    if (!isPlayingRef.current) {
-      playNextInQueue();
-    }
-  }, [voiceEnabled]);
-
+  // Play next audio in queue
   const playNextInQueue = useCallback(async () => {
     if (audioQueueRef.current.length === 0) {
       isPlayingRef.current = false;
@@ -91,20 +70,68 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
 
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
-        playNextInQueue();
+        // Use setTimeout to break the synchronous call chain
+        setTimeout(() => {
+          if (audioQueueRef.current.length > 0) {
+            playNextInQueueRef.current?.();
+          } else {
+            isPlayingRef.current = false;
+            setIsSpeaking(false);
+          }
+        }, 0);
       };
 
       audio.onerror = () => {
         URL.revokeObjectURL(audioUrl);
-        playNextInQueue();
+        setTimeout(() => {
+          if (audioQueueRef.current.length > 0) {
+            playNextInQueueRef.current?.();
+          } else {
+            isPlayingRef.current = false;
+            setIsSpeaking(false);
+          }
+        }, 0);
       };
 
       await audio.play();
     } catch (error) {
       console.error('TTS error:', error);
-      playNextInQueue();
+      setTimeout(() => {
+        if (audioQueueRef.current.length > 0) {
+          playNextInQueueRef.current?.();
+        } else {
+          isPlayingRef.current = false;
+          setIsSpeaking(false);
+        }
+      }, 0);
     }
   }, []);
+
+  // Ref to store the latest playNextInQueue function
+  const playNextInQueueRef = useRef(playNextInQueue);
+  playNextInQueueRef.current = playNextInQueue;
+
+  // Text-to-speech
+  const speak = useCallback(async (text: string) => {
+    if (!voiceEnabled || !text.trim()) return;
+
+    // Clean text for speech (remove markdown, emojis, etc.)
+    const cleanText = text
+      .replace(/[#*_`~]/g, '') // Remove markdown
+      .replace(/\n+/g, '. ') // Convert newlines to pauses
+      .replace(/[👨‍🍳✨🎉🍽️🥗🍝🥘]/g, '') // Remove emojis
+      .trim();
+
+    if (!cleanText) return;
+
+    // Add to queue
+    audioQueueRef.current.push(cleanText);
+    
+    // Start playing if not already
+    if (!isPlayingRef.current) {
+      playNextInQueue();
+    }
+  }, [voiceEnabled, playNextInQueue]);
 
   const stopSpeaking = useCallback(() => {
     audioQueueRef.current = [];
@@ -116,6 +143,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
     isPlayingRef.current = false;
     setIsSpeaking(false);
   }, []);
+
 
   // Start listening (STT)
   const startListening = useCallback(async () => {
