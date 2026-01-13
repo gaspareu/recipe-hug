@@ -268,8 +268,8 @@ export default function RecipeDetail() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <div className="flex items-center gap-2 min-w-max">
+        <div className="overflow-x-auto pb-1 -mb-1">
+          <div className="flex items-center gap-2 min-w-max py-1">
             <RecipeStatusSelect status={recipe.status} onStatusChange={handleStatusChange} disabled={updateRecipe.isPending} />
             
             {recipe.season && <>
