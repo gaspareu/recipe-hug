@@ -70,9 +70,13 @@ export function useRecipeChat() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const currentConversationIdRef = useRef<string | null>(null);
   
   const navigate = useNavigate();
   const createRecipe = useCreateRecipe();
+
+  // Keep ref in sync with state
+  currentConversationIdRef.current = currentConversationId;
 
   // Load recent conversations on mount
   useEffect(() => {
@@ -162,21 +166,22 @@ export function useRecipeChat() {
     }
   }, []);
 
-  // Debounced save
+  // Debounced save - uses ref to avoid stale closure issues
   const debouncedSave = useCallback((msgs: ChatMessage[], recipe: ExtractedRecipe | null) => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
     saveTimeoutRef.current = setTimeout(async () => {
-      const newId = await saveConversation(msgs, recipe, currentConversationId);
-      if (newId && !currentConversationId) {
+      const convId = currentConversationIdRef.current;
+      const newId = await saveConversation(msgs, recipe, convId);
+      if (newId && !convId) {
         setCurrentConversationId(newId);
       }
       // Refresh history
       loadRecentConversations();
     }, 1000);
-  }, [currentConversationId, saveConversation]);
+  }, [saveConversation]);
 
   const loadConversation = useCallback((conversation: Conversation) => {
     // Add welcome message back at the start
@@ -320,11 +325,11 @@ export function useRecipeChat() {
         }
       }
 
-      // Save conversation after streaming completes
+      // Save conversation after streaming completes - use newExtractedRecipe directly
+      // to avoid stale extractedRecipe from closure
       setMessages(prev => {
-        const finalMessages = prev;
-        debouncedSave(finalMessages, newExtractedRecipe || extractedRecipe);
-        return finalMessages;
+        debouncedSave(prev, newExtractedRecipe);
+        return prev;
       });
 
       // Trigger preference extraction in background (non-blocking)
@@ -357,7 +362,7 @@ export function useRecipeChat() {
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
-  }, [messages, isStreaming, extractedRecipe, debouncedSave]);
+  }, [messages, isStreaming, debouncedSave]);
 
   const saveRecipe = useCallback(async () => {
     if (!extractedRecipe || isSaving) return;
