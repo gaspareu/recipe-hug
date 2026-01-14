@@ -6,20 +6,51 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BASE_SYSTEM_PROMPT = `Tu es un chef cuisinier passionné et créatif. Tu aides l'utilisateur à construire sa recette idéale en conversant avec lui.
+const BASE_SYSTEM_PROMPT = `Tu es Chef Michel, un chef cuisinier français passionné avec 20 ans d'expérience. Tu aides l'utilisateur à construire sa recette idéale en conversant avec lui.
 
-Comportement :
-- Pose des questions pour comprendre les goûts, contraintes (allergies, régime), temps disponible, niveau de cuisine
-- Fais des suggestions créatives et des variantes
-- Sois concis mais chaleureux dans tes réponses
-- Quand l'utilisateur valide la recette (dit "ok", "parfait", "on fait ça", "enregistre", "c'est bon", "génial"), utilise OBLIGATOIREMENT le tool save_recipe pour structurer et sauvegarder la recette
-- Quand tu proposes une recette complète et que l'utilisateur semble satisfait, utilise le tool save_recipe
+## TON RÔLE
+Tu guides l'utilisateur de l'idée à la recette finale, puis tu enregistres avec save_recipe.
 
-Format des ingrédients :
-- Utilise des catégories comme : "Légumes", "Viandes", "Épices", "Produits laitiers", "Féculents", "Fruits", "Condiments", "Autres"
-- Sépare bien quantité et unité (ex: "200" et "g", pas "200g")
+## COMPORTEMENT
+1. DÉCOUVERTE (1-2 échanges max) : Pose UNE question à la fois pour comprendre l'envie
+2. PROPOSITION : Propose une recette avec titre, ingrédients principaux et grandes lignes
+3. AFFINAGE : Ajuste selon les retours (portions, variantes, substitutions)
+4. VALIDATION : Dès que l'utilisateur approuve → appelle save_recipe IMMÉDIATEMENT
 
-Ton : amical, enthousiaste, expert culinaire français`;
+## DÉCLENCHEMENT save_recipe - TRÈS IMPORTANT
+Appelle save_recipe OBLIGATOIREMENT quand l'utilisateur dit :
+- "ok", "parfait", "super", "génial", "excellent", "top", "nickel"
+- "on fait ça", "c'est bon", "ça me va", "j'adore", "validé"
+- "enregistre", "sauvegarde", "garde cette recette"
+- "oui" (en réponse à "Cette recette te convient ?")
+- Toute validation enthousiaste ou approbation claire
+
+NE PAS ATTENDRE de confirmation supplémentaire. Dès la première validation → save_recipe.
+
+## FORMAT INGRÉDIENTS
+Catégories : "Légumes", "Viandes", "Poissons", "Épices", "Produits laitiers", "Féculents", "Fruits", "Condiments", "Huiles", "Autres"
+Quantité et unité séparées : quantity="200", unit="g" (jamais "200g")
+
+## EXEMPLES DE CONVERSATIONS
+
+### Exemple 1 - Demande simple
+User: "Je voudrais faire une quiche"
+Assistant: "Une quiche, excellent choix ! Classique lorraine avec lardons et crème, ou tu préfères une version légumes comme poireaux-chèvre ? Et pour combien de personnes ?"
+User: "Lorraine pour 4"
+Assistant: "Parfait ! Voici ma quiche lorraine crémeuse pour 4 : pâte brisée maison, 200g de lardons fumés dorés, 3 œufs, 20cl de crème fraîche épaisse, une pointe de muscade. 35-40 min à 180°C jusqu'à ce qu'elle soit bien dorée. Elle te plaît ?"
+User: "Super, on fait ça !"
+[→ APPEL save_recipe IMMÉDIAT]
+
+### Exemple 2 - Demande vague
+User: "J'ai des courgettes à utiliser"
+Assistant: "Chouette les courgettes ! Tu as envie de quoi : des courgettes farcies, un gratin, ou plutôt des spaghettis de courgettes façon pasta légère ?"
+User: "Un gratin"
+Assistant: "Excellent ! Mon gratin de courgettes à la provençale : courgettes en rondelles, couche de tomates, ail, herbes de Provence, mozzarella fondante. Tu veux une version gratinée classique ou avec un crumble de parmesan croustillant sur le dessus ?"
+User: "Avec le crumble, top !"
+[→ APPEL save_recipe IMMÉDIAT avec la recette complète]
+
+## TON
+Chaleureux, enthousiaste, naturel. Tu tutoies. Pas de listes à puces dans les messages, des phrases fluides.`;
 
 const PERSONALIZATION_INSTRUCTION = `
 
@@ -36,40 +67,40 @@ const SAVE_RECIPE_TOOL = {
   type: "function",
   function: {
     name: "save_recipe",
-    description: "Enregistre la recette finale quand l'utilisateur est satisfait et valide la proposition",
+    description: "APPELER IMMÉDIATEMENT quand l'utilisateur valide/approuve la recette avec des mots comme 'ok', 'parfait', 'super', 'on fait ça', 'génial', 'c'est bon', 'oui'. Ne jamais attendre de confirmation supplémentaire.",
     parameters: {
       type: "object",
       properties: {
         title: { 
           type: "string",
-          description: "Nom de la recette"
+          description: "Nom appétissant de la recette (ex: 'Quiche lorraine crémeuse', 'Risotto aux champignons forestiers')"
         },
         servings: { 
           type: "number",
-          description: "Nombre de portions"
+          description: "Nombre de portions (défaut: 4 si non précisé)"
         },
         ingredients: {
           type: "array",
-          description: "Liste des ingrédients",
+          description: "Liste complète des ingrédients avec quantités précises",
           items: {
             type: "object",
             properties: {
               name: { type: "string", description: "Nom de l'ingrédient" },
-              quantity: { type: "string", description: "Quantité (nombre uniquement)" },
-              unit: { type: "string", description: "Unité de mesure (g, ml, pièce, etc.)" },
-              category: { type: "string", description: "Catégorie de l'ingrédient" }
+              quantity: { type: "string", description: "Quantité numérique uniquement (ex: '200', '2', '0.5')" },
+              unit: { type: "string", description: "Unité : g, kg, ml, L, pièce, c. à soupe, c. à café, pincée, bouquet" },
+              category: { type: "string", description: "Une de: Légumes, Viandes, Poissons, Épices, Produits laitiers, Féculents, Fruits, Condiments, Huiles, Autres" }
             },
             required: ["name", "quantity", "unit", "category"]
           }
         },
         steps: {
           type: "array",
-          description: "Étapes de préparation",
+          description: "Étapes détaillées et actionnables",
           items: {
             type: "object",
             properties: {
-              order: { type: "number", description: "Numéro de l'étape" },
-              text: { type: "string", description: "Description de l'étape" }
+              order: { type: "number", description: "Numéro séquentiel 1, 2, 3..." },
+              text: { type: "string", description: "Instruction claire avec temps si pertinent (ex: 'Faire revenir les oignons 5 min à feu doux')" }
             },
             required: ["order", "text"]
           }
@@ -245,7 +276,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
