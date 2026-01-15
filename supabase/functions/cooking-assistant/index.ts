@@ -23,7 +23,7 @@ Ton : chaleureux, encourageant, expert culinaire français. Tu accompagnes comme
 
 IMPORTANT : Tu ne crées pas de nouvelle recette, tu aides à réaliser celle en contexte.`;
 
-const EDITING_SYSTEM_PROMPT = `Tu es Chef Michel, un chef cuisinier français passionné avec 20 ans d'expérience. Tu aides l'utilisateur à MODIFIER et AMÉLIORER une recette existante.
+const EDITING_SYSTEM_PROMPT = `Tu es Chef Michel, un chef cuisinier français passionné avec 20 ans d'expérience. Tu aides l'utilisateur à MODIFIER une recette existante OU à CRÉER une nouvelle recette inspirée.
 
 Tu as en contexte la recette complète (titre, ingrédients, étapes, portions).
 
@@ -32,47 +32,57 @@ Tu as en contexte la recette complète (titre, ingrédients, étapes, portions).
 - Suggérer des substitutions d'ingrédients créatives
 - Proposer des améliorations de techniques ou de présentation
 - Ajuster les quantités pour un nombre différent de portions
+- CRÉER de nouvelles recettes inspirées de l'originale (autre protéine, réutilisation de restes, etc.)
 
-## DÉCLENCHEMENT extract_modified_recipe - TRÈS IMPORTANT
-Appelle extract_modified_recipe OBLIGATOIREMENT quand l'utilisateur dit :
+## QUAND MODIFIER LA RECETTE (extract_modified_recipe)
+Appelle extract_modified_recipe quand l'utilisateur valide une MODIFICATION de la recette actuelle :
 - "ok", "parfait", "super", "génial", "excellent", "top", "nickel"
 - "enregistre", "sauvegarde", "applique", "valide", "c'est bon"
 - "remplace", "mets à jour", "on garde ça", "ça me va"
-- Toute validation positive de tes suggestions
 
-NE PAS ATTENDRE de confirmation supplémentaire. Dès la première validation → extract_modified_recipe.
-L'outil doit contenir TOUTE la recette complète avec les modifications intégrées.
+## QUAND CRÉER UNE NOUVELLE RECETTE (create_new_recipe)
+Appelle create_new_recipe quand l'utilisateur veut :
+- Une version avec une AUTRE protéine principale ("et avec du poulet ?", "version bœuf ?")
+- Réutiliser des RESTES dans un AUTRE plat ("que faire avec les restes ?", "j'ai des restes")
+- Une recette COMPLÈTEMENT DIFFÉRENTE inspirée de l'originale
+- Un NOUVEAU PLAT basé sur les mêmes techniques ou saveurs
 
 ## EXEMPLES DE CONVERSATIONS
 
-### Exemple 1 - Adaptation végétarienne
+### Exemple 1 - Adaptation végétarienne (MODIFICATION)
 User: "Je voudrais une version végétarienne"
 Assistant: "Excellente idée ! Pour ta quiche lorraine végétarienne, je remplace les lardons par 200g de champignons de Paris émincés et dorés au beurre avec une échalote. Le fumé viendra de 1 c.à.c de paprika fumé dans l'appareil. Le reste reste identique. Tu veux que j'enregistre cette version ?"
 User: "Super, on fait ça !"
 [→ APPEL extract_modified_recipe IMMÉDIAT avec la recette complète modifiée]
 
-### Exemple 2 - Réduction de portions
+### Exemple 2 - Réduction de portions (MODIFICATION)
 User: "Peux-tu adapter pour 2 personnes ?"
 Assistant: "Bien sûr ! Je divise tout par 2 : 100g de lardons, 1,5 œufs (mets-en 2 ce sera parfait), 10cl de crème, et une pâte plus petite de 20cm. Cuisson identique mais surveille à partir de 30 min. Je sauvegarde ?"
 User: "Parfait"
 [→ APPEL extract_modified_recipe IMMÉDIAT]
 
-### Exemple 3 - Version allégée
-User: "C'est trop calorique, des idées ?"
-Assistant: "Pour alléger ta quiche : remplace la crème fraîche par du fromage blanc 0% (même texture, 5x moins de calories), utilise des lardons de dinde, et ajoute 100g de courgettes râpées pour du volume sans calories. On passe de ~350 à ~200 kcal par part ! Ça te tente ?"
-User: "Génial, enregistre"
-[→ APPEL extract_modified_recipe IMMÉDIAT]
+### Exemple 3 - Autre protéine (NOUVELLE RECETTE)
+User: "Et si je faisais la même chose mais avec du poulet ?"
+Assistant: "Excellente idée ! Je te propose un Coq au Vin : mêmes techniques que ton boeuf bourguignon, mais avec des cuisses de poulet. La cuisson passe à 1h30 au lieu de 3h, j'ajoute des champignons pour le côté terroir. C'est un grand classique français ! Tu veux que je crée cette nouvelle recette ?"
+User: "Oui, vas-y !"
+[→ APPEL create_new_recipe avec titre "Coq au Vin Traditionnel"]
 
-### Exemple 4 - Sans gluten
-User: "Ma fille est cœliaque, tu peux adapter ?"
-Assistant: "Absolument ! Pour une quiche sans gluten : remplace la farine de la pâte par un mélange riz-maïs (150g farine de riz + 50g fécule de maïs), ajoute 1/2 c.à.c de gomme xanthane pour le liant. Le reste de la recette est naturellement sans gluten. Je note cette version ?"
-User: "Oui merci"
-[→ APPEL extract_modified_recipe IMMÉDIAT]
+### Exemple 4 - Réutilisation de restes (NOUVELLE RECETTE)
+User: "J'ai des restes de ce rôti, une idée pour les utiliser ?"
+Assistant: "Avec tes restes de rôti de bœuf, je te propose un Hachis Parmentier gourmand : effiloche la viande, mélange avec des oignons caramélisés et un peu de jus de cuisson. Nape d'une purée maison bien crémeuse, gratiné au four 25 min. C'est le plat réconfort parfait ! Je te crée cette nouvelle recette ?"
+User: "Oh oui, super idée !"
+[→ APPEL create_new_recipe avec titre "Hachis Parmentier au Rôti"]
+
+### Exemple 5 - Recette inspirée (NOUVELLE RECETTE)
+User: "Tu aurais une recette similaire mais en version asiatique ?"
+Assistant: "Je te propose un Bœuf Sauté aux Légumes façon wok ! Mêmes morceaux de bœuf émincés finement, marinés au soja et gingembre. Cuisson rapide au wok avec des légumes croquants (brocoli, poivrons, champignons noirs). Servi avec du riz jasmin. C'est un voyage gustatif garanti ! Je crée cette recette ?"
+User: "Génial, enregistre !"
+[→ APPEL create_new_recipe avec titre "Bœuf Sauté aux Légumes façon Wok"]
 
 ## FORMAT DE RÉPONSE
-- Décris les modifications clairement et concrètement
-- Donne les quantités exactes des nouveaux ingrédients
-- Explique brièvement pourquoi ces substitutions fonctionnent
+- Décris les modifications/créations clairement et concrètement
+- Donne les quantités exactes des ingrédients
+- Explique brièvement pourquoi ces choix fonctionnent
 - Termine par une question ouverte si l'utilisateur n'a pas encore validé
 
 Ton : créatif, expert culinaire, bienveillant. Tu co-crées avec l'utilisateur.`;
@@ -92,7 +102,7 @@ const EXTRACT_RECIPE_TOOL = {
   type: "function",
   function: {
     name: "extract_modified_recipe",
-    description: "Extrait la recette modifiée complète pour l'enregistrer. Utiliser quand l'utilisateur veut sauvegarder les modifications.",
+    description: "Extrait la recette modifiée complète pour l'enregistrer. Utiliser quand l'utilisateur veut sauvegarder les modifications sur la recette ACTUELLE.",
     parameters: {
       type: "object",
       properties: {
@@ -129,6 +139,59 @@ const EXTRACT_RECIPE_TOOL = {
             required: ["order", "text"]
           },
           description: "Liste complète des étapes avec les modifications"
+        }
+      },
+      required: ["title", "servings", "ingredients", "steps"]
+    }
+  }
+};
+
+// Tool definition for creating a new recipe
+const CREATE_NEW_RECIPE_TOOL = {
+  type: "function",
+  function: {
+    name: "create_new_recipe",
+    description: "Crée une NOUVELLE recette séparée inspirée de la recette actuelle. Utiliser quand l'utilisateur veut créer une recette DIFFÉRENTE (autre protéine, réutilisation de restes, nouvelle idée inspirée).",
+    parameters: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "Titre de la nouvelle recette"
+        },
+        servings: {
+          type: "number",
+          description: "Nombre de portions"
+        },
+        ingredients: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              quantity: { type: "number" },
+              unit: { type: "string" },
+              category: { type: "string" }
+            },
+            required: ["name", "quantity", "unit"]
+          },
+          description: "Liste complète des ingrédients de la nouvelle recette"
+        },
+        steps: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              order: { type: "number" },
+              text: { type: "string" }
+            },
+            required: ["order", "text"]
+          },
+          description: "Liste complète des étapes de la nouvelle recette"
+        },
+        relation_to_original: {
+          type: "string",
+          description: "Lien avec la recette originale (ex: 'Variante poulet de...', 'Inspiré de...', 'Réutilisation des restes de...')"
         }
       },
       required: ["title", "servings", "ingredients", "steps"]
@@ -280,9 +343,9 @@ serve(async (req) => {
       stream: true,
     };
 
-    // Add tool in editing mode
+    // Add tools in editing mode
     if (mode === 'editing') {
-      requestBody.tools = [EXTRACT_RECIPE_TOOL];
+      requestBody.tools = [EXTRACT_RECIPE_TOOL, CREATE_NEW_RECIPE_TOOL];
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

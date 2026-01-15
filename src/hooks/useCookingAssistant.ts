@@ -16,6 +16,8 @@ export interface ExtractedRecipeData {
   servings: number;
   ingredients: Ingredient[];
   steps: Step[];
+  isNewRecipe?: boolean;
+  relationToOriginal?: string;
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cooking-assistant`;
@@ -135,6 +137,7 @@ export function useCookingAssistant(
       let assistantContent = '';
       let buffer = '';
       let toolCallArgs = '';
+      let toolCallName = '';
       let isToolCall = false;
 
       const assistantMessageId = crypto.randomUUID();
@@ -173,6 +176,9 @@ export function useCookingAssistant(
             if (delta?.tool_calls) {
               isToolCall = true;
               for (const toolCall of delta.tool_calls) {
+                if (toolCall.function?.name) {
+                  toolCallName = toolCall.function.name;
+                }
                 if (toolCall.function?.arguments) {
                   toolCallArgs += toolCall.function.arguments;
                 }
@@ -197,15 +203,27 @@ export function useCookingAssistant(
       // Process tool call result
       if (isToolCall && toolCallArgs) {
         try {
-          const extractedRecipe = JSON.parse(toolCallArgs) as ExtractedRecipeData;
-          console.log('Extracted recipe from tool call:', extractedRecipe);
+          const parsedData = JSON.parse(toolCallArgs);
+          const isNewRecipe = toolCallName === 'create_new_recipe';
+          
+          const extractedRecipe: ExtractedRecipeData = {
+            title: parsedData.title,
+            servings: parsedData.servings,
+            ingredients: parsedData.ingredients,
+            steps: parsedData.steps,
+            isNewRecipe,
+            relationToOriginal: parsedData.relation_to_original,
+          };
+          
+          console.log('Extracted recipe from tool call:', toolCallName, extractedRecipe);
           
           // Store pending recipe
           setPendingRecipe(extractedRecipe);
           
           // Update message with extracted recipe info
-          const confirmationMessage = assistantContent || 
-            `✅ J'ai préparé la version modifiée de votre recette "${extractedRecipe.title}". Cliquez sur "Appliquer les modifications" pour mettre à jour votre recette.`;
+          const confirmationMessage = assistantContent || (isNewRecipe
+            ? `✅ J'ai préparé la nouvelle recette "${extractedRecipe.title}". Cliquez sur "Créer la nouvelle recette" pour l'ajouter à votre carnet.`
+            : `✅ J'ai préparé la version modifiée de votre recette "${extractedRecipe.title}". Cliquez sur "Appliquer les modifications" pour mettre à jour votre recette.`);
           
           setMessages(prev => prev.map(m => 
             m.id === assistantMessageId 
