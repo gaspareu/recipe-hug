@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, Send, RotateCcw, ChefHat, Pencil, Save, History } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, Send, RotateCcw, ChefHat, Pencil, Save, History, Plus } from 'lucide-react';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
@@ -19,7 +19,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { RecipeStatusSelect } from '@/components/recipes/RecipeStatusSelect';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
-import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
+import { useRecipe, useToggleFavorite, useUpdateRecipe, useCreateRecipe } from '@/hooks/useRecipes';
 import { useCookingAssistant, ChatMessage, AssistantMode, ExtractedRecipeData } from '@/hooks/useCookingAssistant';
 import { useCreateVersion } from '@/hooks/useRecipeVersions';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
@@ -46,6 +46,7 @@ export default function RecipeDetail() {
   } = useRecipe(id || '');
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
+  const createRecipe = useCreateRecipe();
   const createVersion = useCreateVersion();
   const { user } = useAuth();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -373,6 +374,28 @@ export default function RecipeDetail() {
                       });
                       refetch();
                     }}
+                    onRecipeCreate={async (data) => {
+                      const newRecipe = await createRecipe.mutateAsync({
+                        title: data.title,
+                        servings: data.servings,
+                        ingredients: data.ingredients,
+                        steps: data.steps,
+                        status: 'draft',
+                        is_favorite: false,
+                        source_type: 'ai',
+                        ai_summary: data.relationToOriginal ? `Inspiré de "${recipe.title}". ${data.relationToOriginal}` : null,
+                        season: null,
+                        nutrition_tags: null,
+                        calorie_score: null,
+                        source_image_url: null,
+                      });
+                      toast({
+                        title: 'Nouvelle recette créée !',
+                        description: `"${newRecipe.title}" a été ajoutée à votre carnet.`
+                      });
+                      setChatOpen(false);
+                      navigate(`/recipes/${newRecipe.id}`);
+                    }}
                     recipeId={recipe.id}
                   />
                 </SheetContent>
@@ -411,6 +434,7 @@ function AssistantSheetContent({
   totalSteps,
   onClose,
   onRecipeUpdate,
+  onRecipeCreate,
   recipeId
 }: {
   recipe: NonNullable<ReturnType<typeof useRecipe>['data']>;
@@ -418,6 +442,7 @@ function AssistantSheetContent({
   totalSteps: number;
   onClose: () => void;
   onRecipeUpdate: (data: ExtractedRecipeData) => Promise<void>;
+  onRecipeCreate: (data: ExtractedRecipeData) => Promise<void>;
   recipeId: string;
 }) {
   const { style: swipeStyle, ...swipeHandlers } = useSwipeClose({ onClose, direction: 'right', threshold: 80 });
@@ -466,6 +491,7 @@ function AssistantSheetContent({
           mode={activeMode}
           onModeChange={setActiveMode}
           onRecipeUpdate={onRecipeUpdate}
+          onRecipeCreate={onRecipeCreate}
         />
       )}
     </div>
@@ -478,13 +504,15 @@ function ChatInterface({
   completedSteps,
   mode,
   onModeChange,
-  onRecipeUpdate
+  onRecipeUpdate,
+  onRecipeCreate
 }: {
   recipe: NonNullable<ReturnType<typeof useRecipe>['data']>;
   completedSteps: Set<number>;
   mode: AssistantMode;
   onModeChange: (mode: AssistantMode) => void;
   onRecipeUpdate: (data: ExtractedRecipeData) => Promise<void>;
+  onRecipeCreate: (data: ExtractedRecipeData) => Promise<void>;
 }) {
   const {
     messages,
@@ -558,7 +586,11 @@ function ChatInterface({
     
     setIsApplying(true);
     try {
-      await onRecipeUpdate(pendingRecipe);
+      if (pendingRecipe.isNewRecipe) {
+        await onRecipeCreate(pendingRecipe);
+      } else {
+        await onRecipeUpdate(pendingRecipe);
+      }
       clearPendingRecipe();
     } finally {
       setIsApplying(false);
@@ -593,10 +625,12 @@ function ChatInterface({
           >
             {isApplying ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : pendingRecipe.isNewRecipe ? (
+              <Plus className="h-4 w-4 mr-2" />
             ) : (
               <Save className="h-4 w-4 mr-2" />
             )}
-            Appliquer les modifications
+            {pendingRecipe.isNewRecipe ? "Créer la nouvelle recette" : "Appliquer les modifications"}
           </Button>
         </div>
       )}
