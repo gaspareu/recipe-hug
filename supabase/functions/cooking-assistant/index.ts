@@ -1,10 +1,46 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Input validation schema
+const MessageSchema = z.object({
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string().max(10000, "Message content too long"),
+});
+
+const IngredientSchema = z.object({
+  name: z.string(),
+  quantity: z.union([z.string(), z.number()]),
+  unit: z.string(),
+  category: z.string().optional(),
+});
+
+const StepSchema = z.object({
+  order: z.number(),
+  text: z.string(),
+  completed: z.boolean().optional(),
+});
+
+const RecipeContextSchema = z.object({
+  title: z.string(),
+  servings: z.number().optional(),
+  season: z.string().optional().nullable(),
+  ingredients: z.array(IngredientSchema).optional(),
+  steps: z.array(StepSchema).optional(),
+  completedStepsCount: z.number().optional(),
+  totalSteps: z.number().optional(),
+});
+
+const RequestSchema = z.object({
+  messages: z.array(MessageSchema).max(50, "Too many messages"),
+  recipeContext: RecipeContextSchema.optional(),
+  mode: z.enum(["cooking", "editing"]).optional().default("cooking"),
+});
 
 const COOKING_SYSTEM_PROMPT = `Tu es un assistant culinaire qui guide l'utilisateur dans la réalisation d'une recette spécifique.
 
@@ -231,66 +267,78 @@ function formatPreferencesContext(prefs: any): string {
   return `\n\n--- PROFIL UTILISATEUR ---\n${sections.join('\n')}\n--- FIN PROFIL ---`;
 }
 
-// Extract user ID from JWT
-function extractUserIdFromToken(authHeader: string | null): string | null {
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  
-  try {
-    const token = authHeader.split(' ')[1];
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    
-    const payload = JSON.parse(atob(parts[1]));
-    return payload.sub || null;
-  } catch {
-    return null;
-  }
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages, recipeContext, mode = 'cooking' } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    // Verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized", message: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    console.log("Cooking assistant request - mode:", mode, "messages:", messages.length);
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    
+    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw new Error("Missing required environment variables");
+    }
+
+    // Verify JWT and get user
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized", message: "Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = claimsData.claims.sub;
+
+    // Validate input
+    const body = await req.json();
+    const parseResult = RequestSchema.safeParse(body);
+    
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: "validation_error", message: parseResult.error.message }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { messages, recipeContext, mode } = parseResult.data;
+
+    console.log("Cooking assistant request - mode:", mode, "messages:", messages.length, "user:", userId);
     console.log("Recipe context:", recipeContext?.title);
 
     // Choose system prompt based on mode
     const basePrompt = mode === 'editing' ? EDITING_SYSTEM_PROMPT : COOKING_SYSTEM_PROMPT;
     let contextMessage = basePrompt;
 
-    // Try to get user preferences if authenticated
-    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      const authHeader = req.headers.get('authorization');
-      const userId = extractUserIdFromToken(authHeader);
+    // Fetch user preferences
+    const { data: prefs } = await supabaseClient
+      .from('user_culinary_preferences')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
 
-      if (userId) {
-        console.log("Loading preferences for user:", userId);
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const prefsContext = formatPreferencesContext(prefs);
 
-        const { data: prefs } = await supabase
-          .from('user_culinary_preferences')
-          .select('*')
-          .eq('user_id', userId)
-          .single();
-
-        const prefsContext = formatPreferencesContext(prefs);
-
-        if (prefsContext) {
-          contextMessage += PERSONALIZATION_INSTRUCTION + prefsContext;
-          console.log("Added personalization context");
-        }
-      }
+    if (prefsContext) {
+      contextMessage += PERSONALIZATION_INSTRUCTION + prefsContext;
+      console.log("Added personalization context");
     }
     
     if (recipeContext) {

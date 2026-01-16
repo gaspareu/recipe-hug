@@ -1,10 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Input validation schema
+const MessageSchema = z.object({
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string().max(10000, "Message content too long"),
+});
+
+const RequestSchema = z.object({
+  messages: z.array(MessageSchema).max(50, "Too many messages"),
+});
 
 const BASE_SYSTEM_PROMPT = `Tu es Chef Michel, un chef cuisinier français passionné avec 20 ans d'expérience. Tu aides l'utilisateur à construire sa recette idéale en conversant avec lui.
 
@@ -198,75 +209,85 @@ function formatFavoritesContext(recipes: any[]): string {
   return `\n\n--- RECETTES FAVORITES ---\n${summaries.join('\n')}\n--- FIN FAVORITES ---`;
 }
 
-// Extract user ID from JWT
-function extractUserIdFromToken(authHeader: string | null): string | null {
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  
-  try {
-    const token = authHeader.split(' ')[1];
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    
-    const payload = JSON.parse(atob(parts[1]));
-    return payload.sub || null;
-  } catch {
-    return null;
-  }
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    // Verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized", message: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    console.log("Chat request received with", messages.length, "messages");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    
+    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw new Error("Missing required environment variables");
+    }
+
+    // Verify JWT and get user
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized", message: "Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = claimsData.claims.sub;
+
+    // Validate input
+    const body = await req.json();
+    const parseResult = RequestSchema.safeParse(body);
+    
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: "validation_error", message: parseResult.error.message }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { messages } = parseResult.data;
+
+    console.log("Chat request received with", messages.length, "messages for user:", userId);
 
     // Build personalized system prompt
     let systemPrompt = BASE_SYSTEM_PROMPT;
-    let userId: string | null = null;
 
-    // Try to get user context if authenticated
-    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      const authHeader = req.headers.get('authorization');
-      userId = extractUserIdFromToken(authHeader);
+    // Fetch user preferences and favorites
+    const [prefsResult, favoritesResult] = await Promise.all([
+      supabaseClient
+        .from('user_culinary_preferences')
+        .select('*')
+        .eq('user_id', userId)
+        .single(),
+      supabaseClient
+        .from('recipes')
+        .select('title, season, nutrition_tags')
+        .eq('user_id', userId)
+        .eq('is_favorite', true)
+        .limit(5)
+    ]);
 
-      if (userId) {
-        console.log("Loading context for user:", userId);
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const prefsContext = formatPreferencesContext(prefsResult.data);
+    const favoritesContext = formatFavoritesContext(favoritesResult.data || []);
 
-        // Fetch user preferences and favorites in parallel
-        const [prefsResult, favoritesResult] = await Promise.all([
-          supabase
-            .from('user_culinary_preferences')
-            .select('*')
-            .eq('user_id', userId)
-            .single(),
-          supabase
-            .from('recipes')
-            .select('title, season, nutrition_tags')
-            .eq('user_id', userId)
-            .eq('is_favorite', true)
-            .limit(5)
-        ]);
-
-        const prefsContext = formatPreferencesContext(prefsResult.data);
-        const favoritesContext = formatFavoritesContext(favoritesResult.data || []);
-
-        if (prefsContext || favoritesContext) {
-          systemPrompt += PERSONALIZATION_INSTRUCTION + prefsContext + favoritesContext;
-          console.log("Added personalization context");
-        }
-      }
+    if (prefsContext || favoritesContext) {
+      systemPrompt += PERSONALIZATION_INSTRUCTION + prefsContext + favoritesContext;
+      console.log("Added personalization context");
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

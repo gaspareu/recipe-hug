@@ -1,9 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Input validation schema
+const MessageSchema = z.object({
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string().max(10000, "Message content too long"),
+});
+
+const RecipeSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: z.string(),
+  is_favorite: z.boolean().optional(),
+});
+
+const RequestSchema = z.object({
+  messages: z.array(MessageSchema).max(50, "Too many messages"),
+  recipes: z.array(RecipeSchema).optional(),
+});
 
 const SYSTEM_PROMPT = `Tu es Chef Michel, l'assistant culinaire personnel de cette application de recettes. Tu aides les utilisateurs à :
 - Chercher des recettes dans leur livre de recettes
@@ -162,18 +182,60 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, recipes } = await req.json();
+    // Verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized", message: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw new Error("Missing required environment variables");
     }
+
+    // Verify JWT and get user
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized", message: "Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = claimsData.claims.sub;
+
+    // Validate input
+    const body = await req.json();
+    const parseResult = RequestSchema.safeParse(body);
+    
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: "validation_error", message: parseResult.error.message }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { messages, recipes } = parseResult.data;
+
+    console.log("Home assistant request - messages:", messages.length, "user:", userId);
 
     // Build context about user's recipes for the AI
     let recipesContext = "";
     if (recipes && recipes.length > 0) {
       recipesContext = `\n\n## RECETTES DE L'UTILISATEUR (${recipes.length} recettes)\n`;
-      recipesContext += recipes.map((r: { id: string; title: string; status: string; is_favorite: boolean }) => 
+      recipesContext += recipes.map((r) => 
         `- ID: ${r.id} | "${r.title}" | Statut: ${r.status}${r.is_favorite ? ' ⭐' : ''}`
       ).join('\n');
     }
