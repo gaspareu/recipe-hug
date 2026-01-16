@@ -1,9 +1,57 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// SSRF protection: validate URL is safe
+function isUrlSafe(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    
+    // Only allow HTTPS
+    if (url.protocol !== 'https:') return false;
+    
+    const hostname = url.hostname.toLowerCase();
+    
+    // Block localhost and loopback
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return false;
+    
+    // Block AWS metadata endpoint
+    if (hostname === '169.254.169.254') return false;
+    
+    // Block private IP ranges
+    const parts = hostname.split('.');
+    if (parts.length === 4) {
+      const firstOctet = parseInt(parts[0], 10);
+      const secondOctet = parseInt(parts[1], 10);
+      
+      // 10.x.x.x
+      if (firstOctet === 10) return false;
+      // 172.16.x.x - 172.31.x.x
+      if (firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31) return false;
+      // 192.168.x.x
+      if (firstOctet === 192 && secondOctet === 168) return false;
+      // 169.254.x.x (link-local)
+      if (firstOctet === 169 && secondOctet === 254) return false;
+    }
+    
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Input validation schema
+const RequestSchema = z.object({
+  image_url: z.string()
+    .url("Invalid URL format")
+    .max(2000, "URL too long")
+    .refine(isUrlSafe, "URL is not allowed (must be HTTPS and not internal)")
+});
 
 const SYSTEM_PROMPT = `Tu es un assistant spécialisé dans l'extraction de recettes de cuisine à partir d'images.
 Analyse l'image fournie et extrais les informations suivantes au format JSON strict:
@@ -41,21 +89,52 @@ serve(async (req) => {
   }
 
   try {
-    const { image_url } = await req.json();
-    
-    if (!image_url) {
+    // Verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ error: 'image_url is required' }),
+        JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+
+    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw new Error('Missing required environment variables');
+    }
+
+    // Verify JWT
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate input
+    const body = await req.json();
+    const parseResult = RequestSchema.safeParse(body);
+    
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: parseResult.error.errors[0]?.message || 'Invalid input' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Parsing recipe from image:', image_url);
+    const { image_url } = parseResult.data;
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
-    }
+    console.log('Parsing recipe from image for user:', claimsData.claims.sub);
 
     // Call Lovable AI Gateway with vision model
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -117,7 +196,7 @@ serve(async (req) => {
       throw new Error('No content in AI response');
     }
 
-    console.log('AI response content:', content);
+    console.log('AI response content received');
 
     // Parse the JSON from the response
     // Remove potential markdown code blocks
@@ -135,7 +214,7 @@ serve(async (req) => {
 
     const parsedRecipe = JSON.parse(jsonContent);
 
-    console.log('Parsed recipe:', parsedRecipe);
+    console.log('Parsed recipe:', parsedRecipe.title);
 
     return new Response(
       JSON.stringify({ 
@@ -150,7 +229,7 @@ serve(async (req) => {
     
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Failed to parse recipe image',
+        error: 'Failed to parse recipe image',
         success: false
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

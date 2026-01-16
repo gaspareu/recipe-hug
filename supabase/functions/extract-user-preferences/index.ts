@@ -1,10 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Input validation schema
+const MessageSchema = z.object({
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string().max(10000, "Message content too long"),
+});
+
+const RequestSchema = z.object({
+  messages: z.array(MessageSchema).max(50, "Too many messages"),
+});
 
 const EXTRACTION_PROMPT = `Tu es un assistant qui analyse des conversations culinaires pour extraire les préférences de l'utilisateur.
 
@@ -194,35 +205,62 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, userId } = await req.json();
-    
-    if (!userId) {
+    // Verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ error: "user_id required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "unauthorized", message: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Missing required environment variables");
     }
 
-    // Create supabase client with service role
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Verify JWT and get user
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } }
+    });
 
-    // Get existing preferences
-    const { data: existingPrefs } = await supabase
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized", message: "Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = claimsData.claims.sub as string;
+
+    // Validate input
+    const body = await req.json();
+    const parseResult = RequestSchema.safeParse(body);
+    
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: "validation_error", message: parseResult.error.message }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { messages } = parseResult.data;
+
+    console.log("Extracting preferences for user:", userId);
+    console.log("Messages count:", messages.length);
+
+    // Get existing preferences using user's auth context
+    const { data: existingPrefs } = await supabaseClient
       .from('user_culinary_preferences')
       .select('*')
       .eq('user_id', userId)
       .single();
-
-    console.log("Extracting preferences for user:", userId);
-    console.log("Messages count:", messages.length);
 
     // Format conversation for extraction
     const conversationText = messages
@@ -285,8 +323,8 @@ serve(async (req) => {
 
     const mergedPrefs = mergePreferences(existingPrefs || defaultPrefs, extractedPrefs);
 
-    // Upsert preferences
-    const { error: upsertError } = await supabase
+    // Upsert preferences using user's auth context (RLS will enforce ownership)
+    const { error: upsertError } = await supabaseClient
       .from('user_culinary_preferences')
       .upsert({
         user_id: userId,
