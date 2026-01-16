@@ -3,71 +3,69 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 // Input validation schema
 const RequestSchema = z.object({
-  prompt: z.string()
-    .min(1, "Prompt is required")
-    .max(2000, "Prompt too long"),
+  prompt: z.string().min(1, "Prompt is required").max(2000, "Prompt too long"),
 });
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     // Verify authentication
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Authentication required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      throw new Error('Missing required environment variables');
+      throw new Error("Missing required environment variables");
     }
 
     // Verify JWT
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } }
+      global: { headers: { Authorization: authHeader } },
     });
 
-    const token = authHeader.replace('Bearer ', '');
+    const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
-    
+
     if (claimsError || !claimsData?.claims) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Validate input
     const body = await req.json();
     const parseResult = RequestSchema.safeParse(body);
-    
+
     if (!parseResult.success) {
-      return new Response(
-        JSON.stringify({ error: parseResult.error.errors[0]?.message || 'Invalid input' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: parseResult.error.errors[0]?.message || "Invalid input" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { prompt } = parseResult.data;
 
-    console.log('Generating recipe for user:', claimsData.claims.sub, 'prompt:', prompt);
+    console.log("Generating recipe for user:", claimsData.claims.sub, "prompt:", prompt);
 
-    const systemPrompt = `Tu es Chef Michel, un chef cuisinier français passionné avec 20 ans d'expérience dans des restaurants étoilés. Tu crées des recettes détaillées, créatives et accessibles.
+    const systemPrompt = `Tu es un chef cuisinier français passionné avec 20 ans d'expérience dans des restaurants étoilés. Tu crées des recettes détaillées, créatives et accessibles.
 
 ## TON STYLE
 - Recettes gourmandes avec des touches personnelles et astuces de chef
@@ -142,24 +140,24 @@ Catégories: légumes, fruits, viandes, poissons, produits laitiers, épices, au
 
 Génère maintenant une recette créative et détaillée selon la demande de l'utilisateur.`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
+        model: "google/gemini-3-flash-preview",
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
         ],
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('AI Gateway error:', response.status, errorText);
+      console.error("AI Gateway error:", response.status, errorText);
       throw new Error(`AI Gateway error: ${response.status}`);
     }
 
@@ -167,36 +165,34 @@ Génère maintenant une recette créative et détaillée selon la demande de l'u
     const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
-      throw new Error('No content in AI response');
+      throw new Error("No content in AI response");
     }
 
-    console.log('AI response received');
+    console.log("AI response received");
 
     // Parse JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error('No valid JSON found in response');
+      throw new Error("No valid JSON found in response");
     }
 
     const recipeData = JSON.parse(jsonMatch[0]);
 
     // Validate structure
     if (!recipeData.title || !Array.isArray(recipeData.ingredients) || !Array.isArray(recipeData.steps)) {
-      throw new Error('Invalid recipe structure');
+      throw new Error("Invalid recipe structure");
     }
 
-    console.log('Generated recipe:', recipeData.title);
+    console.log("Generated recipe:", recipeData.title);
 
-    return new Response(
-      JSON.stringify(recipeData),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
+    return new Response(JSON.stringify(recipeData), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    console.error('Error generating recipe:', error);
-    return new Response(
-      JSON.stringify({ error: 'Failed to generate recipe' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error("Error generating recipe:", error);
+    return new Response(JSON.stringify({ error: "Failed to generate recipe" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

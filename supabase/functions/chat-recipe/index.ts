@@ -17,7 +17,7 @@ const RequestSchema = z.object({
   messages: z.array(MessageSchema).max(50, "Too many messages"),
 });
 
-const BASE_SYSTEM_PROMPT = `Tu es Chef Michel, un chef cuisinier français passionné avec 20 ans d'expérience. Tu aides l'utilisateur à construire sa recette idéale en conversant avec lui.
+const BASE_SYSTEM_PROMPT = `Tu es un chef cuisinier français passionné avec 20 ans d'expérience. Tu aides l'utilisateur à construire sa recette idéale en conversant avec lui.
 
 ## TON RÔLE
 Tu guides l'utilisateur de l'idée à la recette finale, puis tu enregistres avec save_recipe.
@@ -61,7 +61,7 @@ User: "Avec le crumble, top !"
 [→ APPEL save_recipe IMMÉDIAT avec la recette complète]
 
 ## TON
-Chaleureux, enthousiaste, naturel. Tu tutoies. Pas de listes à puces dans les messages, des phrases fluides.`;
+Chaleureux, enthousiaste, naturel. Tu tutoies. Des phrases fluides.`;
 
 const PERSONALIZATION_INSTRUCTION = `
 
@@ -78,17 +78,19 @@ const SAVE_RECIPE_TOOL = {
   type: "function",
   function: {
     name: "save_recipe",
-    description: "APPELER IMMÉDIATEMENT quand l'utilisateur valide/approuve la recette avec des mots comme 'ok', 'parfait', 'super', 'on fait ça', 'génial', 'c'est bon', 'oui'. Ne jamais attendre de confirmation supplémentaire.",
+    description:
+      "APPELER IMMÉDIATEMENT quand l'utilisateur valide/approuve la recette avec des mots comme 'ok', 'parfait', 'super', 'on fait ça', 'génial', 'c'est bon', 'oui'. Ne jamais attendre de confirmation supplémentaire.",
     parameters: {
       type: "object",
       properties: {
-        title: { 
+        title: {
           type: "string",
-          description: "Nom appétissant de la recette (ex: 'Quiche lorraine crémeuse', 'Risotto aux champignons forestiers')"
+          description:
+            "Nom appétissant de la recette (ex: 'Quiche lorraine crémeuse', 'Risotto aux champignons forestiers')",
         },
-        servings: { 
+        servings: {
           type: "number",
-          description: "Nombre de portions (défaut: 4 si non précisé)"
+          description: "Nombre de portions (défaut: 4 si non précisé)",
         },
         ingredients: {
           type: "array",
@@ -98,11 +100,18 @@ const SAVE_RECIPE_TOOL = {
             properties: {
               name: { type: "string", description: "Nom de l'ingrédient" },
               quantity: { type: "string", description: "Quantité numérique uniquement (ex: '200', '2', '0.5')" },
-              unit: { type: "string", description: "Unité : g, kg, ml, L, pièce, c. à soupe, c. à café, pincée, bouquet" },
-              category: { type: "string", description: "Une de: Légumes, Viandes, Poissons, Épices, Produits laitiers, Féculents, Fruits, Condiments, Huiles, Autres" }
+              unit: {
+                type: "string",
+                description: "Unité : g, kg, ml, L, pièce, c. à soupe, c. à café, pincée, bouquet",
+              },
+              category: {
+                type: "string",
+                description:
+                  "Une de: Légumes, Viandes, Poissons, Épices, Produits laitiers, Féculents, Fruits, Condiments, Huiles, Autres",
+              },
             },
-            required: ["name", "quantity", "unit", "category"]
-          }
+            required: ["name", "quantity", "unit", "category"],
+          },
         },
         steps: {
           type: "array",
@@ -111,20 +120,24 @@ const SAVE_RECIPE_TOOL = {
             type: "object",
             properties: {
               order: { type: "number", description: "Numéro séquentiel 1, 2, 3..." },
-              text: { type: "string", description: "Instruction claire avec temps si pertinent (ex: 'Faire revenir les oignons 5 min à feu doux')" }
+              text: {
+                type: "string",
+                description:
+                  "Instruction claire avec temps si pertinent (ex: 'Faire revenir les oignons 5 min à feu doux')",
+              },
             },
-            required: ["order", "text"]
-          }
-        }
+            required: ["order", "text"],
+          },
+        },
       },
-      required: ["title", "servings", "ingredients", "steps"]
-    }
-  }
+      required: ["title", "servings", "ingredients", "steps"],
+    },
+  },
 };
 
 // Format user preferences for context
 function formatPreferencesContext(prefs: any): string {
-  if (!prefs) return '';
+  if (!prefs) return "";
 
   const sections: string[] = [];
 
@@ -132,81 +145,81 @@ function formatPreferencesContext(prefs: any): string {
   const taste = prefs.taste_preferences || {};
   const tasteLines: string[] = [];
   if (taste.liked_flavors?.length > 0) {
-    tasteLines.push(`Saveurs aimées : ${taste.liked_flavors.join(', ')}`);
+    tasteLines.push(`Saveurs aimées : ${taste.liked_flavors.join(", ")}`);
   }
   if (taste.disliked_flavors?.length > 0) {
-    tasteLines.push(`Saveurs évitées : ${taste.disliked_flavors.join(', ')}`);
+    tasteLines.push(`Saveurs évitées : ${taste.disliked_flavors.join(", ")}`);
   }
   if (taste.liked_ingredients?.length > 0) {
-    tasteLines.push(`Ingrédients favoris : ${taste.liked_ingredients.join(', ')}`);
+    tasteLines.push(`Ingrédients favoris : ${taste.liked_ingredients.join(", ")}`);
   }
   if (taste.disliked_ingredients?.length > 0) {
-    tasteLines.push(`Ingrédients évités : ${taste.disliked_ingredients.join(', ')}`);
+    tasteLines.push(`Ingrédients évités : ${taste.disliked_ingredients.join(", ")}`);
   }
   if (tasteLines.length > 0) {
-    sections.push(`Goûts :\n${tasteLines.join('\n')}`);
+    sections.push(`Goûts :\n${tasteLines.join("\n")}`);
   }
 
   // Kitchen equipment
   const equipment = prefs.kitchen_equipment || {};
   const equipLines: string[] = [];
   if (equipment.unavailable?.length > 0) {
-    equipLines.push(`Non disponible : ${equipment.unavailable.join(', ')}`);
+    equipLines.push(`Non disponible : ${equipment.unavailable.join(", ")}`);
   }
   if (equipment.available?.length > 0) {
-    equipLines.push(`Disponible : ${equipment.available.join(', ')}`);
+    equipLines.push(`Disponible : ${equipment.available.join(", ")}`);
   }
   if (equipLines.length > 0) {
-    sections.push(`Équipement :\n${equipLines.join('\n')}`);
+    sections.push(`Équipement :\n${equipLines.join("\n")}`);
   }
 
   // Culinary style
   const style = prefs.culinary_style || {};
   const styleLines: string[] = [];
   if (style.favorite_cuisines?.length > 0) {
-    styleLines.push(`Cuisines favorites : ${style.favorite_cuisines.join(', ')}`);
+    styleLines.push(`Cuisines favorites : ${style.favorite_cuisines.join(", ")}`);
   }
   if (style.favorite_techniques?.length > 0) {
-    styleLines.push(`Techniques appréciées : ${style.favorite_techniques.join(', ')}`);
+    styleLines.push(`Techniques appréciées : ${style.favorite_techniques.join(", ")}`);
   }
   if (style.preferred_difficulty) {
     styleLines.push(`Niveau préféré : ${style.preferred_difficulty}`);
   }
   if (styleLines.length > 0) {
-    sections.push(`Style culinaire :\n${styleLines.join('\n')}`);
+    sections.push(`Style culinaire :\n${styleLines.join("\n")}`);
   }
 
   // Dietary constraints
   const diet = prefs.dietary_constraints || {};
   const dietLines: string[] = [];
   if (diet.allergies?.length > 0) {
-    dietLines.push(`⚠️ ALLERGIES : ${diet.allergies.join(', ')}`);
+    dietLines.push(`⚠️ ALLERGIES : ${diet.allergies.join(", ")}`);
   }
   if (diet.diets?.length > 0) {
-    dietLines.push(`Régime : ${diet.diets.join(', ')}`);
+    dietLines.push(`Régime : ${diet.diets.join(", ")}`);
   }
   if (diet.restrictions?.length > 0) {
-    dietLines.push(`Restrictions : ${diet.restrictions.join(', ')}`);
+    dietLines.push(`Restrictions : ${diet.restrictions.join(", ")}`);
   }
   if (dietLines.length > 0) {
-    sections.push(`Contraintes alimentaires :\n${dietLines.join('\n')}`);
+    sections.push(`Contraintes alimentaires :\n${dietLines.join("\n")}`);
   }
 
-  if (sections.length === 0) return '';
+  if (sections.length === 0) return "";
 
-  return `\n\n--- PROFIL CULINAIRE ---\n${sections.join('\n\n')}\n--- FIN PROFIL ---`;
+  return `\n\n--- PROFIL CULINAIRE ---\n${sections.join("\n\n")}\n--- FIN PROFIL ---`;
 }
 
 // Format favorite recipes summaries
 function formatFavoritesContext(recipes: any[]): string {
-  if (!recipes || recipes.length === 0) return '';
+  if (!recipes || recipes.length === 0) return "";
 
   const summaries = recipes.slice(0, 5).map((r, i) => {
-    const tags = [r.season, ...(r.nutrition_tags || [])].filter(Boolean).join(', ');
-    return `${i + 1}. ${r.title}${tags ? ` (${tags})` : ''}`;
+    const tags = [r.season, ...(r.nutrition_tags || [])].filter(Boolean).join(", ");
+    return `${i + 1}. ${r.title}${tags ? ` (${tags})` : ""}`;
   });
 
-  return `\n\n--- RECETTES FAVORITES ---\n${summaries.join('\n')}\n--- FIN FAVORITES ---`;
+  return `\n\n--- RECETTES FAVORITES ---\n${summaries.join("\n")}\n--- FIN FAVORITES ---`;
 }
 
 serve(async (req) => {
@@ -216,35 +229,35 @@ serve(async (req) => {
 
   try {
     // Verify authentication
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: "unauthorized", message: "Authentication required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "unauthorized", message: "Authentication required" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    
+
     if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Missing required environment variables");
     }
 
     // Verify JWT and get user
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } }
+      global: { headers: { Authorization: authHeader } },
     });
 
-    const token = authHeader.replace('Bearer ', '');
+    const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
-    
+
     if (claimsError || !claimsData?.claims) {
-      return new Response(
-        JSON.stringify({ error: "unauthorized", message: "Invalid token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "unauthorized", message: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const userId = claimsData.claims.sub;
@@ -252,12 +265,12 @@ serve(async (req) => {
     // Validate input
     const body = await req.json();
     const parseResult = RequestSchema.safeParse(body);
-    
+
     if (!parseResult.success) {
-      return new Response(
-        JSON.stringify({ error: "validation_error", message: parseResult.error.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "validation_error", message: parseResult.error.message }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { messages } = parseResult.data;
@@ -269,17 +282,13 @@ serve(async (req) => {
 
     // Fetch user preferences and favorites
     const [prefsResult, favoritesResult] = await Promise.all([
+      supabaseClient.from("user_culinary_preferences").select("*").eq("user_id", userId).single(),
       supabaseClient
-        .from('user_culinary_preferences')
-        .select('*')
-        .eq('user_id', userId)
-        .single(),
-      supabaseClient
-        .from('recipes')
-        .select('title, season, nutrition_tags')
-        .eq('user_id', userId)
-        .eq('is_favorite', true)
-        .limit(5)
+        .from("recipes")
+        .select("title, season, nutrition_tags")
+        .eq("user_id", userId)
+        .eq("is_favorite", true)
+        .limit(5),
     ]);
 
     const prefsContext = formatPreferencesContext(prefsResult.data);
@@ -298,10 +307,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ],
+        messages: [{ role: "system", content: systemPrompt }, ...messages],
         tools: [SAVE_RECIPE_TOOL],
         tool_choice: "auto",
         stream: true,
@@ -311,42 +317,41 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      
+
       if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "rate_limit", message: "Trop de requêtes, veuillez patienter." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "rate_limit", message: "Trop de requêtes, veuillez patienter." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "payment_required", message: "Crédits IA épuisés." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "payment_required", message: "Crédits IA épuisés." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      
-      return new Response(
-        JSON.stringify({ error: "ai_error", message: "Erreur du service IA" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+      return new Response(JSON.stringify({ error: "ai_error", message: "Erreur du service IA" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Stream the response directly
     return new Response(response.body, {
-      headers: { 
-        ...corsHeaders, 
+      headers: {
+        ...corsHeaders,
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive"
+        Connection: "keep-alive",
       },
     });
-
   } catch (error) {
     console.error("Chat recipe error:", error);
     const message = error instanceof Error ? error.message : "Erreur inconnue";
-    return new Response(
-      JSON.stringify({ error: "server_error", message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "server_error", message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
