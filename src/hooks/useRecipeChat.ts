@@ -214,11 +214,17 @@ export function useRecipeChat() {
     try {
       abortControllerRef.current = new AbortController();
       
+      // Get user session token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Vous devez être connecté pour utiliser l\'assistant');
+      }
+      
       const response = await fetch(CHAT_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ messages: apiMessages }),
         signal: abortControllerRef.current.signal,
@@ -333,8 +339,8 @@ export function useRecipeChat() {
       });
 
       // Trigger preference extraction in background (non-blocking)
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      // Session is already retrieved above, reuse it
+      if (session?.user) {
         const allMessages = newMessages.filter(m => m.id !== 'welcome').map(m => ({
           role: m.role,
           content: m.content,
@@ -345,9 +351,9 @@ export function useRecipeChat() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            'Authorization': `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ messages: allMessages, userId: user.id }),
+          body: JSON.stringify({ messages: allMessages, userId: session.user.id }),
         }).catch(err => console.log('Preference extraction failed (non-critical):', err));
       }
 

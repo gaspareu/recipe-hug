@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import type { Recipe, Ingredient, Step } from '@/types/recipe';
+import { supabase } from '@/integrations/supabase/client';
 
 export type AssistantMode = 'cooking' | 'editing';
 
@@ -113,11 +114,17 @@ export function useCookingAssistant(
     try {
       abortControllerRef.current = new AbortController();
       
+      // Get user session token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Vous devez être connecté pour utiliser l\'assistant');
+      }
+      
       const response = await fetch(CHAT_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ messages: apiMessages, recipeContext, mode }),
         signal: abortControllerRef.current.signal,
