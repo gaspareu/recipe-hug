@@ -15,8 +15,8 @@ const MessageSchema = z.object({
 
 const IngredientSchema = z.object({
   name: z.string(),
-  quantity: z.union([z.string(), z.number()]),
-  unit: z.string(),
+  quantity: z.union([z.string(), z.number()]).nullable().optional(),
+  unit: z.string().nullable().optional(),
   category: z.string().optional(),
 });
 
