@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, RotateCcw, Loader2, BookOpen, User, Mic, MicOff } from 'lucide-react';
+import { Send, RotateCcw, Loader2, BookOpen, User, Mic, MicOff, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import ReactMarkdown from 'react-markdown';
@@ -13,8 +14,14 @@ export default function Home() {
   const {
     messages,
     isStreaming,
+    mode,
+    activeRecipe,
+    pendingRecipe,
     sendMessage,
-    resetChat
+    resetChat,
+    savePendingRecipe,
+    cancelPendingRecipe,
+    getModeInfo
   } = useHomeChat();
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -73,14 +80,40 @@ export default function Home() {
     }
   };
 
-  const quickSuggestions = [
-    { text: 'Chercher une recette de poulet' },
-    { text: 'Crée-moi une recette de tarte' },
-    { text: 'Voir toutes mes recettes' },
-    { text: 'Qu\'est-ce que je peux faire avec des œufs ?' }
-  ];
+  // Dynamic suggestions based on mode
+  const getQuickSuggestions = () => {
+    switch (mode) {
+      case 'creating':
+        return [
+          { text: 'Plutôt simple et rapide' },
+          { text: 'Une version végétarienne' },
+          { text: "C'est parfait, enregistre !" },
+        ];
+      case 'cooking':
+        return [
+          { text: 'Étape suivante' },
+          { text: 'Je peux substituer un ingrédient ?' },
+          { text: "C'est quoi la bonne texture ?" },
+        ];
+      case 'editing':
+        return [
+          { text: 'Version végétarienne' },
+          { text: 'Moins calorique' },
+          { text: 'Enregistre les modifications' },
+        ];
+      default:
+        return [
+          { text: 'Chercher une recette de poulet' },
+          { text: 'Crée-moi une recette de tarte' },
+          { text: 'Voir toutes mes recettes' },
+          { text: "Qu'est-ce que je peux faire avec des œufs ?" }
+        ];
+    }
+  };
 
+  const quickSuggestions = getQuickSuggestions();
   const hasConversation = messages.length > 1;
+  const modeInfo = getModeInfo();
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -98,6 +131,17 @@ export default function Home() {
             >
               <RotateCcw className="h-4 w-4" />
             </Button>
+            
+            {/* Mode indicator */}
+            {modeInfo && (
+              <Badge variant="outline" className={`${modeInfo.color} text-xs font-normal`}>
+                <span className="mr-1">{modeInfo.icon}</span>
+                {modeInfo.label}
+                {activeRecipe && (
+                  <span className="ml-1 opacity-70">• {activeRecipe.title}</span>
+                )}
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <Button 
@@ -179,10 +223,41 @@ export default function Home() {
           </div>
         )}
 
-        {/* Bottom input area */}
+        {/* Bottom area */}
         <div className="p-4 pb-6">
           <div className="container max-w-3xl mx-auto space-y-4">
-            {/* Quick suggestions - only on welcome screen */}
+            {/* Pending recipe action bar */}
+            {pendingRecipe && (
+              <div className="flex items-center justify-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl">
+                <span className="text-sm">
+                  {pendingRecipe.isUpdate 
+                    ? `Mettre à jour "${pendingRecipe.title}" ?`
+                    : `Enregistrer "${pendingRecipe.title}" ?`
+                  }
+                </span>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    onClick={savePendingRecipe}
+                    className="gap-1"
+                  >
+                    <Check className="h-4 w-4" />
+                    {pendingRecipe.isUpdate ? 'Mettre à jour' : 'Créer'}
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={cancelPendingRecipe}
+                    className="gap-1"
+                  >
+                    <X className="h-4 w-4" />
+                    Continuer à modifier
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Quick suggestions */}
             {!hasConversation && (
               <div className="flex flex-wrap gap-2 justify-center mb-4">
                 {quickSuggestions.map((suggestion, i) => (
@@ -193,6 +268,24 @@ export default function Home() {
                     onClick={() => sendMessage(suggestion.text)} 
                     disabled={isStreaming}
                     className="text-xs rounded-full px-4 border-border/50 hover:bg-muted"
+                  >
+                    {suggestion.text}
+                  </Button>
+                ))}
+              </div>
+            )}
+
+            {/* Contextual suggestions when in specialized modes */}
+            {hasConversation && mode !== 'orchestration' && !pendingRecipe && (
+              <div className="flex flex-wrap gap-2 justify-center">
+                {quickSuggestions.map((suggestion, i) => (
+                  <Button 
+                    key={i} 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => sendMessage(suggestion.text)} 
+                    disabled={isStreaming}
+                    className="text-xs rounded-full px-3 text-muted-foreground hover:text-foreground"
                   >
                     {suggestion.text}
                   </Button>
