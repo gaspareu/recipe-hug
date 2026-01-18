@@ -68,6 +68,11 @@ export function useHomeChat() {
 
   // Refs for stable references
   const lastSearchResultsRef = useRef<SearchResult[]>([]);
+  const pendingModeSwitchRef = useRef<{
+    newMode: ChatMode;
+    recipe: ActiveRecipeData | null;
+    initialContext: string;
+  } | null>(null);
 
   // Load a full recipe by ID
   const loadRecipe = useCallback(async (recipeId: string): Promise<ActiveRecipeData | null> => {
@@ -124,26 +129,31 @@ export function useHomeChat() {
           setActiveRecipe(recipe);
           setMode('cooking');
           toast.success(`Mode cuisine activé pour "${recipe.title}"`);
+          // Return mode switch info so we can continue the conversation
+          return { modeSwitch: 'cooking', recipe, initialContext: action.data.initial_context };
         }
         return null;
       }
 
       case 'start_editing': {
         const recipeId = action.data.recipe_id as string;
+        const modificationRequest = action.data.modification_request as string;
         const recipe = await loadRecipe(recipeId);
         if (recipe) {
           setActiveRecipe(recipe);
           setMode('editing');
           toast.success(`Mode modification activé pour "${recipe.title}"`);
+          return { modeSwitch: 'editing', recipe, initialContext: modificationRequest };
         }
         return null;
       }
 
       case 'start_recipe_creation': {
+        const initialIdea = action.data.initial_idea as string;
         setMode('creating');
         setActiveRecipe(null);
         toast.success('Mode création de recette activé');
-        return null;
+        return { modeSwitch: 'creating', initialContext: initialIdea };
       }
 
       case 'open_recipe': {
@@ -281,6 +291,96 @@ export function useHomeChat() {
       timestamp: new Date(),
     }]);
   }, []);
+
+  // Continue conversation with new agent after mode switch
+  const continueWithNewAgent = useCallback(async (
+    newMode: ChatMode,
+    recipe: ActiveRecipeData | null,
+    initialContext: string,
+    previousAssistantMessageId: string
+  ) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      // Build continuation message for the new agent
+      const continuationMessage = {
+        role: 'user' as const,
+        content: initialContext,
+      };
+
+      const recipeSummaries = recipes.map(r => ({
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        is_favorite: r.is_favorite,
+      }));
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          messages: [continuationMessage],
+          recipes: recipeSummaries,
+          mode: newMode,
+          activeRecipe: recipe,
+          isContinuation: true, // Flag to indicate this is a continuation after mode switch
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error('Erreur lors de la continuation');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let assistantContent = '';
+
+      // Update the previous assistant message with the new content
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed.choices?.[0]?.delta;
+
+            if (delta?.content) {
+              assistantContent += delta.content;
+              setMessages(prev => prev.map(m =>
+                m.id === previousAssistantMessageId
+                  ? { ...m, content: assistantContent }
+                  : m
+              ));
+            }
+          } catch {
+            buffer = line + '\n' + buffer;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error continuing with new agent:', error);
+    }
+  }, [recipes]);
 
   // Send a message
   const sendMessage = useCallback(async (content: string) => {
@@ -436,6 +536,18 @@ export function useHomeChat() {
                   ));
                 }
 
+                // Handle mode switch - continue conversation with new agent
+                if (result && typeof result === 'object' && 'modeSwitch' in result) {
+                  const modeSwitchResult = result as { modeSwitch: ChatMode; recipe?: ActiveRecipeData; initialContext?: string };
+                  
+                  // Store the mode switch info to trigger a follow-up call after streaming ends
+                  pendingModeSwitchRef.current = {
+                    newMode: modeSwitchResult.modeSwitch,
+                    recipe: modeSwitchResult.recipe || null,
+                    initialContext: modeSwitchResult.initialContext || content,
+                  };
+                }
+
                 // Reset tool call tracking for potential multiple calls
                 toolCallName = '';
                 toolCallArguments = '';
@@ -450,12 +562,22 @@ export function useHomeChat() {
           }
         }
       }
+
+      // After streaming ends, check if we need to continue with new agent
+      if (pendingModeSwitchRef.current) {
+        const { newMode, recipe, initialContext } = pendingModeSwitchRef.current;
+        pendingModeSwitchRef.current = null;
+        
+        // Continue conversation with the new agent
+        await continueWithNewAgent(newMode, recipe, initialContext, assistantMessageId);
+      }
     } catch (error) {
       console.error('Home chat error:', error);
       toast.error(error instanceof Error ? error.message : 'Erreur de communication');
 
       // Remove the empty assistant message on error
       setMessages(prev => prev.filter(m => m.id !== assistantMessageId));
+      pendingModeSwitchRef.current = null;
     } finally {
       setIsStreaming(false);
     }
