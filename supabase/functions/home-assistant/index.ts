@@ -47,6 +47,7 @@ const RequestSchema = z.object({
   recipes: z.array(RecipeSchema).optional(),
   mode: z.enum(["orchestration", "creating", "cooking", "editing"]).default("orchestration"),
   activeRecipe: ActiveRecipeSchema,
+  isContinuation: z.boolean().optional().default(false),
 });
 
 // ===== ORCHESTRATION MODE PROMPT =====
@@ -577,13 +578,33 @@ serve(async (req) => {
       );
     }
 
-    const { messages, recipes, mode, activeRecipe } = parseResult.data;
+    const { messages, recipes, mode, activeRecipe, isContinuation } = parseResult.data;
 
-    console.log("Home assistant - mode:", mode, "messages:", messages.length, "user:", userId);
+    console.log("Home assistant - mode:", mode, "messages:", messages.length, "user:", userId, "continuation:", isContinuation);
     if (activeRecipe) console.log("Active recipe:", activeRecipe.title);
 
     // Build system prompt
     let systemPrompt = getSystemPromptForMode(mode);
+
+    // Add continuation instruction if this is after a mode switch
+    if (isContinuation) {
+      const continuationInstructions: Record<string, string> = {
+        creating: `\n\n## MODE CONTINUATION
+Tu viens d'être activé pour aider l'utilisateur à créer une recette. Son idée initiale est dans le message. 
+COMMENCE IMMÉDIATEMENT par répondre à son idée avec enthousiasme et pose une première question pour affiner (type de cuisine, portions, préférences...).
+NE MENTIONNE PAS le changement de mode, réponds naturellement comme si la conversation continuait.`,
+        cooking: `\n\n## MODE CONTINUATION
+Tu viens d'être activé pour guider l'utilisateur dans la réalisation d'une recette. 
+COMMENCE IMMÉDIATEMENT par saluer chaleureusement et présenter rapidement la recette (titre, portions, temps estimé).
+Puis demande si l'utilisateur est prêt à commencer ou s'il a des questions.
+NE MENTIONNE PAS le changement de mode.`,
+        editing: `\n\n## MODE CONTINUATION
+Tu viens d'être activé pour modifier une recette existante. La demande de modification est dans le message.
+COMMENCE IMMÉDIATEMENT par analyser la demande et proposer des modifications concrètes.
+NE MENTIONNE PAS le changement de mode, réponds naturellement.`,
+      };
+      systemPrompt += continuationInstructions[mode] || "";
+    }
 
     // Fetch user preferences
     const { data: prefs } = await supabaseClient
