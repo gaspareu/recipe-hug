@@ -7,13 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,10 +46,8 @@ export default function Profile() {
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Impossible de charger le profil',
-        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
@@ -63,20 +60,16 @@ export default function Profile() {
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Veuillez sélectionner une image',
-        variant: 'destructive',
       });
       return;
     }
 
     // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: "L'image ne doit pas dépasser 2 Mo",
-        variant: 'destructive',
       });
       return;
     }
@@ -109,16 +102,13 @@ export default function Profile() {
 
       if (updateError) throw updateError;
 
-      toast({
-        title: 'Succès',
+      toast.success('Succès', {
         description: 'Avatar mis à jour !',
       });
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: "Impossible de mettre à jour l'avatar",
-        variant: 'destructive',
       });
     } finally {
       setIsUploading(false);
@@ -139,16 +129,13 @@ export default function Profile() {
 
       if (error) throw error;
 
-      toast({
-        title: 'Succès',
+      toast.success('Succès', {
         description: 'Profil mis à jour !',
       });
     } catch (error) {
       console.error('Error updating profile:', error);
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Impossible de mettre à jour le profil',
-        variant: 'destructive',
       });
     } finally {
       setIsSaving(false);

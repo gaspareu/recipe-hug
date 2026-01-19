@@ -18,12 +18,11 @@ import { StepsEditor } from '@/components/recipes/StepsEditor';
 import { RecipeFromImage } from '@/components/recipes/RecipeFromImage';
 import { RecipeFromAI } from '@/components/recipes/RecipeFromAI';
 import { useCreateRecipe } from '@/hooks/useRecipes';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
 export default function RecipeNew() {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const createRecipe = useCreateRecipe();
 
   const [title, setTitle] = useState('');
@@ -36,10 +35,8 @@ export default function RecipeNew() {
     e.preventDefault();
     
     if (!title.trim()) {
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Le titre est obligatoire',
-        variant: 'destructive',
       });
       return;
     }
@@ -60,16 +57,13 @@ export default function RecipeNew() {
         source_image_url: null,
       });
       
-      toast({
-        title: 'Succès',
+      toast.success('Succès', {
         description: 'Recette créée avec succès !',
       });
       navigate('/dashboard');
     } catch (error) {
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Impossible de créer la recette',
-        variant: 'destructive',
       });
     }
   };

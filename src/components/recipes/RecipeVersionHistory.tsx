@@ -18,7 +18,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useRecipeVersions, useRestoreVersion, type RecipeVersion } from '@/hooks/useRecipeVersions';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 interface RecipeVersionHistoryProps {
   recipeId: string;
@@ -28,7 +28,6 @@ interface RecipeVersionHistoryProps {
 export function RecipeVersionHistory({ recipeId, onRestore }: RecipeVersionHistoryProps) {
   const { data: versions, isLoading } = useRecipeVersions(recipeId);
   const restoreVersion = useRestoreVersion();
-  const { toast } = useToast();
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
@@ -36,16 +35,13 @@ export function RecipeVersionHistory({ recipeId, onRestore }: RecipeVersionHisto
     setRestoringId(version.id);
     try {
       await restoreVersion.mutateAsync({ version, recipeId });
-      toast({
-        title: 'Version restaurée',
+      toast.success('Version restaurée', {
         description: `La recette a été restaurée à la version ${version.version_number}`,
       });
       onRestore?.();
     } catch (error) {
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Impossible de restaurer cette version',
-        variant: 'destructive',
       });
     } finally {
       setRestoringId(null);
