@@ -15,7 +15,7 @@ import { ImageUploader } from './ImageUploader';
 import { IngredientEditor } from './IngredientEditor';
 import { StepsEditor } from './StepsEditor';
 import { useCreateRecipe } from '@/hooks/useRecipes';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
@@ -28,7 +28,6 @@ interface ParsedRecipe {
 
 export function RecipeFromImage() {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const createRecipe = useCreateRecipe();
 
   // Image state
@@ -48,10 +47,8 @@ export function RecipeFromImage() {
   const handleImageSelected = useCallback((file: File) => {
     // Validate file size (5 MB max)
     if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: 'Fichier trop volumineux',
+      toast.error('Fichier trop volumineux', {
         description: 'La taille maximale est de 5 Mo',
-        variant: 'destructive',
       });
       return;
     }
@@ -59,7 +56,7 @@ export function RecipeFromImage() {
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
     setHasAnalyzed(false);
-  }, [toast]);
+  }, []);
 
   const handleImageRemoved = useCallback(() => {
     if (previewUrl) {
@@ -128,17 +125,14 @@ export function RecipeFromImage() {
       setSteps(parsed.steps || []);
       setHasAnalyzed(true);
 
-      toast({
-        title: 'Analyse terminée',
+      toast.success('Analyse terminée', {
         description: 'Les données ont été extraites. Vérifiez et corrigez si nécessaire.',
       });
 
     } catch (error) {
       console.error('Analysis error:', error);
-      toast({
-        title: 'Erreur d\'analyse',
+      toast.error('Erreur d\'analyse', {
         description: error instanceof Error ? error.message : 'Impossible d\'analyser l\'image',
-        variant: 'destructive',
       });
     } finally {
       setIsAnalyzing(false);
@@ -149,10 +143,8 @@ export function RecipeFromImage() {
     e.preventDefault();
 
     if (!title.trim()) {
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Le titre est obligatoire',
-        variant: 'destructive',
       });
       return;
     }
@@ -173,16 +165,13 @@ export function RecipeFromImage() {
         source_image_url: imageUrl,
       });
 
-      toast({
-        title: 'Succès',
+      toast.success('Succès', {
         description: 'Recette créée avec succès !',
       });
       navigate('/dashboard');
     } catch (error) {
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Impossible de créer la recette',
-        variant: 'destructive',
       });
     }
   };

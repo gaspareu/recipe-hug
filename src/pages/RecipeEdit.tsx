@@ -28,7 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { IngredientEditor } from '@/components/recipes/IngredientEditor';
 import { StepsEditor } from '@/components/recipes/StepsEditor';
 import { useRecipe, useUpdateRecipe, useDeleteRecipe } from '@/hooks/useRecipes';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
 const AVAILABLE_TAGS = [
@@ -42,7 +42,6 @@ const SEASONS = ['printemps', 'été', 'automne', 'hiver', 'toutes saisons'];
 export default function RecipeEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
   
   const { data: recipe, isLoading } = useRecipe(id || '');
   const updateRecipe = useUpdateRecipe();
@@ -82,10 +81,8 @@ export default function RecipeEdit() {
     e.preventDefault();
     
     if (!id || !title.trim()) {
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Le titre est obligatoire',
-        variant: 'destructive',
       });
       return;
     }
@@ -102,16 +99,13 @@ export default function RecipeEdit() {
         season: season || null,
       });
       
-      toast({
-        title: 'Succès',
+      toast.success('Succès', {
         description: 'Recette mise à jour !',
       });
       navigate(`/recipes/${id}`);
     } catch (error) {
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Impossible de mettre à jour la recette',
-        variant: 'destructive',
       });
     }
   };
@@ -121,16 +115,13 @@ export default function RecipeEdit() {
     
     try {
       await deleteRecipe.mutateAsync(id);
-      toast({
-        title: 'Succès',
+      toast.success('Succès', {
         description: 'Recette supprimée',
       });
       navigate('/dashboard');
     } catch (error) {
-      toast({
-        title: 'Erreur',
+      toast.error('Erreur', {
         description: 'Impossible de supprimer la recette',
-        variant: 'destructive',
       });
     }
   };

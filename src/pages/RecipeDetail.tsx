@@ -26,7 +26,7 @@ import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { useAuth } from '@/hooks/useAuth';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSwipeClose } from '@/hooks/useSwipeClose';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { RecipeStatus, Step, Ingredient } from '@/types/recipe';
 export default function RecipeDetail() {
@@ -36,9 +36,6 @@ export default function RecipeDetail() {
     id: string;
   }>();
   const navigate = useNavigate();
-  const {
-    toast
-  } = useToast();
   const {
     data: recipe,
     isLoading,
@@ -95,16 +92,13 @@ export default function RecipeDetail() {
         id: recipe.id,
         source_image_url: publicUrl
       });
-      toast({
-        title: 'Image mise à jour',
+      toast.success('Image mise à jour', {
         description: 'L\'image de la recette a été modifiée'
       });
     } catch (error) {
       console.error('Error uploading image:', error);
-      toast({
-        title: 'Erreur',
-        description: "Impossible de télécharger l'image",
-        variant: 'destructive'
+      toast.error('Erreur', {
+        description: "Impossible de télécharger l'image"
       });
     }
   };
@@ -115,16 +109,13 @@ export default function RecipeDetail() {
         id: recipe.id,
         source_image_url: null
       });
-      toast({
-        title: 'Image supprimée',
+      toast.success('Image supprimée', {
         description: 'L\'image de la recette a été retirée'
       });
     } catch (error) {
       console.error('Error removing image:', error);
-      toast({
-        title: 'Erreur',
-        description: "Impossible de supprimer l'image",
-        variant: 'destructive'
+      toast.error('Erreur', {
+        description: "Impossible de supprimer l'image"
       });
     }
   };
@@ -150,16 +141,13 @@ export default function RecipeDetail() {
         calorie_score: data.calorie_score,
         season: data.season
       });
-      toast({
-        title: 'Analyse terminée',
+      toast.success('Analyse terminée', {
         description: 'Le résumé nutritionnel a été généré'
       });
     } catch (error) {
       console.error('Error analyzing recipe:', error);
-      toast({
-        title: 'Erreur',
-        description: "Impossible d'analyser la recette",
-        variant: 'destructive'
+      toast.error('Erreur', {
+        description: "Impossible d'analyser la recette"
       });
     } finally {
       setIsAnalyzing(false);
@@ -368,8 +356,7 @@ export default function RecipeDetail() {
                         ingredients: data.ingredients,
                         steps: data.steps,
                       });
-                      toast({
-                        title: 'Recette mise à jour',
+                      toast.success('Recette mise à jour', {
                         description: 'Les modifications ont été appliquées. Vous pouvez restaurer la version précédente depuis l\'historique.'
                       });
                       refetch();
@@ -389,8 +376,7 @@ export default function RecipeDetail() {
                         calorie_score: null,
                         source_image_url: null,
                       });
-                      toast({
-                        title: 'Nouvelle recette créée !',
+                      toast.success('Nouvelle recette créée !', {
                         description: `"${newRecipe.title}" a été ajoutée à votre carnet.`
                       });
                       setChatOpen(false);
