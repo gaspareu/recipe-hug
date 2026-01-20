@@ -9,8 +9,13 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  imageUrl?: string; // For displaying image in UI
   timestamp: Date;
 }
+
+export type MessageContent = 
+  | string 
+  | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>;
 
 export type ChatMode = 'orchestration' | 'creating' | 'cooking' | 'editing';
 
@@ -382,14 +387,15 @@ export function useHomeChat() {
     }
   }, [recipes]);
 
-  // Send a message
-  const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isStreaming) return;
+  // Send a message (with optional image)
+  const sendMessage = useCallback(async (content: string, imageDataUrl?: string) => {
+    if ((!content.trim() && !imageDataUrl) || isStreaming) return;
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: content.trim(),
+      content: content.trim() || (imageDataUrl ? "📷 Image envoyée" : ""),
+      imageUrl: imageDataUrl,
       timestamp: new Date(),
     };
 
@@ -404,10 +410,18 @@ export function useHomeChat() {
 
     try {
       // Prepare messages for API (exclude welcome message)
-      const apiMessages = [...messages.filter(m => m.id !== 'welcome'), userMessage].map(m => ({
-        role: m.role,
-        content: m.content,
-      }));
+      const apiMessages = [...messages.filter(m => m.id !== 'welcome'), userMessage].map(m => {
+        // If message has an image, format as multimodal content
+        if (m.imageUrl) {
+          const parts: MessageContent = [];
+          if (m.content && m.content !== "📷 Image envoyée") {
+            parts.push({ type: 'text', text: m.content });
+          }
+          parts.push({ type: 'image_url', image_url: { url: m.imageUrl } });
+          return { role: m.role, content: parts };
+        }
+        return { role: m.role, content: m.content };
+      });
 
       // Include recipe summaries for orchestration context
       const recipeSummaries = recipes.map(r => ({
