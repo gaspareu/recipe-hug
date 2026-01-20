@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, RotateCcw, Loader2, BookOpen, User, Mic, MicOff, Check, X } from 'lucide-react';
+import { Send, RotateCcw, Loader2, BookOpen, User, Mic, MicOff, Check, X, ImagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import ReactMarkdown from 'react-markdown';
+import { toast } from 'sonner';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -24,8 +25,10 @@ export default function Home() {
     getModeInfo
   } = useHomeChat();
   const [input, setInput] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMessageRef = useRef<string>('');
 
   // Voice mode
@@ -68,9 +71,45 @@ export default function Home() {
   }, [messages, isStreaming, voiceEnabled, speak]);
 
   const handleSubmit = () => {
-    if (!input.trim() || isStreaming) return;
-    sendMessage(input);
+    if ((!input.trim() && !selectedImage) || isStreaming) return;
+    sendMessage(input, selectedImage || undefined);
     setInput('');
+    setSelectedImage(null);
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Seules les images sont acceptées');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image trop volumineuse (max 5 Mo)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setSelectedImage(dataUrl);
+    };
+    reader.readAsDataURL(file);
+    
+    // Reset input
+    e.target.value = '';
+  };
+
+  const removeSelectedImage = () => {
+    setSelectedImage(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -189,12 +228,22 @@ export default function Home() {
                       ? 'bg-muted rounded-3xl px-4 py-3' 
                       : ''}`}
                     >
+                      {/* Display image if present */}
+                      {message.imageUrl && (
+                        <img 
+                          src={message.imageUrl} 
+                          alt="Image envoyée" 
+                          className="max-w-full max-h-64 rounded-2xl mb-2 object-cover"
+                        />
+                      )}
                       {message.role === 'assistant' ? (
                         <div className="prose prose-sm max-w-none dark:prose-invert">
                           <ReactMarkdown>{message.content}</ReactMarkdown>
                         </div>
                       ) : (
-                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        message.content && message.content !== "📷 Image envoyée" && (
+                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        )
                       )}
                     </div>
                   </div>
@@ -295,6 +344,25 @@ export default function Home() {
 
             {/* Input container */}
             <div className="relative bg-muted rounded-3xl border border-border/50">
+              {/* Image preview */}
+              {selectedImage && (
+                <div className="p-3 pb-0">
+                  <div className="relative inline-block">
+                    <img 
+                      src={selectedImage} 
+                      alt="Aperçu" 
+                      className="h-20 w-20 object-cover rounded-xl"
+                    />
+                    <button
+                      onClick={removeSelectedImage}
+                      className="absolute -top-2 -right-2 h-6 w-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center shadow-md hover:bg-destructive/90"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              
               <Textarea 
                 ref={inputRef} 
                 value={input} 
@@ -306,14 +374,35 @@ export default function Home() {
                   target.style.height = Math.min(target.scrollHeight, 160) + 'px';
                 }} 
                 onKeyDown={handleKeyDown} 
-                placeholder="Poser une question..." 
-                className="w-full min-h-[56px] max-h-40 resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-4 pl-4 pr-28 text-base" 
+                placeholder={selectedImage ? "Ajouter un commentaire..." : "Poser une question..."} 
+                className="w-full min-h-[56px] max-h-40 resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-4 pl-4 pr-36 text-base" 
                 rows={1} 
                 disabled={isStreaming || isListening} 
               />
               
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              
               {/* Action buttons inside input */}
               <div className="absolute bottom-3 right-3 flex items-center gap-1">
+                {/* Image upload button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isStreaming || isListening}
+                  className="h-10 w-10 rounded-full shrink-0"
+                  title="Ajouter une image"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </Button>
+                
                 {/* Voice button */}
                 <Button
                   variant={isListening ? "default" : "ghost"}
@@ -338,7 +427,7 @@ export default function Home() {
                 {/* Send button */}
                 <Button 
                   onClick={handleSubmit} 
-                  disabled={!input.trim() || isStreaming || isListening} 
+                  disabled={(!input.trim() && !selectedImage) || isStreaming || isListening} 
                   size="icon" 
                   className="h-10 w-10 rounded-full shrink-0"
                 >

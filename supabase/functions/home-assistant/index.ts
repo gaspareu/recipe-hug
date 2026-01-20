@@ -8,9 +8,26 @@ const corsHeaders = {
 };
 
 // Input validation schema
+// Message content can be string or array (for multimodal)
+const ContentPartSchema = z.union([
+  z.object({
+    type: z.literal("text"),
+    text: z.string().max(10000),
+  }),
+  z.object({
+    type: z.literal("image_url"),
+    image_url: z.object({
+      url: z.string(), // base64 data URL or https URL
+    }),
+  }),
+]);
+
 const MessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
-  content: z.string().max(10000, "Message content too long"),
+  content: z.union([
+    z.string().max(10000, "Message content too long"),
+    z.array(ContentPartSchema),
+  ]),
 });
 
 const RecipeSchema = z.object({
@@ -57,6 +74,13 @@ const ORCHESTRATION_PROMPT = `Tu es Chef Michel, l'assistant culinaire central d
 - Chaleureux, enthousiaste et professionnel
 - Tu tutoies l'utilisateur
 - Réponses concises mais utiles
+
+## ANALYSE D'IMAGES
+Si l'utilisateur envoie une image de nourriture ou d'ingrédients :
+- Identifie ce que tu vois (plat, ingrédients, état de cuisson, etc.)
+- Propose des actions pertinentes : reproduire le plat, identifier les ingrédients, suggérer une recette
+- Si c'est une photo d'un plat : propose de créer la recette correspondante
+- Si c'est une photo d'ingrédients : propose des recettes possibles avec ces ingrédients
 
 ## DÉTECTION D'INTENTION
 Analyse chaque message pour déterminer l'intention :
