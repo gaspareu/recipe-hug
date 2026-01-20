@@ -267,7 +267,7 @@ export default function Home() {
                     size="sm" 
                     onClick={() => sendMessage(suggestion.text)} 
                     disabled={isStreaming}
-                    className="text-xs rounded-full px-4 border-border/50 hover:bg-muted"
+                    className="text-sm rounded-2xl px-4 py-2 h-auto whitespace-normal text-center border-border/50 hover:bg-muted"
                   >
                     {suggestion.text}
                   </Button>
@@ -285,7 +285,7 @@ export default function Home() {
                     size="sm" 
                     onClick={() => sendMessage(suggestion.text)} 
                     disabled={isStreaming}
-                    className="text-xs rounded-full px-3 text-muted-foreground hover:text-foreground"
+                    className="text-sm rounded-2xl px-4 py-2 h-auto whitespace-normal text-center text-muted-foreground hover:text-foreground"
                   >
                     {suggestion.text}
                   </Button>
@@ -294,20 +294,26 @@ export default function Home() {
             )}
 
             {/* Input container */}
-            <div className="relative bg-muted rounded-3xl border border-border/50 overflow-hidden">
+            <div className="relative bg-muted rounded-3xl border border-border/50">
               <Textarea 
                 ref={inputRef} 
                 value={input} 
-                onChange={e => setInput(e.target.value)} 
+                onChange={e => {
+                  setInput(e.target.value);
+                  // Auto-resize textarea
+                  const target = e.target;
+                  target.style.height = 'auto';
+                  target.style.height = Math.min(target.scrollHeight, 160) + 'px';
+                }} 
                 onKeyDown={handleKeyDown} 
                 placeholder="Poser une question..." 
-                className="min-h-[56px] max-h-40 resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 pr-24 py-4 px-4 text-base" 
+                className="w-full min-h-[56px] max-h-40 resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-4 pl-4 pr-28 text-base" 
                 rows={1} 
                 disabled={isStreaming || isListening} 
               />
               
               {/* Action buttons inside input */}
-              <div className="absolute bottom-2 right-2 flex items-center gap-1">
+              <div className="absolute bottom-3 right-3 flex items-center gap-1">
                 {/* Voice button */}
                 <Button
                   variant={isListening ? "default" : "ghost"}
@@ -323,7 +329,7 @@ export default function Home() {
                     }
                   }}
                   disabled={isStreaming}
-                  className={`h-10 w-10 rounded-full ${isListening ? 'bg-primary text-primary-foreground' : ''}`}
+                  className={`h-10 w-10 rounded-full shrink-0 ${isListening ? 'bg-primary text-primary-foreground' : ''}`}
                   title={isListening ? "Arrêter l'écoute" : "Mode vocal"}
                 >
                   {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
@@ -334,7 +340,7 @@ export default function Home() {
                   onClick={handleSubmit} 
                   disabled={!input.trim() || isStreaming || isListening} 
                   size="icon" 
-                  className="h-10 w-10 rounded-full"
+                  className="h-10 w-10 rounded-full shrink-0"
                 >
                   {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
