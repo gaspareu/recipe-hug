@@ -173,7 +173,7 @@ export function useHomeChat() {
         const destination = action.data.destination as string;
         const routes: Record<string, string> = {
           dashboard: '/dashboard',
-          new_recipe: '/recipes/new',
+          new_recipe: '/home',
           profile: '/profile',
         };
         if (routes[destination]) {
