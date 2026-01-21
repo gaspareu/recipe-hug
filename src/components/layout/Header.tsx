@@ -1,4 +1,4 @@
-import { ChefHat, LogOut, User } from 'lucide-react';
+import { LogOut, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -44,11 +44,9 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center justify-between px-4">
         <Link to="/home" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <ChefHat className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <img src="/favicon.png" alt="Grimoire" className="h-8 w-8 rounded-lg" />
           <span className="text-lg font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-            Mes Recettes
+            Grimoire
           </span>
         </Link>
         

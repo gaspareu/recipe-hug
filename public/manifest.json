@@ -1,7 +1,7 @@
 {
-  "name": "Mes Recettes",
-  "short_name": "Recettes",
-  "description": "Gérez vos recettes de cuisine avec style",
+  "name": "Grimoire",
+  "short_name": "Grimoire",
+  "description": "Votre grimoire culinaire magique",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F5E6D3",
