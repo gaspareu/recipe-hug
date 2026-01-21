@@ -214,7 +214,7 @@ export default function Home() {
               Toujours prêt à cuisiner.
             </h1>
             <p className="text-muted-foreground text-center text-sm md:text-base">
-              Chef Michel, votre assistant culinaire personnel
+              Chef, votre assistant culinaire personnel
             </p>
           </div>
         ) : (
@@ -444,7 +444,7 @@ export default function Home() {
                   className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                 >
                   <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                  Chef Michel parle... (cliquez pour arrêter)
+                  Chef parle... (cliquez pour arrêter)
                 </button>
               </div>
             )}
