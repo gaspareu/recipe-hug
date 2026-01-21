@@ -57,7 +57,7 @@ export default function Dashboard() {
             </p>
           </div>
           <Button asChild>
-            <Link to="/recipes/new">
+            <Link to="/home">
               <Plus className="mr-2 h-4 w-4" />
               Nouvelle
             </Link>
@@ -90,7 +90,7 @@ export default function Dashboard() {
             </p>
             {recipes?.length === 0 && (
               <Button asChild className="mt-4">
-                <Link to="/recipes/new">
+                <Link to="/home">
                   <Plus className="mr-2 h-4 w-4" />
                   Créer une recette
                 </Link>

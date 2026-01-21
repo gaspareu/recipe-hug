@@ -7,7 +7,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Auth from "./pages/Auth";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
-import RecipeNew from "./pages/RecipeNew";
+
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeEdit from "./pages/RecipeEdit";
 import Profile from "./pages/Profile";
@@ -34,11 +34,7 @@ const App = () => (
                 <Dashboard />
               </ProtectedRoute>
             } />
-            <Route path="/recipes/new" element={
-              <ProtectedRoute>
-                <RecipeNew />
-              </ProtectedRoute>
-            } />
+            <Route path="/recipes/new" element={<Navigate to="/home" replace />} />
             <Route path="/recipes/:id" element={
               <ProtectedRoute>
                 <RecipeDetail />
