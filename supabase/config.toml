@@ -9,11 +9,20 @@ verify_jwt = false
 [functions.analyze-recipe]
 verify_jwt = false
 
-[functions.chat-recipe]
-verify_jwt = false
-
 [functions.cooking-assistant]
 verify_jwt = false
 
 [functions.extract-user-preferences]
+verify_jwt = false
+
+[functions.home-assistant]
+verify_jwt = false
+
+[functions.memory-assistant]
+verify_jwt = false
+
+[functions.elevenlabs-tts]
+verify_jwt = false
+
+[functions.elevenlabs-scribe-token]
 verify_jwt = false

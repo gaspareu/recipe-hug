@@ -62,7 +62,7 @@ const ActiveRecipeSchema = z.object({
 const RequestSchema = z.object({
   messages: z.array(MessageSchema).max(50, "Too many messages"),
   recipes: z.array(RecipeSchema).optional(),
-  mode: z.enum(["orchestration", "creating", "cooking", "editing"]).default("orchestration"),
+  mode: z.enum(["orchestration", "creating", "cooking", "editing", "memory"]).default("orchestration"),
   activeRecipe: ActiveRecipeSchema,
   isContinuation: z.boolean().optional().default(false),
 });
@@ -99,6 +99,9 @@ Analyse chaque message pour déterminer l'intention :
 
 5. **NAVIGATION** : "mes recettes", "profil", "tableau de bord"
    → Utilise navigate
+
+6. **MÉMOIRE** : "qu'est-ce que tu sais de moi", "mes préférences", "mes allergies", "mon équipement", "modifie ma mémoire", "je suis allergique", "j'ai un nouveau", "ajoute à mes préférences", "retire de mes allergies"
+   → Utilise start_memory
 
 ## WORKFLOW TYPIQUE
 
@@ -316,6 +319,15 @@ const OPEN_RECIPE_TOOL = {
   }
 };
 
+const START_MEMORY_TOOL = {
+  type: "function",
+  function: {
+    name: "start_memory",
+    description: "Ouvre l'assistant mémoire pour consulter ou modifier les préférences culinaires de l'utilisateur (goûts, allergies, équipement, style culinaire).",
+    parameters: { type: "object", properties: {} }
+  }
+};
+
 const BACK_TO_ORCHESTRATION_TOOL = {
   type: "function",
   function: {
@@ -523,6 +535,7 @@ function getToolsForMode(mode: string) {
         START_RECIPE_CREATION_TOOL,
         NAVIGATE_TOOL,
         OPEN_RECIPE_TOOL,
+        START_MEMORY_TOOL,
       ];
     case "creating":
       return [SAVE_RECIPE_TOOL, BACK_TO_ORCHESTRATION_TOOL];
@@ -530,6 +543,8 @@ function getToolsForMode(mode: string) {
       return [BACK_TO_ORCHESTRATION_TOOL];
     case "editing":
       return [EXTRACT_MODIFIED_RECIPE_TOOL, CREATE_NEW_RECIPE_TOOL, BACK_TO_ORCHESTRATION_TOOL];
+    case "memory":
+      return [BACK_TO_ORCHESTRATION_TOOL];
     default:
       return [];
   }

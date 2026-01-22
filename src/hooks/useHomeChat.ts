@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useRecipes } from './useRecipes';
+import { useUserPreferences, UserCulinaryPreferences } from './useUserPreferences';
 import { supabase } from '@/integrations/supabase/client';
 import type { Recipe, Ingredient, Step } from '@/types/recipe';
 
@@ -17,7 +18,7 @@ export type MessageContent =
   | string 
   | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>;
 
-export type ChatMode = 'orchestration' | 'creating' | 'cooking' | 'editing';
+export type ChatMode = 'orchestration' | 'creating' | 'cooking' | 'editing' | 'memory';
 
 interface ToolCallAction {
   type: string;
@@ -55,6 +56,7 @@ const WELCOME_MESSAGE = "Salut ! Je suis Chef, ton assistant culinaire. 👨‍�
 export function useHomeChat() {
   const navigate = useNavigate();
   const { data: recipes = [], refetch: refetchRecipes } = useRecipes();
+  const { preferences, updatePreferences, isLoading: prefsLoading } = useUserPreferences();
 
   // Core state
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -190,6 +192,62 @@ export function useHomeChat() {
         return null;
       }
 
+      case 'start_memory': {
+        setMode('memory');
+        toast.success('Mode mémoire activé');
+        return { modeSwitch: 'memory', initialContext: 'Affiche mes préférences actuelles' };
+      }
+
+      case 'get_preferences': {
+        // Return preferences for display by the LLM
+        return preferences;
+      }
+
+      case 'update_preferences': {
+        const operations = action.data.operations as Array<{
+          operation: 'add' | 'remove' | 'set';
+          category: 'taste_preferences' | 'kitchen_equipment' | 'culinary_style' | 'dietary_constraints';
+          field: string;
+          values?: string[];
+          value?: string | null;
+        }>;
+
+        if (!preferences) {
+          toast.error('Impossible de charger les préférences');
+          return { error: 'No preferences loaded' };
+        }
+
+        // Apply operations to create updated preferences
+        const updatedPrefs = JSON.parse(JSON.stringify(preferences)) as UserCulinaryPreferences;
+
+        for (const op of operations) {
+          const categoryKey = op.category;
+          // Use type assertion with any to handle dynamic property access
+          const category = (updatedPrefs as any)[categoryKey];
+          if (!category) continue;
+
+          if (op.operation === 'add' && op.values) {
+            const current = (category[op.field] as string[]) || [];
+            category[op.field] = [...new Set([...current, ...op.values])];
+          } else if (op.operation === 'remove' && op.values) {
+            const current = (category[op.field] as string[]) || [];
+            category[op.field] = current.filter((v: string) => !op.values!.includes(v));
+          } else if (op.operation === 'set') {
+            category[op.field] = op.value;
+          }
+        }
+
+        try {
+          await updatePreferences(updatedPrefs);
+          toast.success('Préférences mises à jour !');
+          return { success: true, updatedPreferences: updatedPrefs };
+        } catch (error) {
+          console.error('Error updating preferences:', error);
+          toast.error('Erreur lors de la mise à jour');
+          return { error: 'Update failed' };
+        }
+      }
+
       case 'save_recipe': {
         const recipeData = action.data as unknown as PendingRecipe;
         setPendingRecipe(recipeData);
@@ -314,6 +372,11 @@ export function useHomeChat() {
         content: initialContext,
       };
 
+      // Choose endpoint based on mode
+      const endpoint = newMode === 'memory' 
+        ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/memory-assistant`
+        : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`;
+
       const recipeSummaries = recipes.map(r => ({
         id: r.id,
         title: r.title,
@@ -321,19 +384,28 @@ export function useHomeChat() {
         is_favorite: r.is_favorite,
       }));
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`, {
+      // Build request body based on mode
+      const requestBody = newMode === 'memory'
+        ? {
+            messages: [continuationMessage],
+            currentPreferences: preferences,
+            isContinuation: true,
+          }
+        : {
+            messages: [continuationMessage],
+            recipes: recipeSummaries,
+            mode: newMode,
+            activeRecipe: recipe,
+            isContinuation: true,
+          };
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          messages: [continuationMessage],
-          recipes: recipeSummaries,
-          mode: newMode,
-          activeRecipe: recipe,
-          isContinuation: true, // Flag to indicate this is a continuation after mode switch
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok || !response.body) {
@@ -385,7 +457,7 @@ export function useHomeChat() {
     } catch (error) {
       console.error('Error continuing with new agent:', error);
     }
-  }, [recipes]);
+  }, [recipes, preferences]);
 
   // Send a message (with optional image)
   const sendMessage = useCallback(async (content: string, imageDataUrl?: string) => {
@@ -620,6 +692,8 @@ export function useHomeChat() {
         return { label: 'En cuisine', icon: '👨‍🍳', color: 'bg-green-500/10 text-green-600' };
       case 'editing':
         return { label: 'Modification', icon: '🔧', color: 'bg-orange-500/10 text-orange-600' };
+      case 'memory':
+        return { label: 'Mémoire', icon: '🧠', color: 'bg-purple-500/10 text-purple-600' };
       default:
         return null;
     }
