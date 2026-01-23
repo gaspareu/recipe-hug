@@ -409,6 +409,10 @@ export function useHomeChat() {
       });
 
       if (!response.ok || !response.body) {
+        if (response.status === 429) {
+          toast.error('Trop de requêtes, réessaie dans un moment');
+          return;
+        }
         throw new Error('Erreur lors de la continuation');
       }
 
@@ -653,6 +657,9 @@ export function useHomeChat() {
       if (pendingModeSwitchRef.current) {
         const { newMode, recipe, initialContext } = pendingModeSwitchRef.current;
         pendingModeSwitchRef.current = null;
+        
+        // Small delay to avoid rate limiting between consecutive API calls
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Continue conversation with the new agent
         await continueWithNewAgent(newMode, recipe, initialContext, assistantMessageId);
