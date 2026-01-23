@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, RotateCcw, Loader2, BookOpen, User, Mic, MicOff, Check, X, ImagePlus } from 'lucide-react';
+import { Send, Plus, Loader2, BookOpen, User, Mic, MicOff, Check, X, ImagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -168,7 +168,7 @@ export default function Home() {
               title="Nouvelle conversation"
               className="h-9 w-9"
             >
-              <RotateCcw className="h-4 w-4" />
+              <Plus className="h-4 w-4" />
             </Button>
             
             {/* Mode indicator */}
