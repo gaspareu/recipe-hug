@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Camera, User } from 'lucide-react';
+import { ArrowLeft, Save, Camera } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { CulinaryPreferencesEditor } from '@/components/profile/CulinaryPreferencesEditor';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -232,6 +233,9 @@ export default function Profile() {
             </form>
           </CardContent>
         </Card>
+
+        {/* Culinary Preferences */}
+        <CulinaryPreferencesEditor />
       </div>
     </MainLayout>
   );
