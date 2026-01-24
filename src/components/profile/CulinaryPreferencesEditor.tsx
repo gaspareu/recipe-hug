@@ -25,12 +25,31 @@ interface TagInputProps {
   suggestions?: string[];
 }
 
+// Helper to normalize tag for comparison (lowercase, trimmed)
+const normalizeTag = (tag: string): string => tag.trim().toLowerCase();
+
+// Helper to dedupe array (case-insensitive)
+const dedupeArray = (arr: string[]): string[] => {
+  const seen = new Set<string>();
+  return arr.filter(item => {
+    const normalized = normalizeTag(item);
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+};
+
 function TagInput({ tags, onAdd, onRemove, placeholder, suggestions = [] }: TagInputProps) {
   const [inputValue, setInputValue] = useState('');
+  
+  // Dedupe tags for display
+  const uniqueTags = dedupeArray(tags);
 
   const handleAdd = () => {
     const trimmed = inputValue.trim();
-    if (trimmed && !tags.includes(trimmed)) {
+    // Case-insensitive duplicate check
+    const isDuplicate = uniqueTags.some(t => normalizeTag(t) === normalizeTag(trimmed));
+    if (trimmed && !isDuplicate) {
       onAdd(trimmed);
       setInputValue('');
     }
@@ -43,8 +62,10 @@ function TagInput({ tags, onAdd, onRemove, placeholder, suggestions = [] }: TagI
     }
   };
 
+  // Case-insensitive filtering for suggestions
   const filteredSuggestions = suggestions.filter(
-    s => s.toLowerCase().includes(inputValue.toLowerCase()) && !tags.includes(s)
+    s => s.toLowerCase().includes(inputValue.toLowerCase()) && 
+         !uniqueTags.some(t => normalizeTag(t) === normalizeTag(s))
   ).slice(0, 5);
 
   return (
@@ -81,9 +102,9 @@ function TagInput({ tags, onAdd, onRemove, placeholder, suggestions = [] }: TagI
         </div>
       )}
       
-      {/* Current tags */}
+      {/* Current tags - use uniqueTags to display */}
       <div className="flex flex-wrap gap-1.5">
-        {tags.map(tag => (
+        {uniqueTags.map(tag => (
           <Badge key={tag} variant="secondary" className="gap-1 pr-1">
             {tag}
             <button
@@ -127,30 +148,55 @@ export function CulinaryPreferencesEditor() {
     style: false,
   });
 
-  // Initialize local state from preferences
+  // Initialize local state from preferences - with deduplication
   const getEditablePrefs = (): EditablePrefs => {
     if (localPrefs) return localPrefs;
     
+    const taste = preferences?.taste_preferences || {
+      liked_flavors: [],
+      disliked_flavors: [],
+      liked_ingredients: [],
+      disliked_ingredients: [],
+    };
+    
+    const equipment = preferences?.kitchen_equipment || {
+      available: [],
+      unavailable: [],
+    };
+    
+    const style = preferences?.culinary_style || {
+      favorite_cuisines: [],
+      favorite_techniques: [],
+      preferred_difficulty: null,
+    };
+    
+    const constraints = preferences?.dietary_constraints || {
+      allergies: [],
+      diets: [],
+      restrictions: [],
+    };
+    
+    // Dedupe all arrays on load
     return {
-      taste_preferences: preferences?.taste_preferences || {
-        liked_flavors: [],
-        disliked_flavors: [],
-        liked_ingredients: [],
-        disliked_ingredients: [],
+      taste_preferences: {
+        liked_flavors: dedupeArray(taste.liked_flavors),
+        disliked_flavors: dedupeArray(taste.disliked_flavors),
+        liked_ingredients: dedupeArray(taste.liked_ingredients),
+        disliked_ingredients: dedupeArray(taste.disliked_ingredients),
       },
-      kitchen_equipment: preferences?.kitchen_equipment || {
-        available: [],
-        unavailable: [],
+      kitchen_equipment: {
+        available: dedupeArray(equipment.available),
+        unavailable: dedupeArray(equipment.unavailable),
       },
-      culinary_style: preferences?.culinary_style || {
-        favorite_cuisines: [],
-        favorite_techniques: [],
-        preferred_difficulty: null,
+      culinary_style: {
+        favorite_cuisines: dedupeArray(style.favorite_cuisines),
+        favorite_techniques: dedupeArray(style.favorite_techniques),
+        preferred_difficulty: style.preferred_difficulty,
       },
-      dietary_constraints: preferences?.dietary_constraints || {
-        allergies: [],
-        diets: [],
-        restrictions: [],
+      dietary_constraints: {
+        allergies: dedupeArray(constraints.allergies),
+        diets: dedupeArray(constraints.diets),
+        restrictions: dedupeArray(constraints.restrictions),
       },
     };
   };
@@ -175,7 +221,9 @@ export function CulinaryPreferencesEditor() {
     const current = getEditablePrefs();
     const categoryData = current[category] as unknown as Record<string, string[]>;
     const currentArray = categoryData[field] || [];
-    if (!currentArray.includes(value)) {
+    // Case-insensitive duplicate check
+    const isDuplicate = currentArray.some(v => normalizeTag(v) === normalizeTag(value));
+    if (!isDuplicate) {
       const updated = { ...current[category], [field]: [...currentArray, value] };
       setLocalPrefs({ ...current, [category]: updated });
       setHasChanges(true);
@@ -186,7 +234,8 @@ export function CulinaryPreferencesEditor() {
     const current = getEditablePrefs();
     const categoryData = current[category] as unknown as Record<string, string[]>;
     const currentArray = categoryData[field] || [];
-    const updated = { ...current[category], [field]: currentArray.filter(v => v !== value) };
+    // Remove all variations of this tag (case-insensitive)
+    const updated = { ...current[category], [field]: currentArray.filter(v => normalizeTag(v) !== normalizeTag(value)) };
     setLocalPrefs({ ...current, [category]: updated });
     setHasChanges(true);
   };
