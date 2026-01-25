@@ -50,6 +50,18 @@ export default function Home() {
     partialTranscript
   } = useVoiceMode(handleVoiceTranscript);
 
+  // Auto-focus input on mobile to open keyboard
+  useEffect(() => {
+    const isMobile = window.innerWidth < 768;
+    if (isMobile && inputRef.current) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) {
@@ -208,8 +220,8 @@ export default function Home() {
       {/* Main content area */}
       <div className="flex-1 flex flex-col">
         {!hasConversation ? (
-          /* Welcome screen - centered title */
-          <div className="flex-1 flex flex-col items-center justify-center px-4 pb-32">
+          /* Welcome screen - positioned higher to keep input visible */
+          <div className="flex-1 flex flex-col items-center justify-center px-4 -mt-24">
             <h1 className="text-3xl md:text-4xl font-display text-foreground text-center mb-2">
               Toujours prêt à cuisiner.
             </h1>
@@ -374,8 +386,8 @@ export default function Home() {
                   target.style.height = Math.min(target.scrollHeight, 160) + 'px';
                 }} 
                 onKeyDown={handleKeyDown} 
-                placeholder={selectedImage ? "Ajouter un commentaire..." : "Poser une question..."} 
-                className="w-full min-h-[56px] max-h-40 resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-4 pl-4 pr-36 text-base" 
+                placeholder={selectedImage ? "Ajouter un commentaire..." : ""} 
+                className="w-full min-h-[56px] max-h-40 resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-4 pl-4 pr-36 text-base"
                 rows={1} 
                 disabled={isStreaming || isListening} 
               />
