@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
+import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 
@@ -50,7 +51,12 @@ export default function Home() {
     partialTranscript
   } = useVoiceMode(handleVoiceTranscript);
 
-  // Auto-focus input on mobile to open keyboard
+  // Swipe left to navigate to recipes
+  const { handlers: swipeHandlers, style: swipeStyle } = useSwipeNavigation({
+    targetRoute: '/dashboard',
+    direction: 'left',
+    threshold: 80,
+  });
   useEffect(() => {
     const isMobile = window.innerWidth < 768;
     if (isMobile && inputRef.current) {
@@ -167,7 +173,11 @@ export default function Home() {
   const modeInfo = getModeInfo();
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div 
+      className="min-h-screen flex flex-col bg-background"
+      {...swipeHandlers}
+      style={swipeStyle}
+    >
       {/* Minimal header */}
       <header className="absolute top-0 left-0 right-0 z-10 p-4">
         <div className="container max-w-4xl mx-auto flex items-center justify-between">
