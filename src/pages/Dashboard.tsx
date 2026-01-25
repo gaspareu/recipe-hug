@@ -7,9 +7,16 @@ import { RecipeGridItem } from '@/components/recipes/RecipeGridItem';
 import { FilterBar } from '@/components/recipes/FilterBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRecipes, useToggleFavorite } from '@/hooks/useRecipes';
+import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import type { RecipeStatus } from '@/types/recipe';
 
 export default function Dashboard() {
+  // Swipe right to navigate back to chat
+  const { handlers: swipeHandlers, style: swipeStyle } = useSwipeNavigation({
+    targetRoute: '/',
+    direction: 'right',
+    threshold: 80,
+  });
   const { data: recipes, isLoading } = useRecipes();
   const toggleFavorite = useToggleFavorite();
   
@@ -48,7 +55,11 @@ export default function Dashboard() {
 
   return (
     <MainLayout>
-      <div className="space-y-6">
+      <div 
+        className="space-y-6" 
+        {...swipeHandlers} 
+        style={swipeStyle}
+      >
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-playfair font-bold">Mes Recettes</h1>
