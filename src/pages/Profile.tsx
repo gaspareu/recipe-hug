@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { CulinaryPreferencesEditor } from '@/components/profile/CulinaryPreferencesEditor';
+import { WebhookIntegration } from '@/components/profile/WebhookIntegration';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -236,6 +237,9 @@ export default function Profile() {
 
         {/* Culinary Preferences */}
         <CulinaryPreferencesEditor />
+
+        {/* Webhook Integration */}
+        <WebhookIntegration />
       </div>
     </MainLayout>
   );

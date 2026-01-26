@@ -51,6 +51,7 @@ export type Database = {
           display_name: string | null
           id: string
           updated_at: string
+          webhook_token: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -58,6 +59,7 @@ export type Database = {
           display_name?: string | null
           id: string
           updated_at?: string
+          webhook_token?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -65,6 +67,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           updated_at?: string
+          webhook_token?: string | null
         }
         Relationships: []
       }
@@ -216,7 +219,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_webhook_token: { Args: { user_uuid: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
