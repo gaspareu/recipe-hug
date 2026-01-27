@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { CulinaryPreferencesEditor } from '@/components/profile/CulinaryPreferencesEditor';
 import { WebhookIntegration } from '@/components/profile/WebhookIntegration';
+import { ThemeSelector } from '@/components/profile/ThemeSelector';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -234,6 +235,9 @@ export default function Profile() {
             </form>
           </CardContent>
         </Card>
+
+        {/* Theme Selector */}
+        <ThemeSelector />
 
         {/* Culinary Preferences */}
         <CulinaryPreferencesEditor />
