@@ -62,7 +62,7 @@ export default function Dashboard() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-playfair font-bold">Mes Recettes</h1>
+            <h1 className="text-2xl font-playfair font-bold text-foreground">Mes Recettes</h1>
             <p className="text-muted-foreground">
               {filteredRecipes.length} sur {recipes?.length || 0} recette{(recipes?.length || 0) !== 1 ? 's' : ''}
             </p>
