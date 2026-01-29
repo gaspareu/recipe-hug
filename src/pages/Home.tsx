@@ -218,15 +218,30 @@ export default function Home() {
       <div className="flex-1 flex flex-col container max-w-3xl mx-auto w-full pt-16">
             <ScrollArea className="flex-1 px-4" ref={scrollRef}>
               <div className="py-6 space-y-6">
-                {messages.slice(1).map(message => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] ${message.role === 'user' ? 'bg-muted rounded-3xl px-4 py-3' : ''}`}>
-                      {/* Display image if present */}
-                      {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
-                      {message.role === 'assistant' ? <div className="prose prose-sm max-w-none dark:prose-invert">
-                          <ReactMarkdown>{message.content}</ReactMarkdown>
-                        </div> : message.content && message.content !== "📷 Image envoyée" && <p className="text-sm whitespace-pre-wrap">{message.content}</p>}
+                {messages.slice(1).map(message => {
+                  // Filter out action JSON from display
+                  let displayContent = message.content;
+                  if (message.role === 'assistant' && displayContent) {
+                    // Remove JSON action blocks that might be accidentally displayed
+                    displayContent = displayContent.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
+                  }
+                  
+                  return (
+                    <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] ${message.role === 'user' ? 'bg-muted rounded-3xl px-4 py-3' : ''}`}>
+                        {/* Display image if present */}
+                        {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
+                        {message.role === 'assistant' ? (
+                          <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground">
+                            <ReactMarkdown>{displayContent}</ReactMarkdown>
+                          </div>
+                        ) : message.content && message.content !== "📷 Image envoyée" && (
+                          <p className="text-sm whitespace-pre-wrap text-foreground">{message.content}</p>
+                        )}
+                      </div>
                     </div>
-                  </div>)}
+                  );
+                })}
 
                 {isStreaming && messages[messages.length - 1]?.content === '' && <div className="flex justify-start">
                     <div className="flex items-center gap-1">
