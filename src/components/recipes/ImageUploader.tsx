@@ -122,7 +122,7 @@ export function ImageUploader({
       </div>
       
       <div className="text-center">
-        <p className="font-medium">
+        <p className="font-medium text-foreground">
           {isDragging ? 'Déposez l\'image ici' : 'Cliquez ou déposez une image'}
         </p>
         <p className="text-sm text-muted-foreground mt-1">
@@ -132,7 +132,7 @@ export function ImageUploader({
 
       <div className="text-xs text-muted-foreground text-center mt-2 space-y-1">
         <p>💡 Conseils :</p>
-        <ul className="list-disc list-inside text-left">
+        <ul className="list-disc list-inside text-left text-foreground/80">
           <li>Photo bien éclairée</li>
           <li>Texte lisible</li>
           <li>Recette complète visible</li>

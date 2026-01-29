@@ -194,7 +194,7 @@ function IngredientItem({
       
       <span 
         className={cn(
-          "transition-all duration-200 leading-6",
+          "transition-all duration-200 leading-6 text-foreground",
           checked && "line-through text-muted-foreground/60"
         )}
       >

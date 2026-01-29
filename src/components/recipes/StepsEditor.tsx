@@ -30,7 +30,7 @@ export function StepsEditor({ steps, onChange }: StepsEditorProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">Étapes</h3>
+        <h3 className="text-sm font-medium text-foreground">Étapes</h3>
         <Button type="button" variant="outline" size="sm" onClick={addStep}>
           <Plus className="mr-1 h-4 w-4" />
           Ajouter
