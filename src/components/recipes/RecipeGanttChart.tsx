@@ -117,8 +117,8 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
 
   const sortedSteps = [...steps].sort((a, b) => a.order - b.order);
   const totalTime = timelineData.total_time;
-  const pixelsPerMinute = 8; // Scale factor
-  const minWidth = Math.max(totalTime * pixelsPerMinute, 400);
+  const pixelsPerMinute = 6; // Reduced scale for better mobile fit
+  const chartWidth = Math.max(totalTime * pixelsPerMinute, 300);
 
   // Group steps into "lanes" based on parallelism
   const lanes: TimelineStep[][] = [];
@@ -159,9 +159,10 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
     stepToLane.set(timelineStep.order, assignedLane);
   }
 
-  // Create time markers
+  // Create time markers - adaptive based on total time
+  const markerInterval = totalTime > 60 ? 15 : totalTime > 30 ? 10 : 5;
   const timeMarkers: number[] = [];
-  for (let t = 0; t <= totalTime; t += 10) {
+  for (let t = 0; t <= totalTime; t += markerInterval) {
     timeMarkers.push(t);
   }
   if (timeMarkers[timeMarkers.length - 1] < totalTime) {
@@ -178,12 +179,12 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-base">
-            <Clock className="h-4 w-4" />
-            Timeline de cuisson
-            <span className="text-sm font-normal text-muted-foreground">
-              ({formatTime(totalTime)} au total)
+        <CardTitle className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2 text-base flex-wrap">
+            <Clock className="h-4 w-4 shrink-0" />
+            <span className="whitespace-nowrap">Timeline</span>
+            <span className="text-sm font-normal text-muted-foreground whitespace-nowrap">
+              ({formatTime(totalTime)})
             </span>
           </span>
           <Button 
@@ -192,6 +193,7 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
             onClick={analyzeTimeline} 
             disabled={isAnalyzing}
             title="Ré-analyser"
+            className="shrink-0"
           >
             {isAnalyzing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -201,15 +203,15 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
           </Button>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <ScrollArea className="w-full">
-          <div className="min-w-fit pb-4" style={{ width: `${minWidth + 80}px` }}>
+      <CardContent className="px-3 sm:px-6">
+        <ScrollArea className="w-full rounded-md">
+          <div className="pb-4" style={{ width: `${chartWidth + 50}px`, minWidth: '100%' }}>
             {/* Time axis */}
-            <div className="flex items-center h-6 mb-2 ml-8 relative">
-              {timeMarkers.map((t, i) => (
+            <div className="flex items-center h-6 mb-2 ml-6 relative">
+              {timeMarkers.map((t) => (
                 <div
                   key={t}
-                  className="absolute text-xs text-muted-foreground"
+                  className="absolute text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap"
                   style={{ left: `${t * pixelsPerMinute}px` }}
                 >
                   {formatTime(t)}
@@ -218,18 +220,18 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
             </div>
 
             {/* Lanes */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {lanes.map((lane, laneIndex) => (
-                <div key={laneIndex} className="flex items-center gap-2">
+                <div key={laneIndex} className="flex items-center gap-1.5">
                   {/* Lane label */}
-                  <div className="w-6 text-xs text-muted-foreground text-right shrink-0">
+                  <div className="w-4 text-[10px] text-muted-foreground text-right shrink-0">
                     {laneIndex + 1}
                   </div>
                   
                   {/* Lane timeline */}
                   <div 
-                    className="relative h-10 bg-muted/30 rounded-md"
-                    style={{ width: `${totalTime * pixelsPerMinute}px` }}
+                    className="relative h-8 sm:h-10 bg-muted/30 rounded-md"
+                    style={{ width: `${chartWidth}px` }}
                   >
                     {/* Grid lines */}
                     {timeMarkers.map(t => (
@@ -293,19 +295,19 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
             </div>
 
             {/* Legend */}
-            <div className="flex flex-wrap gap-3 mt-4 pt-3 border-t">
+            <div className="flex flex-wrap gap-2 sm:gap-3 mt-4 pt-3 border-t">
               {sortedSteps.map((step, i) => {
                 const timelineStep = timelineData.steps.find(ts => ts.order === step.order);
                 const colorIndex = i % COLORS.length;
                 
                 return (
-                  <div key={step.order} className="flex items-center gap-1.5 text-xs">
-                    <div className={cn('w-3 h-3 rounded-sm', COLORS[colorIndex])} />
-                    <span className="text-muted-foreground truncate max-w-[120px]">
-                      {step.order}. {step.text.slice(0, 20)}...
+                  <div key={step.order} className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs">
+                    <div className={cn('w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm shrink-0', COLORS[colorIndex])} />
+                    <span className="text-muted-foreground truncate max-w-[80px] sm:max-w-[120px]">
+                      {step.order}. {step.text.slice(0, 15)}...
                     </span>
                     {timelineStep && (
-                      <span className="text-muted-foreground/70">
+                      <span className="text-muted-foreground/70 whitespace-nowrap">
                         ({formatTime(timelineStep.duration_minutes)})
                       </span>
                     )}
