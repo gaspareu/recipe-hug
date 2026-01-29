@@ -77,12 +77,12 @@ export function RecipeVersionHistory({ recipeId, onRestore }: RecipeVersionHisto
           >
             <div className="border rounded-lg overflow-hidden">
               <CollapsibleTrigger asChild>
-                <button className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors text-left">
+                <button className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors text-left text-foreground">
                   <div className="flex items-center gap-2 min-w-0">
                     <Badge variant="outline" className="shrink-0">
                       v{version.version_number}
                     </Badge>
-                    <span className="text-sm font-medium truncate">{version.title}</span>
+                    <span className="text-sm font-medium truncate text-foreground">{version.title}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs text-muted-foreground">
@@ -98,14 +98,14 @@ export function RecipeVersionHistory({ recipeId, onRestore }: RecipeVersionHisto
               </CollapsibleTrigger>
               
               <CollapsibleContent>
-                <div className="px-3 pb-3 pt-1 border-t bg-muted/20 space-y-3">
+                <div className="px-3 pb-3 pt-1 border-t bg-muted/20 space-y-3 text-foreground">
                   {version.change_description && (
                     <p className="text-xs text-muted-foreground italic">
                       {version.change_description}
                     </p>
                   )}
                   
-                  <div className="text-xs space-y-1">
+                  <div className="text-xs space-y-1 text-foreground">
                     <p><strong>Portions:</strong> {version.servings || 'Non spécifié'}</p>
                     <p><strong>Ingrédients:</strong> {version.ingredients.length}</p>
                     <p><strong>Étapes:</strong> {version.steps.length}</p>
