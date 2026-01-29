@@ -72,21 +72,30 @@ serve(async (req) => {
       .map((s, i) => `Étape ${i + 1}: ${s.text}`)
       .join("\n");
 
-    const systemPrompt = `Tu es un expert culinaire. Analyse les étapes d'une recette et estime:
-1. La durée en minutes de chaque étape
-2. Les étapes qui peuvent être faites en parallèle (pendant qu'une autre se déroule)
+    const systemPrompt = `Tu es un expert culinaire. Analyse les étapes d'une recette pour créer un diagramme de Gantt réaliste.
 
-Réponds UNIQUEMENT avec l'appel de fonction, pas de texte.`;
+RÈGLES CRITIQUES pour le parallélisme:
+1. Une personne ne peut faire qu'UNE SEULE tâche active à la fois (couper, mélanger, nettoyer, éplucher, etc.)
+2. Le parallélisme est UNIQUEMENT possible quand une étape est PASSIVE (cuisson au four, mijotage, repos, marinade, refroidissement)
+3. Pendant une tâche passive, on peut faire d'autres tâches actives
 
-    const userPrompt = `Analyse ces étapes de recette et estime les durées et le parallélisme:
+EXEMPLES:
+- "Faire cuire au four 20 min" = tâche passive → les étapes suivantes peuvent être en parallèle
+- "Nettoyer les légumes" = tâche active → NE PEUT PAS être en parallèle avec "Couper la viande"
+- "Laisser reposer 10 min" = tâche passive → parallélisme possible
+- "Mélanger les ingrédients" = tâche active → pas de parallélisme
+
+Réponds UNIQUEMENT avec l'appel de fonction.`;
+
+    const userPrompt = `Analyse ces étapes de recette:
 
 ${stepsText}
 
-Pour chaque étape, indique:
-- duration_minutes: durée estimée en minutes (inclure temps de cuisson, repos, etc.)
-- parallel_with: numéros des étapes qui peuvent être faites EN MÊME TEMPS que celle-ci
+Pour chaque étape:
+- duration_minutes: durée estimée en minutes
+- parallel_with: UNIQUEMENT les numéros d'étapes PASSIVES (cuisson, repos, marinade) pendant lesquelles cette étape peut être réalisée
 
-Exemple: si l'étape 2 dit "Pendant ce temps, préparez...", elle peut être faite en parallèle avec l'étape 1.`;
+IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS être en parallèle car une seule personne cuisine.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
