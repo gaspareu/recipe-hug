@@ -275,7 +275,7 @@ export default function Home() {
                 <p className="text-sm text-foreground text-center break-words">
                   {pendingRecipe.isUpdate ? `Mettre à jour "${pendingRecipe.title}" ?` : `Enregistrer "${pendingRecipe.title}" ?`}
                 </p>
-                <div className="flex justify-between items-center gap-2">
+                <div className="flex justify-end items-center gap-2">
                   <Button size="sm" onClick={savePendingRecipe} className="gap-1">
                     <Check className="h-4 w-4" />
                     {pendingRecipe.isUpdate ? 'Mettre à jour' : 'Créer'}
