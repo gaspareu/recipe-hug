@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Loader2, Clock, GitBranch, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -42,6 +41,20 @@ const COLORS = [
 
 export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpdate }: RecipeGanttChartProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.offsetWidth);
+      }
+    };
+    
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, [timelineData]);
 
   const analyzeTimeline = async () => {
     setIsAnalyzing(true);
@@ -117,8 +130,10 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
 
   const sortedSteps = [...steps].sort((a, b) => a.order - b.order);
   const totalTime = timelineData.total_time;
-  const pixelsPerMinute = 6; // Reduced scale for better mobile fit
-  const chartWidth = Math.max(totalTime * pixelsPerMinute, 300);
+  
+  // Calculate scale to fill container width (minus lane label width)
+  const laneWidth = containerWidth - 24; // 24px for lane label
+  const pixelsPerMinute = totalTime > 0 ? Math.max(laneWidth / totalTime, 2) : 6;
 
   // Group steps into "lanes" based on parallelism
   const lanes: TimelineStep[][] = [];
@@ -204,8 +219,8 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
         </CardTitle>
       </CardHeader>
       <CardContent className="px-3 sm:px-6">
-        <ScrollArea className="w-full rounded-md">
-          <div className="pb-4" style={{ width: `${chartWidth + 50}px`, minWidth: '100%' }}>
+        <div ref={containerRef} className="w-full">
+          <div className="pb-4">
             {/* Time axis */}
             <div className="flex items-center h-6 mb-2 ml-6 relative">
               {timeMarkers.map((t) => (
@@ -230,8 +245,7 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
                   
                   {/* Lane timeline */}
                   <div 
-                    className="relative h-8 sm:h-10 bg-muted/30 rounded-md"
-                    style={{ width: `${chartWidth}px` }}
+                    className="relative h-8 sm:h-10 bg-muted/30 rounded-md flex-1"
                   >
                     {/* Grid lines */}
                     {timeMarkers.map(t => (
@@ -316,8 +330,7 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
               })}
             </div>
           </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );
