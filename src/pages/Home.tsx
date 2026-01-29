@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, Plus, Loader2, BookOpen, User, Mic, MicOff, Check, X, ImagePlus } from 'lucide-react';
+import { Send, Plus, Loader2, BookOpen, User, Mic, MicOff, Check, X, ImagePlus, Camera, FileText, Image, AudioWaveform, ArrowUp, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
@@ -364,11 +366,11 @@ export default function Home() {
               </div>
             )}
 
-            {/* Input container */}
-            <div className="relative bg-muted rounded-3xl border border-border/50">
+            {/* Input container - ChatGPT style */}
+            <div className="relative bg-muted rounded-[24px] border border-border/50 mx-auto w-full max-w-[800px] px-3 py-3">
               {/* Image preview */}
               {selectedImage && (
-                <div className="p-3 pb-0">
+                <div className="pb-2">
                   <div className="relative inline-block">
                     <img 
                       src={selectedImage} 
@@ -385,76 +387,158 @@ export default function Home() {
                 </div>
               )}
               
-              <Textarea 
-                ref={inputRef} 
-                value={input} 
-                onChange={e => {
-                  setInput(e.target.value);
-                  // Auto-resize textarea
-                  const target = e.target;
-                  target.style.height = 'auto';
-                  target.style.height = Math.min(target.scrollHeight, 160) + 'px';
-                }} 
-                onKeyDown={handleKeyDown} 
-                placeholder={selectedImage ? "Ajouter un commentaire..." : ""} 
-                className="w-full min-h-[56px] max-h-40 resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-4 pl-4 pr-36 text-base"
-                rows={1} 
-                disabled={isStreaming || isListening} 
-              />
-              
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageSelect}
-                className="hidden"
-              />
-              
-              {/* Action buttons inside input */}
-              <div className="absolute bottom-3 right-3 flex items-center gap-1">
-                {/* Image upload button */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isStreaming || isListening}
-                  className="h-10 w-10 rounded-full shrink-0"
-                  title="Ajouter une image"
-                >
-                  <ImagePlus className="h-4 w-4" />
-                </Button>
+              {/* Main input row with flex alignment */}
+              <div className="flex items-end gap-2">
+                {/* Add button with popover menu */}
+                <TooltipProvider>
+                  <Popover>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <PopoverTrigger asChild>
+                          <button
+                            className="flex-shrink-0 h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-accent transition-colors mb-1"
+                            disabled={isStreaming || isListening}
+                          >
+                            <Plus className="h-5 w-5 text-foreground" />
+                          </button>
+                        </PopoverTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>Ajouter des fichiers et plus encore <kbd className="ml-1 px-1 py-0.5 bg-muted rounded text-xs">/</kbd></p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <PopoverContent 
+                      className="w-56 p-1" 
+                      align="start"
+                      side="top"
+                    >
+                      <div className="flex flex-col">
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground"
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span>Ajouter des fichiers</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Trigger camera capture on mobile
+                            if (fileInputRef.current) {
+                              fileInputRef.current.setAttribute('capture', 'environment');
+                              fileInputRef.current.click();
+                              fileInputRef.current.removeAttribute('capture');
+                            }
+                          }}
+                          className="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground"
+                        >
+                          <Camera className="h-4 w-4" />
+                          <span>Prendre une photo</span>
+                        </button>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground"
+                        >
+                          <Image className="h-4 w-4" />
+                          <span>Ajouter une image</span>
+                        </button>
+                        <div className="h-px bg-border my-1" />
+                        <button
+                          className="flex items-center justify-between px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground"
+                        >
+                          <span className="flex items-center gap-3">
+                            <Plus className="h-4 w-4" />
+                            <span>Plus</span>
+                          </span>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </TooltipProvider>
                 
-                {/* Voice button */}
-                <Button
-                  variant={isListening ? "default" : "ghost"}
-                  size="icon"
-                  onClick={() => {
-                    if (!voiceEnabled) {
-                      toggleVoice();
-                      setTimeout(() => startListening(), 100);
-                    } else if (isListening) {
-                      stopListening();
-                    } else {
-                      startListening();
-                    }
-                  }}
-                  disabled={isStreaming}
-                  className={`h-10 w-10 rounded-full shrink-0 ${isListening ? 'bg-primary text-primary-foreground' : ''}`}
-                  title={isListening ? "Arrêter l'écoute" : "Mode vocal"}
-                >
-                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                </Button>
+                {/* Textarea - expands vertically */}
+                <div className="flex-1 relative">
+                  <Textarea 
+                    ref={inputRef} 
+                    value={input} 
+                    onChange={e => {
+                      setInput(e.target.value);
+                      // Auto-resize textarea
+                      const target = e.target;
+                      target.style.height = 'auto';
+                      target.style.height = Math.min(target.scrollHeight, 200) + 'px';
+                    }} 
+                    onKeyDown={handleKeyDown} 
+                    placeholder="Poser une question" 
+                    className="w-full min-h-[24px] max-h-[200px] resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-1.5 px-0 text-base leading-6 placeholder:text-muted-foreground"
+                    rows={1} 
+                    disabled={isStreaming || isListening} 
+                  />
+                </div>
                 
-                {/* Send button */}
-                <Button 
-                  onClick={handleSubmit} 
-                  disabled={(!input.trim() && !selectedImage) || isStreaming || isListening} 
-                  size="icon" 
-                  className="h-10 w-10 rounded-full shrink-0"
-                >
-                  {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+                
+                {/* Right side buttons - stay at bottom */}
+                <div className="flex items-center gap-1 mb-1">
+                  {/* Microphone button - visible when input is empty or short */}
+                  {!input.trim() && !selectedImage && (
+                    <button
+                      onClick={() => {
+                        if (!voiceEnabled) {
+                          toggleVoice();
+                          setTimeout(() => startListening(), 100);
+                        } else if (isListening) {
+                          stopListening();
+                        } else {
+                          startListening();
+                        }
+                      }}
+                      disabled={isStreaming}
+                      className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${
+                        isListening 
+                          ? 'bg-primary text-primary-foreground' 
+                          : 'hover:bg-accent text-foreground'
+                      }`}
+                      title={isListening ? "Arrêter l'écoute" : "Dicter"}
+                    >
+                      {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                    </button>
+                  )}
+                  
+                  {/* Voice mode / Send button */}
+                  <button 
+                    onClick={() => {
+                      if (input.trim() || selectedImage) {
+                        handleSubmit();
+                      } else {
+                        // Toggle voice mode
+                        toggleVoice();
+                      }
+                    }}
+                    disabled={isStreaming || isListening} 
+                    className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${
+                      (input.trim() || selectedImage) 
+                        ? 'bg-foreground text-background hover:bg-foreground/90' 
+                        : 'bg-card text-foreground hover:bg-accent border border-border'
+                    }`}
+                    title={(input.trim() || selectedImage) ? "Envoyer" : "Mode vocal"}
+                  >
+                    {isStreaming ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (input.trim() || selectedImage) ? (
+                      <ArrowUp className="h-5 w-5" />
+                    ) : (
+                      <AudioWaveform className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 
