@@ -306,7 +306,7 @@ export default function Home() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
-                          <button className="flex-shrink-0 h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-accent transition-colors mb-1" disabled={isStreaming || isListening}>
+                          <button className="flex-shrink-0 h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-accent transition-colors" disabled={isStreaming || isListening}>
                             <Plus className="h-5 w-5 text-foreground" />
                           </button>
                         </PopoverTrigger>
@@ -350,21 +350,21 @@ export default function Home() {
                 </TooltipProvider>
                 
                 {/* Textarea - expands vertically */}
-                <div className="flex-1 relative">
+                <div className="flex-1 flex items-center min-h-[36px]">
                   <Textarea ref={inputRef} value={input} onChange={e => {
                   setInput(e.target.value);
                   // Auto-resize textarea
                   const target = e.target;
                   target.style.height = 'auto';
                   target.style.height = Math.min(target.scrollHeight, 200) + 'px';
-                }} onKeyDown={handleKeyDown} placeholder="Poser une question" className="w-full min-h-[24px] max-h-[200px] resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-1.5 px-0 text-base leading-6 placeholder:text-muted-foreground" rows={1} disabled={isStreaming || isListening} />
+                }} onKeyDown={handleKeyDown} placeholder="Poser une question" className="w-full min-h-[24px] max-h-[200px] resize-none bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-0 px-0 text-base leading-9 placeholder:text-muted-foreground self-center" rows={1} disabled={isStreaming || isListening} />
                 </div>
                 
                 {/* Hidden file input */}
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
                 
                 {/* Right side buttons - stay at bottom */}
-                <div className="flex items-center gap-1 mb-1">
+                <div className="flex items-center gap-1">
                   {/* Microphone button - visible when input is empty or short */}
                   {!input.trim() && !selectedImage && <button onClick={() => {
                   if (!voiceEnabled) {
