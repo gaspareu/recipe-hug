@@ -46,7 +46,7 @@ export function IngredientEditor({ ingredients, onChange }: IngredientEditorProp
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">Ingrédients</h3>
+        <h3 className="text-sm font-medium text-foreground">Ingrédients</h3>
         <Button type="button" variant="outline" size="sm" onClick={addIngredient}>
           <Plus className="mr-1 h-4 w-4" />
           Ajouter
