@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, Send, RotateCcw, ChefHat, Pencil, Save, History, Plus } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, RotateCcw, ChefHat, Pencil, Save, History, Plus, Mic, MicOff, ArrowUp, X } from 'lucide-react';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -514,6 +514,7 @@ function ChatInterface({
   const [input, setInput] = useState('');
   const [isApplying, setIsApplying] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastMessageRef = useRef<string>('');
 
   // Voice mode with callback for transcribed text
@@ -542,6 +543,16 @@ function ChatInterface({
     }
   }, [mode, hookMode, changeMode]);
 
+  // Auto-scroll
+  useEffect(() => {
+    if (scrollRef.current) {
+      const scrollContainer = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
+    }
+  }, [messages]);
+
   // Speak new assistant messages when voice is enabled
   useEffect(() => {
     if (!voiceEnabled) return;
@@ -559,11 +570,21 @@ function ChatInterface({
     }
   }, [messages, isStreaming, voiceEnabled, speak]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (input.trim() && !isStreaming) {
       sendMessage(input);
       setInput('');
+      // Reset textarea height
+      if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+      }
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
@@ -589,39 +610,59 @@ function ChatInterface({
   const quickSuggestions = mode === 'cooking' ? cookingSuggestions : editingSuggestions;
   const showSuggestions = messages.length <= 1;
 
-  return <div className="flex flex-col flex-1 min-h-0">
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="space-y-4">
+  return (
+    <div className="flex flex-col flex-1 min-h-0">
+      <ScrollArea className="flex-1 px-4" ref={scrollRef}>
+        <div className="py-4 space-y-6">
           {messages.map(message => <MessageBubble key={message.id} message={message} />)}
-          {isStreaming && <div className="flex justify-start">
-              <div className="bg-muted rounded-lg px-3 py-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
+          
+          {isStreaming && messages[messages.length - 1]?.content === '' && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
-            </div>}
+            </div>
+          )}
+
+          {/* Partial transcript while listening */}
+          {isListening && partialTranscript && (
+            <div className="flex justify-end">
+              <div className="bg-muted/50 rounded-3xl px-4 py-3 max-w-[85%]">
+                <p className="text-sm italic text-muted-foreground">{partialTranscript}...</p>
+              </div>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
       {/* Apply changes button when pending recipe exists */}
       {pendingRecipe && (
-        <div className="p-3 border-t bg-primary/5">
-          <Button 
-            onClick={handleApplyChanges} 
-            disabled={isApplying}
-            className="w-full"
-          >
-            {isApplying ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : pendingRecipe.isNewRecipe ? (
-              <Plus className="h-4 w-4 mr-2" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            {pendingRecipe.isNewRecipe ? "Créer la nouvelle recette" : "Appliquer les modifications"}
-          </Button>
+        <div className="flex flex-col gap-3 p-3 mx-4 bg-primary/5 border border-primary/20 rounded-2xl">
+          <p className="text-sm text-foreground text-center break-words">
+            {pendingRecipe.isNewRecipe ? `Créer "${pendingRecipe.title}" ?` : `Mettre à jour "${pendingRecipe.title}" ?`}
+          </p>
+          <div className="flex justify-end items-center gap-2">
+            <Button size="sm" onClick={handleApplyChanges} disabled={isApplying} className="gap-1">
+              {isApplying ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : pendingRecipe.isNewRecipe ? (
+                <Plus className="h-4 w-4" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {pendingRecipe.isNewRecipe ? 'Créer' : 'Mettre à jour'}
+            </Button>
+            <Button size="icon" variant="ghost" onClick={clearPendingRecipe} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 
-      <div className="p-4 border-t space-y-3">
+      {/* Bottom area */}
+      <div className="p-4 space-y-4">
         {/* Voice controls */}
         <VoiceControls
           voiceEnabled={voiceEnabled}
@@ -635,29 +676,91 @@ function ChatInterface({
           compact
         />
 
-        {showSuggestions && <div className="flex flex-wrap gap-2">
-            {quickSuggestions.map(suggestion => <Button key={suggestion} variant="outline" size="sm" onClick={() => sendMessage(suggestion)} disabled={isStreaming} className="text-xs">
+        {/* Quick suggestions */}
+        {showSuggestions && (
+          <div className="flex flex-wrap gap-2 justify-center">
+            {quickSuggestions.map(suggestion => (
+              <Button 
+                key={suggestion} 
+                variant="outline" 
+                size="sm" 
+                onClick={() => sendMessage(suggestion)} 
+                disabled={isStreaming}
+                className="text-sm rounded-2xl px-4 py-2 h-auto whitespace-normal text-center border-border/50 hover:bg-muted"
+              >
                 {suggestion}
-              </Button>)}
-          </div>}
-        
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input 
-            value={input} 
-            onChange={e => setInput(e.target.value)} 
-            placeholder={isListening ? "Parlez..." : (mode === 'cooking' ? "Posez une question..." : "Décrivez vos modifications...")} 
-            disabled={isStreaming || isListening} 
-            className="flex-1" 
-          />
-          <Button type="submit" size="icon" disabled={isStreaming || !input.trim() || isListening}>
-            <Send className="h-4 w-4" />
-          </Button>
-          <Button type="button" variant="ghost" size="icon" onClick={resetChat} title="Réinitialiser">
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-        </form>
+              </Button>
+            ))}
+          </div>
+        )}
+
+        {/* Input container - ChatGPT style like Home page */}
+        <div className="relative bg-muted rounded-[24px] border border-border/50 px-3 py-3">
+          {/* Main input row with flex alignment */}
+          <div className="flex items-end gap-2">
+            {/* Reset button */}
+            <button 
+              onClick={resetChat} 
+              disabled={isStreaming || messages.length <= 1}
+              className="flex-shrink-0 h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Nouvelle conversation"
+            >
+              <RotateCcw className="h-4 w-4 text-foreground" />
+            </button>
+            
+            {/* Textarea - expands vertically */}
+            <div className="flex-1 flex items-center min-h-[36px]">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  // Auto-resize textarea
+                  const target = e.target;
+                  target.style.height = 'auto';
+                  target.style.height = Math.min(target.scrollHeight, 200) + 'px';
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={isListening ? "Parlez..." : (mode === 'cooking' ? "Posez une question..." : "Décrivez vos modifications...")}
+                className="w-full min-h-[24px] max-h-[200px] resize-none bg-transparent border-0 focus:outline-none focus:ring-0 py-0 px-0 text-base leading-9 placeholder:text-muted-foreground self-center text-foreground"
+                rows={1}
+                disabled={isStreaming || isListening}
+              />
+            </div>
+            
+            {/* Right side buttons */}
+            <div className="flex items-center gap-1">
+              {/* Microphone button - visible when input is empty */}
+              {!input.trim() && (
+                <button
+                  onClick={isListening ? stopListening : startListening}
+                  className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${
+                    isListening 
+                      ? 'bg-destructive text-destructive-foreground' 
+                      : 'hover:bg-accent'
+                  }`}
+                  title={isListening ? 'Arrêter' : 'Écouter'}
+                >
+                  {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5 text-foreground" />}
+                </button>
+              )}
+              
+              {/* Send button - visible when there's input */}
+              {input.trim() && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={isStreaming}
+                  className="flex-shrink-0 h-9 w-9 bg-foreground text-background rounded-full flex items-center justify-center hover:bg-foreground/90 transition-colors disabled:opacity-50"
+                >
+                  <ArrowUp className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>;
+    </div>
+  );
 }
 
 function MessageBubble({
@@ -666,11 +769,17 @@ function MessageBubble({
   message: ChatMessage;
 }) {
   const isUser = message.role === 'user';
-  return <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[85%] rounded-lg px-3 py-2 ${isUser ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-        {isUser ? <p className="text-sm whitespace-pre-wrap">{message.content}</p> : <div className="text-sm prose prose-sm dark:prose-invert max-w-none [&>p]:m-0 [&>ul]:my-1 [&>ol]:my-1">
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-[85%] ${isUser ? 'bg-muted rounded-3xl px-4 py-3' : ''}`}>
+        {isUser ? (
+          <p className="text-sm whitespace-pre-wrap text-foreground">{message.content}</p>
+        ) : (
+          <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground">
             <ReactMarkdown>{message.content}</ReactMarkdown>
-          </div>}
+          </div>
+        )}
       </div>
-    </div>;
+    </div>
+  );
 }
