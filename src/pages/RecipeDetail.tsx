@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, RotateCcw, ChefHat, Pencil, Save, History, Plus, Mic, MicOff, ArrowUp, X } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, RotateCcw, ChefHat, Pencil, Save, History, Plus, Mic, MicOff, ArrowUp, X, ImagePlus } from 'lucide-react';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
@@ -20,6 +20,7 @@ import { RecipeStatusSelect } from '@/components/recipes/RecipeStatusSelect';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { useRecipe, useToggleFavorite, useUpdateRecipe, useCreateRecipe } from '@/hooks/useRecipes';
+import { useGenerateRecipeImage } from '@/hooks/useGenerateRecipeImage';
 import { useCookingAssistant, ChatMessage, AssistantMode, ExtractedRecipeData } from '@/hooks/useCookingAssistant';
 import { useCreateVersion } from '@/hooks/useRecipeVersions';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
@@ -45,6 +46,7 @@ export default function RecipeDetail() {
   const updateRecipe = useUpdateRecipe();
   const createRecipe = useCreateRecipe();
   const createVersion = useCreateVersion();
+  const generateImage = useGenerateRecipeImage();
   const { user } = useAuth();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
@@ -230,6 +232,39 @@ export default function RecipeDetail() {
                 tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} 
                 variant="overlay"
               />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => {
+                      const ingredients = recipe.ingredients as Array<{ name: string }>;
+                      generateImage.mutate(
+                        { recipeId: recipe.id, title: recipe.title, ingredients },
+                        {
+                          onSuccess: () => {
+                            toast.success('Image générée !', {
+                              description: 'La nouvelle image a été appliquée à la recette.'
+                            });
+                          },
+                          onError: (error) => {
+                            toast.error('Erreur', {
+                              description: error.message || 'Impossible de générer l\'image'
+                            });
+                          }
+                        }
+                      );
+                    }} 
+                    disabled={generateImage.isPending} 
+                    className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80"
+                  >
+                    {generateImage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Régénérer l'image</p>
+                </TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button 
