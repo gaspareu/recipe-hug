@@ -53,6 +53,45 @@ interface PendingRecipe {
 
 const WELCOME_MESSAGE = "Salut ! Je suis Chef, ton assistant culinaire. 👨‍🍳\n\nJe peux t'aider à :\n- 🔍 **Chercher** une recette dans ton livre\n- ✨ **Créer** une nouvelle recette\n- 👨‍🍳 **Cuisiner** en te guidant étape par étape\n- 🔧 **Modifier** une recette existante\n\nQu'est-ce qui te ferait plaisir ?";
 
+// Background image generation function (fire and forget)
+async function triggerBackgroundImageGeneration(
+  recipeId: string,
+  title: string,
+  ingredients: Ingredient[],
+  accessToken: string,
+  refetchRecipes: () => Promise<any>
+) {
+  try {
+    console.log('Triggering background image generation for recipe:', recipeId);
+
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-recipe-image`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ recipeId, title, ingredients }),
+      }
+    );
+
+    if (response.ok) {
+      console.log('Image generation completed successfully');
+      toast.success('🖼️ Image générée !');
+      // Refresh recipes to show the new image
+      await refetchRecipes();
+    } else {
+      const errorData = await response.json().catch(() => ({}));
+      console.warn('Image generation failed:', errorData);
+      // Silent failure - don't bother the user for background task
+    }
+  } catch (error) {
+    console.warn('Image generation error:', error);
+    // Silent failure for background task
+  }
+}
+
 export function useHomeChat() {
   const navigate = useNavigate();
   const { data: recipes = [], refetch: refetchRecipes } = useRecipes();
@@ -307,7 +346,7 @@ export function useHomeChat() {
         toast.success('Recette mise à jour !');
       } else {
         // Create new recipe
-        const { error } = await supabase
+        const { data: newRecipe, error } = await supabase
           .from('recipes')
           .insert({
             user_id: session.user.id,
@@ -317,10 +356,24 @@ export function useHomeChat() {
             steps: pendingRecipe.steps as any,
             source_type: 'ai',
             status: 'draft',
-          });
+          })
+          .select('id')
+          .single();
 
         if (error) throw error;
         toast.success('Recette créée !');
+        
+        // Trigger image generation in background
+        if (newRecipe?.id) {
+          toast.info('🎨 Génération de l\'image en cours...', { duration: 3000 });
+          triggerBackgroundImageGeneration(
+            newRecipe.id, 
+            pendingRecipe.title, 
+            pendingRecipe.ingredients,
+            session.access_token,
+            refetchRecipes
+          );
+        }
       }
 
       await refetchRecipes();
@@ -334,7 +387,7 @@ export function useHomeChat() {
         role: 'assistant',
         content: pendingRecipe.isUpdate
           ? `✅ J'ai mis à jour ta recette "${pendingRecipe.title}" ! Tu veux faire autre chose ?`
-          : `✅ J'ai enregistré ta nouvelle recette "${pendingRecipe.title}" ! Tu veux la cuisiner ou faire autre chose ?`,
+          : `✅ J'ai enregistré ta nouvelle recette "${pendingRecipe.title}" ! Une image est en cours de génération. Tu veux la cuisiner ou faire autre chose ?`,
         timestamp: new Date(),
       }]);
 

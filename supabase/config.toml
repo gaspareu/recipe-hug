@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.webhook-recipe]
 verify_jwt = false
+
+[functions.generate-recipe-image]
+verify_jwt = false

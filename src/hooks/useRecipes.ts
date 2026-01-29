@@ -52,7 +52,7 @@ export function useCreateRecipe() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (recipe: RecipeFormData) => {
+    mutationFn: async (recipe: RecipeFormData & { generateImage?: boolean }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       
@@ -77,12 +77,50 @@ export function useCreateRecipe() {
         .single();
       
       if (error) throw error;
-      return parseRecipe(data);
+      
+      const createdRecipe = parseRecipe(data);
+      
+      // Trigger image generation in background if requested and no image exists
+      if (recipe.generateImage && !recipe.source_image_url) {
+        triggerImageGeneration(createdRecipe.id, createdRecipe.title, createdRecipe.ingredients);
+      }
+      
+      return createdRecipe;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
     },
   });
+}
+
+// Background image generation function (fire and forget)
+async function triggerImageGeneration(recipeId: string, title: string, ingredients: Ingredient[]) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    
+    console.log('Triggering background image generation for recipe:', recipeId);
+    
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-recipe-image`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ recipeId, title, ingredients }),
+      }
+    );
+    
+    if (response.ok) {
+      console.log('Image generation triggered successfully');
+    } else {
+      console.warn('Image generation failed:', await response.text());
+    }
+  } catch (error) {
+    console.warn('Image generation error:', error);
+  }
 }
 
 export function useUpdateRecipe() {
