@@ -271,18 +271,17 @@ export default function Home() {
         <div className="p-4 pb-6">
           <div className="container max-w-3xl mx-auto space-y-4">
             {/* Pending recipe action bar */}
-            {pendingRecipe && <div className="flex items-center justify-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl">
-                <span className="text-sm">
+            {pendingRecipe && <div className="flex flex-col gap-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl">
+                <p className="text-sm text-foreground text-center break-words">
                   {pendingRecipe.isUpdate ? `Mettre à jour "${pendingRecipe.title}" ?` : `Enregistrer "${pendingRecipe.title}" ?`}
-                </span>
-                <div className="flex gap-2">
+                </p>
+                <div className="flex justify-between items-center gap-2">
                   <Button size="sm" onClick={savePendingRecipe} className="gap-1">
                     <Check className="h-4 w-4" />
                     {pendingRecipe.isUpdate ? 'Mettre à jour' : 'Créer'}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={cancelPendingRecipe} className="gap-1">
+                  <Button size="icon" variant="ghost" onClick={cancelPendingRecipe} className="h-8 w-8 text-muted-foreground hover:text-foreground">
                     <X className="h-4 w-4" />
-                    Continuer à modifier
                   </Button>
                 </div>
               </div>}
