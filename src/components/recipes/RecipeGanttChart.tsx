@@ -131,9 +131,11 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
   const sortedSteps = [...steps].sort((a, b) => a.order - b.order);
   const totalTime = timelineData.total_time;
   
-  // Calculate scale to fill container width (minus lane label width)
-  const laneWidth = containerWidth - 24; // 24px for lane label
-  const pixelsPerMinute = totalTime > 0 ? Math.max(laneWidth / totalTime, 2) : 6;
+  // Calculate scale to fill container width (minus lane label width and right padding)
+  const laneLabel = 24; // Lane label width
+  const rightPadding = 40; // Extra space for last time marker
+  const laneWidth = Math.max(containerWidth - laneLabel - rightPadding, 100);
+  const pixelsPerMinute = totalTime > 0 ? laneWidth / totalTime : 6;
 
   // Group steps into "lanes" based on parallelism
   const lanes: TimelineStep[][] = [];
