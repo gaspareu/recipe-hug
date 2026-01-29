@@ -653,6 +653,75 @@ export function useHomeChat() {
         }
       }
 
+      // FALLBACK: Parse and execute actions from text content if model didn't use tool_calls
+      // This handles cases where the model outputs JSON actions in text instead of using tools
+      const actionRegex = /\{\s*"action"\s*:\s*"([^"]+)"\s*,\s*"parameters"\s*:\s*(\{[^}]*\})\s*\}/g;
+      let match;
+      let contentToClean = assistantContent;
+      
+      while ((match = actionRegex.exec(assistantContent)) !== null) {
+        const actionType = match[1];
+        try {
+          const parameters = JSON.parse(match[2]);
+          console.log('Fallback action detected in text:', actionType, parameters);
+          
+          // Map action names to tool call types
+          const actionMap: Record<string, string> = {
+            'start_recipe_creation': 'start_recipe_creation',
+            'start_cooking': 'start_cooking',
+            'start_editing': 'start_editing',
+            'search_recipes': 'search_recipes',
+            'open_recipe': 'open_recipe',
+            'navigate': 'navigate',
+            'start_memory': 'start_memory',
+            'save_recipe': 'save_recipe',
+          };
+          
+          const toolType = actionMap[actionType];
+          if (toolType) {
+            // Map parameters to expected format
+            const toolData: Record<string, unknown> = {};
+            if (parameters.initial_idea) toolData.initial_idea = parameters.initial_idea;
+            if (parameters.recipe_id) toolData.recipe_id = parameters.recipe_id;
+            if (parameters.query) toolData.query = parameters.query;
+            if (parameters.destination) toolData.destination = parameters.destination;
+            if (parameters.modification_request) toolData.modification_request = parameters.modification_request;
+            // Copy all parameters as fallback
+            Object.assign(toolData, parameters);
+            
+            const result = await handleToolCall({
+              type: toolType,
+              data: toolData,
+            });
+            
+            // Handle mode switch from fallback action
+            if (result && typeof result === 'object' && 'modeSwitch' in result) {
+              const modeSwitchResult = result as { modeSwitch: ChatMode; recipe?: ActiveRecipeData; initialContext?: string };
+              pendingModeSwitchRef.current = {
+                newMode: modeSwitchResult.modeSwitch,
+                recipe: modeSwitchResult.recipe || null,
+                initialContext: modeSwitchResult.initialContext || content,
+              };
+            }
+          }
+          
+          // Remove the action JSON from displayed content
+          contentToClean = contentToClean.replace(match[0], '').trim();
+        } catch (e) {
+          console.error('Failed to parse fallback action:', e);
+        }
+      }
+      
+      // Update message with cleaned content (without action JSON)
+      if (contentToClean !== assistantContent) {
+        assistantContent = contentToClean;
+        setMessages(prev => prev.map(m =>
+          m.id === assistantMessageId
+            ? { ...m, content: assistantContent }
+            : m
+        ));
+      }
+
       // After streaming ends, check if we need to continue with new agent
       if (pendingModeSwitchRef.current) {
         const { newMode, recipe, initialContext } = pendingModeSwitchRef.current;
