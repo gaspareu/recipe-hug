@@ -37,7 +37,7 @@ export function WebhookIntegration() {
       <CardContent className="space-y-4">
         {/* Webhook URL */}
         <div className="space-y-2">
-          <label className="text-sm font-medium">URL du Webhook</label>
+          <label className="text-sm font-medium text-foreground">URL du Webhook</label>
           <div className="flex gap-2">
             <Input
               value={webhookUrl}
@@ -57,7 +57,7 @@ export function WebhookIntegration() {
 
         {/* Token */}
         <div className="space-y-2">
-          <label className="text-sm font-medium">Token Personnel</label>
+          <label className="text-sm font-medium text-foreground">Token Personnel</label>
           {isLoading ? (
             <div className="h-10 animate-pulse bg-muted rounded-md" />
           ) : webhookToken ? (
@@ -122,9 +122,9 @@ export function WebhookIntegration() {
             <CollapsibleContent className="space-y-4 pt-4">
               {/* cURL Example */}
               <div className="space-y-2">
-                <h4 className="text-sm font-medium">Exemple cURL</h4>
+                <h4 className="text-sm font-medium text-foreground">Exemple cURL</h4>
                 <div className="relative">
-                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto text-foreground">
                     {curlExample}
                   </pre>
                   <Button
@@ -140,8 +140,8 @@ export function WebhookIntegration() {
 
               {/* Payload Format */}
               <div className="space-y-2">
-                <h4 className="text-sm font-medium">Format du Payload</h4>
-                <pre className="bg-muted p-3 rounded-md text-xs">
+                <h4 className="text-sm font-medium text-foreground">Format du Payload</h4>
+                <pre className="bg-muted p-3 rounded-md text-xs text-foreground">
 {`{
   "text": "Contenu de la recette...",
   "webhook_token": "votre-token"
@@ -151,7 +151,7 @@ export function WebhookIntegration() {
 
               {/* Use Cases */}
               <div className="space-y-2">
-                <h4 className="text-sm font-medium">Cas d'usage</h4>
+                <h4 className="text-sm font-medium text-foreground">Cas d'usage</h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
                   <li className="flex items-center gap-2">
                     <ExternalLink className="h-3 w-3" />
