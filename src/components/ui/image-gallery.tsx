@@ -103,7 +103,7 @@ function AnimatedImage({
   };
 
   return (
-    <Link to={`/recipe/${id}`} className="block">
+    <Link to={`/recipes/${id}`} className="block">
       <AspectRatio ratio={1} className="relative overflow-hidden bg-muted">
         <div ref={ref} className="absolute inset-0 overflow-hidden">
           <motion.img
