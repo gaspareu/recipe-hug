@@ -52,7 +52,7 @@ export function useCreateRecipe() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (recipe: RecipeFormData & { generateImage?: boolean }) => {
+    mutationFn: async (recipe: RecipeFormData & { skipImageGeneration?: boolean }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       
@@ -80,8 +80,8 @@ export function useCreateRecipe() {
       
       const createdRecipe = parseRecipe(data);
       
-      // Trigger image generation in background if requested and no image exists
-      if (recipe.generateImage && !recipe.source_image_url) {
+      // Trigger image generation in background unless explicitly skipped or image already exists
+      if (!recipe.skipImageGeneration && !recipe.source_image_url) {
         triggerImageGeneration(createdRecipe.id, createdRecipe.title, createdRecipe.ingredients);
       }
       
