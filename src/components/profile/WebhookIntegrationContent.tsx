@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Copy, RefreshCw, Webhook, ChevronDown, ChevronUp, ExternalLink, BookOpen, Zap } from "lucide-react";
+import { Copy, RefreshCw, Webhook, ChevronDown, ChevronUp, ExternalLink, BookOpen, Zap, Download, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWebhookToken } from "@/hooks/useWebhookToken";
+import { toast } from "sonner";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -29,6 +30,102 @@ Corps (JSON):
   "text": "[Texte de la recette]",
   "webhook_token": "${webhookToken || '<votre-token>'}"
 }`;
+
+  const downloadShortcutGuide = () => {
+    if (!webhookToken) {
+      toast.error("Générez d'abord un token");
+      return;
+    }
+
+    const guideContent = `# 📱 Guide : Raccourci iOS "Ajouter une Recette"
+
+## Configuration rapide
+
+**URL du Webhook:** ${webhookUrl}
+**Votre Token:** ${webhookToken}
+
+---
+
+## 🛠️ Création du Raccourci (étape par étape)
+
+### 1. Ouvrir l'app Raccourcis
+Lancez l'application "Raccourcis" sur votre iPhone/iPad.
+
+### 2. Créer un nouveau raccourci
+Appuyez sur le "+" en haut à droite.
+
+### 3. Ajouter l'action "Obtenir le contenu de l'URL"
+- Recherchez "URL" dans la barre de recherche
+- Sélectionnez "Obtenir le contenu de l'URL"
+
+### 4. Configurer la requête
+
+**URL:** ${webhookUrl}
+
+**Méthode:** POST
+
+**En-têtes:**
+| Clé | Valeur |
+|-----|--------|
+| Content-Type | application/json |
+
+**Corps de la requête:** JSON
+\`\`\`json
+{
+  "text": "[Variable: Entrée du raccourci]",
+  "webhook_token": "${webhookToken}"
+}
+\`\`\`
+
+### 5. Configurer l'entrée
+- Appuyez sur "Entrée du raccourci" en haut
+- Activez "Afficher dans la feuille de partage"
+- Sélectionnez les types : Texte, URL, Safari
+
+### 6. Ajouter une notification (optionnel)
+- Ajoutez l'action "Afficher la notification"
+- Message : "Recette ajoutée ! 🎉"
+
+### 7. Nommer et sauvegarder
+- Appuyez sur le nom en haut
+- Nommez-le "Ajouter Recette"
+- Choisissez une icône (ex: 🍽️)
+
+---
+
+## 🚀 Utilisation
+
+1. Ouvrez Safari sur une page de recette
+2. Appuyez sur le bouton Partager
+3. Sélectionnez "Ajouter Recette"
+4. La recette sera automatiquement importée !
+
+---
+
+## ⚠️ Important
+
+- Ne partagez JAMAIS votre token
+- Si compromis, régénérez-le depuis l'app
+
+---
+
+Généré le ${new Date().toLocaleDateString('fr-FR')}
+`;
+
+    const blob = new Blob([guideContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'guide-raccourci-recette.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success("Guide téléchargé", {
+      description: "Ouvrez le fichier pour suivre les instructions"
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -117,7 +214,7 @@ Corps (JSON):
             {/* iOS Shortcuts */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
-                <ExternalLink className="h-3 w-3" />
+                <Smartphone className="h-3 w-3" />
                 Raccourcis iOS / macOS
               </h4>
               <div className="relative">
@@ -131,9 +228,20 @@ Corps (JSON):
                   <Copy className="h-3 w-3" />
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Utilisez l'action "Obtenir le contenu de l'URL" avec la méthode POST.
-              </p>
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Utilisez l'action "Obtenir le contenu de l'URL" avec la méthode POST.
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={downloadShortcutGuide}
+                  className="w-full"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Télécharger le guide complet
+                </Button>
+              </div>
             </div>
 
             {/* Zapier / Make */}
