@@ -100,8 +100,15 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    /* Ensure proper viewport on PWA/mobile */
+    height: -webkit-fill-available;
+  }
+
   body {
     @apply bg-background text-foreground font-crimson;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
   }
 
   h1, h2, h3, h4, h5, h6 {
