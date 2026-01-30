@@ -29,7 +29,7 @@ export default function Auth() {
   // Redirect if already logged in
   useEffect(() => {
     if (user && !loading) {
-      navigate('/dashboard');
+      navigate('/home');
     }
   }, [user, loading, navigate]);
 
