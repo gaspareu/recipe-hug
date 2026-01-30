@@ -10,8 +10,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
-import ReactMarkdown from 'react-markdown';
+import { lazy, Suspense } from 'react';
 import { toast } from 'sonner';
+
+const MarkdownMessage = lazy(() => import('@/components/chat/MarkdownMessage'));
+
 export default function Home() {
   const navigate = useNavigate();
   const {
@@ -232,9 +235,9 @@ export default function Home() {
                         {/* Display image if present */}
                         {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
                         {message.role === 'assistant' ? (
-                          <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground">
-                            <ReactMarkdown>{displayContent}</ReactMarkdown>
-                          </div>
+                          <Suspense fallback={<div className="h-20 w-full animate-shimmer bg-muted rounded-lg" />}>
+                            <MarkdownMessage content={displayContent} />
+                          </Suspense>
                         ) : message.content && message.content !== "📷 Image envoyée" && (
                           <p className="text-sm whitespace-pre-wrap text-foreground">{message.content}</p>
                         )}
