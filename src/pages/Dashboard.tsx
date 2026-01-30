@@ -5,10 +5,25 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { ImageGallery } from '@/components/ui/image-gallery';
 import { FilterBar } from '@/components/recipes/FilterBar';
+import { FilterBadge } from '@/components/ui/filter-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRecipes, useToggleFavorite } from '@/hooks/useRecipes';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import type { RecipeStatus } from '@/types/recipe';
+
+const STATUS_LABELS: Record<RecipeStatus, string> = {
+  draft: 'Brouillon',
+  tested: 'Testé',
+  validated: 'Validé',
+  archived: 'Archivé',
+};
+
+const SEASON_LABELS: Record<string, string> = {
+  printemps: 'Printemps',
+  été: 'Été',
+  automne: 'Automne',
+  hiver: 'Hiver',
+};
 
 export default function Dashboard() {
   // Swipe right to navigate back to chat
@@ -53,10 +68,12 @@ export default function Dashboard() {
     toggleFavorite.mutate({ id, is_favorite: isFavorite });
   };
 
+  const hasActiveFilters = statusFilter !== 'all' || favoritesOnly || seasonFilter !== 'all' || search;
+
   return (
     <MainLayout>
       <div 
-        className="space-y-6" 
+        className="space-y-4" 
         {...swipeHandlers} 
         style={swipeStyle}
       >
@@ -85,6 +102,44 @@ export default function Dashboard() {
           seasonFilter={seasonFilter}
           onSeasonFilterChange={setSeasonFilter}
         />
+
+        {/* Active Filters Display */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap gap-2">
+            {search && (
+              <FilterBadge
+                variant="pill"
+                label="Recherche"
+                value={search}
+                onRemove={() => setSearch('')}
+              />
+            )}
+            {statusFilter !== 'all' && (
+              <FilterBadge
+                variant="pill"
+                label="Statut"
+                value={STATUS_LABELS[statusFilter]}
+                onRemove={() => setStatusFilter('all')}
+              />
+            )}
+            {seasonFilter !== 'all' && (
+              <FilterBadge
+                variant="pill"
+                label="Saison"
+                value={SEASON_LABELS[seasonFilter]}
+                onRemove={() => setSeasonFilter('all')}
+              />
+            )}
+            {favoritesOnly && (
+              <FilterBadge
+                variant="pill"
+                label="Favoris"
+                value="Oui"
+                onRemove={() => setFavoritesOnly(false)}
+              />
+            )}
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex gap-0.5">
