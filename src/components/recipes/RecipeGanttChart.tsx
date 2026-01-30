@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, Clock, GitBranch, RefreshCw } from 'lucide-react';
+import { Loader2, Clock, GitBranch, RefreshCw, Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -13,6 +13,7 @@ interface TimelineStep {
   duration_minutes: number;
   parallel_with: number[];
   start_offset: number;
+  is_passive?: boolean;
 }
 
 interface TimelineData {
@@ -28,15 +29,24 @@ interface RecipeGanttChartProps {
   onTimelineUpdate: () => void;
 }
 
-const COLORS = [
+// Active task colors (solid, vibrant)
+const ACTIVE_COLORS = [
   'bg-primary',
   'bg-blue-500',
   'bg-emerald-500',
   'bg-amber-500',
   'bg-rose-500',
   'bg-violet-500',
-  'bg-cyan-500',
-  'bg-orange-500',
+];
+
+// Passive task styles (striped pattern)
+const PASSIVE_COLORS = [
+  'bg-primary/60',
+  'bg-blue-500/60',
+  'bg-emerald-500/60',
+  'bg-amber-500/60',
+  'bg-rose-500/60',
+  'bg-violet-500/60',
 ];
 
 export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpdate }: RecipeGanttChartProps) {
@@ -262,7 +272,9 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
                     <TooltipProvider>
                       {lane.map(timelineStep => {
                         const step = sortedSteps.find(s => s.order === timelineStep.order);
-                        const colorIndex = (timelineStep.order - 1) % COLORS.length;
+                        const colorIndex = (timelineStep.order - 1) % ACTIVE_COLORS.length;
+                        const isPassive = timelineStep.is_passive ?? false;
+                        const bgColor = isPassive ? PASSIVE_COLORS[colorIndex] : ACTIVE_COLORS[colorIndex];
                         
                         return (
                           <Tooltip key={timelineStep.order}>
@@ -270,21 +282,31 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
                               <div
                                 className={cn(
                                   'absolute top-1 bottom-1 rounded-md flex items-center px-2 cursor-pointer transition-opacity hover:opacity-90',
-                                  COLORS[colorIndex]
+                                  bgColor,
+                                  isPassive && 'border-2 border-dashed border-white/40'
                                 )}
                                 style={{
                                   left: `${timelineStep.start_offset * pixelsPerMinute}px`,
                                   width: `${Math.max(timelineStep.duration_minutes * pixelsPerMinute, 24)}px`,
                                 }}
                               >
-                                <span className="text-xs font-medium text-white truncate">
+                                <span className="text-xs font-medium text-white truncate flex items-center gap-1">
+                                  {isPassive ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
                                   {timelineStep.order}
                                 </span>
                               </div>
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-xs">
                               <div className="space-y-1">
-                                <p className="font-medium">Étape {timelineStep.order}</p>
+                                <p className="font-medium flex items-center gap-1.5">
+                                  Étape {timelineStep.order}
+                                  <span className={cn(
+                                    'text-[10px] px-1.5 py-0.5 rounded',
+                                    isPassive ? 'bg-muted text-muted-foreground' : 'bg-primary/20 text-primary'
+                                  )}>
+                                    {isPassive ? 'Passive' : 'Active'}
+                                  </span>
+                                </p>
                                 <p className="text-xs text-muted-foreground line-clamp-2">
                                   {step?.text}
                                 </p>
@@ -311,25 +333,49 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
             </div>
 
             {/* Legend */}
-            <div className="flex flex-wrap gap-2 sm:gap-3 mt-4 pt-3 border-t">
-              {sortedSteps.map((step, i) => {
-                const timelineStep = timelineData.steps.find(ts => ts.order === step.order);
-                const colorIndex = i % COLORS.length;
-                
-                return (
-                  <div key={step.order} className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs">
-                    <div className={cn('w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm shrink-0', COLORS[colorIndex])} />
-                    <span className="text-muted-foreground truncate max-w-[80px] sm:max-w-[120px]">
-                      {step.order}. {step.text.slice(0, 15)}...
-                    </span>
-                    {timelineStep && (
-                      <span className="text-muted-foreground/70 whitespace-nowrap">
-                        ({formatTime(timelineStep.duration_minutes)})
-                      </span>
-                    )}
+            <div className="mt-4 pt-3 border-t space-y-3">
+              {/* Task type legend */}
+              <div className="flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 bg-primary rounded-sm flex items-center justify-center">
+                    <Play className="h-2.5 w-2.5 text-white" />
                   </div>
-                );
-              })}
+                  <span className="text-muted-foreground">Tâche active</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 bg-primary/60 border-2 border-dashed border-white/40 rounded-sm flex items-center justify-center">
+                    <Pause className="h-2.5 w-2.5 text-white" />
+                  </div>
+                  <span className="text-muted-foreground">Tâche passive (parallélisme possible)</span>
+                </div>
+              </div>
+              
+              {/* Steps legend */}
+              <div className="flex flex-wrap gap-2 sm:gap-3">
+                {sortedSteps.map((step, i) => {
+                  const timelineStep = timelineData.steps.find(ts => ts.order === step.order);
+                  const colorIndex = i % ACTIVE_COLORS.length;
+                  const isPassive = timelineStep?.is_passive ?? false;
+                  
+                  return (
+                    <div key={step.order} className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs">
+                      <div className={cn(
+                        'w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm shrink-0',
+                        isPassive ? PASSIVE_COLORS[colorIndex] : ACTIVE_COLORS[colorIndex],
+                        isPassive && 'border border-dashed border-white/40'
+                      )} />
+                      <span className="text-muted-foreground truncate max-w-[80px] sm:max-w-[120px]">
+                        {step.order}. {step.text.slice(0, 15)}...
+                      </span>
+                      {timelineStep && (
+                        <span className="text-muted-foreground/70 whitespace-nowrap">
+                          ({formatTime(timelineStep.duration_minutes)})
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
