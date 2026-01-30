@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, Clock, GitBranch, RefreshCw, Play, Pause } from 'lucide-react';
+import { Loader2, Clock, GitBranch, RefreshCw, Play, Pause, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { GanttLandscapeModal } from './GanttLandscapeModal';
 import type { Step } from '@/types/recipe';
 
 interface TimelineStep {
@@ -52,7 +54,9 @@ const PASSIVE_COLORS = [
 export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpdate }: RecipeGanttChartProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [isLandscapeOpen, setIsLandscapeOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const updateWidth = () => {
@@ -204,32 +208,46 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-2 text-base flex-wrap">
-            <Clock className="h-4 w-4 shrink-0" />
-            <span className="whitespace-nowrap">Timeline</span>
-            <span className="text-sm font-normal text-muted-foreground whitespace-nowrap">
-              ({formatTime(totalTime)})
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-base flex-wrap">
+              <Clock className="h-4 w-4 shrink-0" />
+              <span className="whitespace-nowrap">Timeline</span>
+              <span className="text-sm font-normal text-muted-foreground whitespace-nowrap">
+                ({formatTime(totalTime)})
+              </span>
             </span>
-          </span>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={analyzeTimeline} 
-            disabled={isAnalyzing}
-            title="Ré-analyser"
-            className="shrink-0"
-          >
-            {isAnalyzing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-          </Button>
-        </CardTitle>
-      </CardHeader>
+            <div className="flex items-center gap-1">
+              {isMobile && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setIsLandscapeOpen(true)}
+                  title="Ouvrir en plein écran"
+                  className="shrink-0"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
+              )}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={analyzeTimeline} 
+                disabled={isAnalyzing}
+                title="Ré-analyser"
+                className="shrink-0"
+              >
+                {isAnalyzing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </CardTitle>
+        </CardHeader>
       <CardContent className="px-3 sm:px-6">
         <div ref={containerRef} className="w-full">
           <div className="pb-4">
@@ -381,5 +399,16 @@ export function RecipeGanttChart({ recipeId, steps, timelineData, onTimelineUpda
         </div>
       </CardContent>
     </Card>
+
+    {/* Mobile fullscreen landscape modal */}
+    {timelineData && (
+      <GanttLandscapeModal
+        isOpen={isLandscapeOpen}
+        onClose={() => setIsLandscapeOpen(false)}
+        steps={steps}
+        timelineData={timelineData}
+      />
+    )}
+  </>
   );
 }
