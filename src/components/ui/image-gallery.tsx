@@ -2,10 +2,11 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { useInView } from 'framer-motion';
+import { motion, useInView, useScroll, useTransform } from 'framer-motion';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Link } from 'react-router-dom';
 import { Heart } from 'lucide-react';
+import placeholderPlat from '@/assets/placeholder_plat.jpg';
 
 export interface GalleryItem {
   id: string;
@@ -21,7 +22,7 @@ interface ImageGalleryProps {
   placeholder?: string;
 }
 
-export function ImageGallery({ items, onToggleFavorite, isTogglingFavorite, placeholder = '/placeholder.svg' }: ImageGalleryProps) {
+export function ImageGallery({ items, onToggleFavorite, isTogglingFavorite, placeholder = placeholderPlat }: ImageGalleryProps) {
   // Distribute items across 3 columns
   const columns: GalleryItem[][] = [[], [], []];
   items.forEach((item, index) => {
@@ -75,10 +76,17 @@ function AnimatedImage({
   onToggleFavorite,
   isTogglingFavorite 
 }: AnimatedImageProps) {
-  const ref = React.useRef(null);
+  const ref = React.useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true });
   const [isLoading, setIsLoading] = React.useState(true);
   const [imgSrc, setImgSrc] = React.useState(src);
+
+  // Parallax effect
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start end", "end start"]
+  });
+  const y = useTransform(scrollYProgress, [0, 1], ["-10%", "10%"]);
 
   const handleError = () => {
     if (placeholder) {
@@ -96,19 +104,22 @@ function AnimatedImage({
 
   return (
     <Link to={`/recipe/${id}`} className="block">
-      <AspectRatio ratio={1} ref={ref} className="relative overflow-hidden bg-muted">
-        <img
-          src={imgSrc}
-          alt={alt}
-          className={cn(
-            'absolute inset-0 h-full w-full object-cover transition-all duration-700',
-            isInView ? 'scale-100 opacity-100 blur-0' : 'scale-110 opacity-0 blur-md',
-            isLoading && 'animate-pulse'
-          )}
-          onLoad={() => setIsLoading(false)}
-          loading="lazy"
-          onError={handleError}
-        />
+      <AspectRatio ratio={1} className="relative overflow-hidden bg-muted">
+        <div ref={ref} className="absolute inset-0 overflow-hidden">
+          <motion.img
+            src={imgSrc}
+            alt={alt}
+            style={{ y }}
+            className={cn(
+              'absolute inset-0 h-[120%] w-full object-cover transition-all duration-700',
+              isInView ? 'scale-100 opacity-100 blur-0' : 'scale-110 opacity-0 blur-md',
+              isLoading && 'animate-pulse'
+            )}
+            onLoad={() => setIsLoading(false)}
+            loading="lazy"
+            onError={handleError}
+          />
+        </div>
         {/* Gradient overlay for title */}
         <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 to-transparent" />
         {/* Title */}
