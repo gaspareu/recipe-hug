@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
-import { RecipeGridItem } from '@/components/recipes/RecipeGridItem';
+import { ImageGallery } from '@/components/ui/image-gallery';
 import { FilterBar } from '@/components/recipes/FilterBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRecipes, useToggleFavorite } from '@/hooks/useRecipes';
@@ -87,9 +87,13 @@ export default function Dashboard() {
         />
 
         {isLoading ? (
-          <div className="grid grid-cols-3 gap-0.5 animate-stagger">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Skeleton key={i} className="aspect-square rounded-none" />
+          <div className="flex gap-0.5">
+            {[0, 1, 2].map((col) => (
+              <div key={col} className="flex flex-1 flex-col gap-0.5">
+                {[1, 2].map((i) => (
+                  <Skeleton key={i} className="aspect-square rounded-none" />
+                ))}
+              </div>
             ))}
           </div>
         ) : filteredRecipes.length === 0 ? (
@@ -109,16 +113,16 @@ export default function Dashboard() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-0.5 animate-stagger">
-            {filteredRecipes.map((recipe) => (
-              <RecipeGridItem
-                key={recipe.id}
-                recipe={recipe}
-                onToggleFavorite={handleToggleFavorite}
-                isTogglingFavorite={toggleFavorite.isPending}
-              />
-            ))}
-          </div>
+          <ImageGallery
+            items={filteredRecipes.map((recipe) => ({
+              id: recipe.id,
+              title: recipe.title,
+              imageUrl: recipe.source_image_url,
+              isFavorite: recipe.is_favorite ?? false,
+            }))}
+            onToggleFavorite={handleToggleFavorite}
+            isTogglingFavorite={toggleFavorite.isPending}
+          />
         )}
       </div>
     </MainLayout>
