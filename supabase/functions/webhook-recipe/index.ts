@@ -29,6 +29,104 @@ const ExtractedRecipeSchema = z.object({
   nutrition_tags: z.array(z.string()).optional(),
 });
 
+// Background image generation function (fire and forget)
+async function triggerImageGeneration(
+  supabaseAdmin: any,
+  recipeId: string,
+  title: string,
+  ingredients: any[],
+  userId: string
+) {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    console.warn("LOVABLE_API_KEY not configured, skipping image generation");
+    return;
+  }
+
+  console.log("Starting background image generation for recipe:", recipeId);
+
+  // Build prompt for image generation
+  const ingredientsList = Array.isArray(ingredients)
+    ? ingredients.slice(0, 8).map((i: any) => i.name || i).join(", ")
+    : "";
+
+  const prompt = `Professional food photography of "${title}". ${
+    ingredientsList ? `Main ingredients: ${ingredientsList}.` : ""
+  } Beautifully plated dish on a rustic wooden table, warm natural lighting, shallow depth of field, appetizing presentation. Ultra high resolution, 16:9 aspect ratio.`;
+
+  console.log("Generating image with prompt:", prompt);
+
+  // Call Lovable AI Gateway for image generation
+  const aiResponse = await fetch(
+    "https://ai.gateway.lovable.dev/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-image",
+        messages: [{ role: "user", content: prompt }],
+        modalities: ["image", "text"],
+      }),
+    }
+  );
+
+  if (!aiResponse.ok) {
+    const errorText = await aiResponse.text();
+    console.error("AI gateway error:", aiResponse.status, errorText);
+    return;
+  }
+
+  const aiData = await aiResponse.json();
+
+  // Extract image from response
+  const imageUrl = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  if (!imageUrl) {
+    console.error("No image in AI response");
+    return;
+  }
+
+  // Convert base64 to blob and upload to storage
+  const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, "");
+  const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+
+  const fileName = `${userId}/${recipeId}-${Date.now()}.webp`;
+
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from("recipe-images")
+    .upload(fileName, imageBytes, {
+      contentType: "image/webp",
+      upsert: true,
+    });
+
+  if (uploadError) {
+    console.error("Upload error:", uploadError);
+    return;
+  }
+
+  // Get public URL
+  const { data: urlData } = supabaseAdmin.storage
+    .from("recipe-images")
+    .getPublicUrl(fileName);
+
+  const publicUrl = urlData.publicUrl;
+
+  // Update recipe with new image URL
+  const { error: updateError } = await supabaseAdmin
+    .from("recipes")
+    .update({ source_image_url: publicUrl })
+    .eq("id", recipeId);
+
+  if (updateError) {
+    console.error("Update error:", updateError);
+    return;
+  }
+
+  console.log("Image generated and saved for recipe:", recipeId, publicUrl);
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -199,7 +297,7 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
         source_type: "webhook",
         status: "draft",
       })
-      .select("id, title")
+      .select("id, title, ingredients")
       .single();
 
     if (insertError) {
@@ -211,6 +309,15 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
     }
 
     console.log("Recipe created successfully:", newRecipe.id);
+
+    // Trigger background image generation
+    triggerImageGeneration(
+      supabaseAdmin,
+      newRecipe.id,
+      newRecipe.title,
+      newRecipe.ingredients,
+      userId
+    ).catch(err => console.warn("Background image generation failed:", err));
 
     return new Response(
       JSON.stringify({
