@@ -177,7 +177,7 @@ export default function Home() {
   const quickSuggestions = getQuickSuggestions();
   const hasConversation = messages.length > 1;
   const modeInfo = getModeInfo();
-  return <div className="min-h-screen flex flex-col bg-background" {...swipeHandlers} style={swipeStyle}>
+  return <div className="h-[100dvh] flex flex-col bg-background pt-[env(safe-area-inset-top)]" {...swipeHandlers} style={swipeStyle}>
       {/* Minimal header */}
       <header className="absolute top-0 left-0 right-0 z-10 p-4">
         <div className="container max-w-4xl mx-auto flex items-center justify-between">
@@ -267,8 +267,8 @@ export default function Home() {
             </ScrollArea>
           </div>)}
 
-        {/* Bottom area */}
-        <div className="p-4 pb-6">
+        {/* Bottom area - with safe area padding for PWA */}
+        <div className="shrink-0 p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           <div className="container max-w-3xl mx-auto space-y-4">
             {/* Pending recipe action bar */}
             {pendingRecipe && <div className="flex flex-col gap-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl">
