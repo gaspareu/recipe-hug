@@ -260,9 +260,9 @@ Généré le ${new Date().toLocaleDateString('fr-FR')}
             {/* Payload Format */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-foreground">Format du Payload</h4>
-              <pre className="bg-muted p-3 rounded-md text-xs text-foreground">
+              <pre className="bg-muted p-3 rounded-md text-xs text-foreground overflow-x-auto whitespace-pre-wrap break-all">
 {`{
-  "text": "Contenu de la recette (texte brut, HTML, ou URL)",
+  "text": "Contenu de la recette",
   "webhook_token": "${webhookToken || '<votre-token>'}"
 }`}
               </pre>
