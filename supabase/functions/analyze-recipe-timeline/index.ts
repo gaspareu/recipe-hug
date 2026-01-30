@@ -16,6 +16,7 @@ interface AnalyzedStep {
   duration_minutes: number;
   parallel_with: number[];
   start_offset: number;
+  is_passive: boolean;
 }
 
 serve(async (req) => {
@@ -130,8 +131,12 @@ IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS 
                           items: { type: "number" },
                           description: "Numéros des étapes qui peuvent être faites en parallèle" 
                         },
+                        is_passive: { 
+                          type: "boolean", 
+                          description: "true si tâche passive (cuisson, repos, marinade), false si tâche active (couper, mélanger)" 
+                        },
                       },
-                      required: ["order", "duration_minutes", "parallel_with"],
+                      required: ["order", "duration_minutes", "parallel_with", "is_passive"],
                     },
                   },
                 },
@@ -169,6 +174,7 @@ IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS 
       order: number;
       duration_minutes: number;
       parallel_with: number[];
+      is_passive: boolean;
     }>;
 
     // Calculate start_offset for Gantt chart positioning
@@ -209,6 +215,7 @@ IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS 
         duration_minutes: step.duration_minutes,
         parallel_with: step.parallel_with,
         start_offset: startOffset,
+        is_passive: step.is_passive ?? false,
       });
     }
 

@@ -17,6 +17,7 @@ export interface TimelineStep {
   duration_minutes: number;
   parallel_with: number[];
   start_offset: number;
+  is_passive?: boolean;
 }
 
 export interface TimelineData {
