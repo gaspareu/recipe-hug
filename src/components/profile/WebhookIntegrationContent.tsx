@@ -17,18 +17,19 @@ export function WebhookIntegrationContent() {
 
   const curlExample = `curl -X POST "${webhookUrl}" \\
   -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer ${webhookToken || '<votre-token>'}" \\
   -d '{
-    "text": "Votre recette ici...",
-    "webhook_token": "${webhookToken || '<votre-token>'}"
+    "text": "Votre recette ici..."
   }'`;
 
   const shortcutsExample = `URL: ${webhookUrl}
 Méthode: POST
-Headers: Content-Type: application/json
+Headers:
+  Content-Type: application/json
+  Authorization: Bearer ${webhookToken || '<votre-token>'}
 Corps (JSON):
 {
-  "text": "[Texte de la recette]",
-  "webhook_token": "${webhookToken || '<votre-token>'}"
+  "text": "[Texte de la recette]"
 }`;
 
   const downloadShortcutGuide = () => {
@@ -68,12 +69,12 @@ Appuyez sur le "+" en haut à droite.
 | Clé | Valeur |
 |-----|--------|
 | Content-Type | application/json |
+| Authorization | Bearer ${webhookToken} |
 
 **Corps de la requête:** JSON
 \`\`\`json
 {
-  "text": "[Variable: Entrée du raccourci]",
-  "webhook_token": "${webhookToken}"
+  "text": "[Variable: Entrée du raccourci]"
 }
 \`\`\`
 
@@ -253,7 +254,8 @@ Généré le ${new Date().toLocaleDateString('fr-FR')}
               <ul className="text-sm text-muted-foreground space-y-1 pl-4">
                 <li>• Créez un webhook HTTP POST vers l'URL ci-dessus</li>
                 <li>• Header: <code className="bg-muted px-1 rounded">Content-Type: application/json</code></li>
-                <li>• Corps JSON avec <code className="bg-muted px-1 rounded">text</code> et <code className="bg-muted px-1 rounded">webhook_token</code></li>
+                <li>• Header: <code className="bg-muted px-1 rounded">Authorization: Bearer &lt;token&gt;</code></li>
+                <li>• Corps JSON avec le champ <code className="bg-muted px-1 rounded">text</code></li>
               </ul>
             </div>
 
@@ -262,10 +264,12 @@ Généré le ${new Date().toLocaleDateString('fr-FR')}
               <h4 className="text-sm font-medium text-foreground">Format du Payload</h4>
               <pre className="bg-muted p-3 rounded-md text-xs text-foreground overflow-x-auto whitespace-pre-wrap break-all">
 {`{
-  "text": "Contenu de la recette",
-  "webhook_token": "${webhookToken || '<votre-token>'}"
+  "text": "Contenu de la recette"
 }`}
               </pre>
+              <p className="text-xs text-muted-foreground">
+                Le token doit être envoyé dans le header <code className="bg-muted px-1 rounded">Authorization: Bearer {webhookToken || '<token>'}</code>
+              </p>
             </div>
           </CollapsibleContent>
         </Collapsible>
@@ -294,6 +298,31 @@ Généré le ${new Date().toLocaleDateString('fr-FR')}
               </div>
             </div>
 
+            {/* Headers */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-foreground">Headers requis</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 pr-4 font-medium text-foreground">Header</th>
+                      <th className="text-left py-2 font-medium text-foreground">Valeur</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-muted-foreground">
+                    <tr className="border-b border-border/50">
+                      <td className="py-2 pr-4"><code className="bg-muted px-1 rounded">Content-Type</code></td>
+                      <td className="py-2"><code>application/json</code></td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 pr-4"><code className="bg-muted px-1 rounded">Authorization</code></td>
+                      <td className="py-2"><code>Bearer &lt;votre-token&gt;</code></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             {/* Request Body */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-foreground">Corps de la requête</h4>
@@ -308,17 +337,11 @@ Généré le ${new Date().toLocaleDateString('fr-FR')}
                     </tr>
                   </thead>
                   <tbody className="text-muted-foreground">
-                    <tr className="border-b border-border/50">
+                    <tr>
                       <td className="py-2 pr-4"><code className="bg-muted px-1 rounded">text</code></td>
                       <td className="py-2 pr-4">string</td>
                       <td className="py-2 pr-4">✓</td>
                       <td className="py-2">Contenu de la recette (texte, HTML, URL)</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2 pr-4"><code className="bg-muted px-1 rounded">webhook_token</code></td>
-                      <td className="py-2 pr-4">string</td>
-                      <td className="py-2 pr-4">✓</td>
-                      <td className="py-2">Votre token d'authentification</td>
                     </tr>
                   </tbody>
                 </table>
