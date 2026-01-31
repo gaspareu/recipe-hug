@@ -9,7 +9,6 @@ const corsHeaders = {
 // Validation schema for incoming webhook payload
 const WebhookPayloadSchema = z.object({
   text: z.string().min(1, "Text is required").max(10000, "Text too long (max 10000 chars)"),
-  webhook_token: z.string().uuid("Invalid webhook token format"),
 });
 
 // Schema for extracted recipe from AI
@@ -157,8 +156,30 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { text, webhook_token } = validationResult.data;
+    const { text } = validationResult.data;
     console.log("Received webhook request with text length:", text.length);
+
+    // Extract token from Authorization header
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.warn("Missing or invalid Authorization header");
+      return new Response(
+        JSON.stringify({ error: "Missing Authorization header. Use: Authorization: Bearer <your-token>" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const webhook_token = authHeader.replace("Bearer ", "").trim();
+    
+    // Validate token format (UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(webhook_token)) {
+      console.warn("Invalid token format");
+      return new Response(
+        JSON.stringify({ error: "Invalid token format" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Create Supabase client with service role for token lookup
     const supabaseAdmin = createClient(
