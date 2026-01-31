@@ -249,17 +249,17 @@ export default function RecipeEdit() {
           
           <StepsEditor steps={steps} onChange={setSteps} />
 
-          <div className="flex gap-4">
-            <Button type="submit" className="flex-1" disabled={updateRecipe.isPending}>
-              <Save className="mr-2 h-4 w-4" />
-              {updateRecipe.isPending ? 'Enregistrement...' : 'Enregistrer les modifications'}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button type="submit" className="flex-1 min-w-0" disabled={updateRecipe.isPending}>
+              <Save className="mr-2 h-4 w-4 shrink-0" />
+              <span className="truncate">{updateRecipe.isPending ? 'Enregistrement...' : 'Enregistrer'}</span>
             </Button>
             
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button type="button" variant="outline" className="text-destructive">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Supprimer
+                <Button type="button" variant="outline" className="text-destructive shrink-0">
+                  <Trash2 className="h-4 w-4 sm:mr-2" />
+                  <span className="sm:inline hidden">Supprimer</span>
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
