@@ -23,7 +23,7 @@ const ExtractedRecipeSchema = z.object({
   })),
   steps: z.array(z.object({
     order: z.number(),
-    instruction: z.string(),
+    text: z.string(),
   })),
   season: z.string().nullable().optional(),
   nutrition_tags: z.array(z.string()).optional(),
@@ -205,13 +205,23 @@ Deno.serve(async (req) => {
     const systemPrompt = `Tu es un assistant spécialisé dans l'extraction de recettes culinaires.
 À partir du texte fourni, extrais les informations de la recette au format JSON structuré.
 
-INSTRUCTIONS:
-- Extrais le titre, le nombre de portions (si mentionné), les ingrédients et les étapes
-- Pour chaque ingrédient, extrais le nom, la quantité (nombre) et l'unité
-- Pour les étapes, numérote-les dans l'ordre
-- Si une information n'est pas disponible, utilise null
-- Détecte la saison si mentionnée (printemps, été, automne, hiver)
-- Détecte les tags nutritionnels si pertinents (végétarien, vegan, sans gluten, etc.)
+INSTRUCTIONS CRITIQUES:
+- "title": OBLIGATOIRE. Si aucun titre n'est explicitement mentionné, génère un titre descriptif basé sur les ingrédients principaux (ex: "Cheesecake à la vanille", "Poulet rôti aux herbes")
+- "servings": nombre de portions si mentionné, sinon null
+- "ingredients": tableau d'objets avec "name" (string), "quantity" (number ou null), "unit" (string ou null)
+- "steps": tableau d'OBJETS avec "order" (number commençant à 1) et "text" (string avec l'instruction). NE JAMAIS retourner les étapes comme des chaînes simples.
+- "season": saison si mentionnée (printemps, été, automne, hiver), sinon null
+- "nutrition_tags": tableau de tags si pertinents (végétarien, vegan, sans gluten, etc.)
+
+EXEMPLE DE FORMAT ATTENDU:
+{
+  "title": "Cheesecake japonais",
+  "servings": 8,
+  "ingredients": [{"name": "mascarpone", "quantity": 400, "unit": "g"}],
+  "steps": [{"order": 1, "text": "Préchauffer le four à 225°C"}, {"order": 2, "text": "Mélanger les ingrédients"}],
+  "season": null,
+  "nutrition_tags": []
+}
 
 RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
 
@@ -266,14 +276,28 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
       );
     }
 
+    // Normalize steps: convert string arrays to objects if needed
+    if (Array.isArray(extractedRecipe.steps)) {
+      extractedRecipe.steps = extractedRecipe.steps.map((step: any, index: number) => {
+        if (typeof step === 'string') {
+          return { order: index + 1, text: step };
+        }
+        // Handle "instruction" vs "text" field name mismatch
+        if (step.instruction && !step.text) {
+          return { order: step.order || index + 1, text: step.instruction };
+        }
+        return { order: step.order || index + 1, text: step.text || '' };
+      });
+    }
+
     // Validate extracted recipe structure
     const recipeValidation = ExtractedRecipeSchema.safeParse(extractedRecipe);
     if (!recipeValidation.success) {
       console.error("Recipe validation error:", recipeValidation.error.errors);
-      // Try to use partial data anyway
+      // Try to use partial data anyway with proper defaults
       extractedRecipe = {
         title: extractedRecipe.title || "Recette sans titre",
-        servings: extractedRecipe.servings || null,
+        servings: extractedRecipe.servings ?? extractedRecipe.portions ?? null,
         ingredients: Array.isArray(extractedRecipe.ingredients) ? extractedRecipe.ingredients : [],
         steps: Array.isArray(extractedRecipe.steps) ? extractedRecipe.steps : [],
         season: extractedRecipe.season || null,
