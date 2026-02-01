@@ -379,22 +379,36 @@ export default function Home() {
                 
                 {/* Right side buttons - stay at bottom */}
                 <div className="flex items-center gap-1">
-                  {/* Microphone button - visible when input is empty or short */}
-                  {!input.trim() && !selectedImage && <button onClick={() => {
-                  if (!voiceEnabled) {
-                    toggleVoice();
-                    setTimeout(() => startListening(), 100);
-                  } else if (isListening) {
-                    stopListening();
-                  } else {
-                    startListening();
-                  }
-                }} disabled={isStreaming} className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${isListening ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-foreground'}`} title={isListening ? "Arrêter l'écoute" : "Dicter"}>
+                  {/* Microphone button - visible when input is empty */}
+                  {!input.trim() && !selectedImage ? (
+                    <button 
+                      onClick={() => {
+                        if (!voiceEnabled) {
+                          toggleVoice();
+                          setTimeout(() => startListening(), 100);
+                        } else if (isListening) {
+                          stopListening();
+                        } else {
+                          startListening();
+                        }
+                      }} 
+                      disabled={isStreaming} 
+                      className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${isListening ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-foreground'}`} 
+                      title={isListening ? "Arrêter l'écoute" : "Dicter"}
+                    >
                       {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                    </button>}
-                  
-                  {/* Voice mode / Send button */}
-                  
+                    </button>
+                  ) : (
+                    /* Send button - visible when input has content */
+                    <button 
+                      onClick={handleSubmit}
+                      disabled={isStreaming}
+                      className="flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors bg-foreground text-background hover:bg-foreground/90"
+                      title="Envoyer"
+                    >
+                      <ArrowUp className="h-5 w-5" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
