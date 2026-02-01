@@ -8,16 +8,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Input validation schema
 const IngredientSchema = z.object({
   name: z.string(),
   quantity: z.union([z.string(), z.number()]).optional(),
   unit: z.string().optional(),
 });
 
-const StepSchema = z.object({
-  text: z.string(),
-});
+const StepSchema = z.object({ text: z.string() });
 
 const RequestSchema = z.object({
   title: z.string().min(1, "Title is required").max(500, "Title too long"),
@@ -25,19 +22,120 @@ const RequestSchema = z.object({
   steps: z.array(StepSchema).max(50, "Too many steps").optional(),
 });
 
+// ===== AI PROVIDER SUPPORT =====
+type AIProvider = "lovable" | "gemini" | "openai" | "anthropic";
+
+interface AISettings {
+  provider: AIProvider;
+  api_key: string | null;
+  preferred_model: string | null;
+}
+
+const DEFAULT_MODELS: Record<AIProvider, string> = {
+  lovable: "google/gemini-2.5-flash",
+  gemini: "gemini-2.5-flash",
+  openai: "gpt-4o-mini",
+  anthropic: "claude-3-5-haiku-latest",
+};
+
+async function getUserAISettings(supabaseClient: any, userId: string): Promise<AISettings> {
+  try {
+    const { data, error } = await supabaseClient
+      .from("user_ai_settings")
+      .select("provider, api_key, preferred_model")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error || !data) return { provider: "lovable", api_key: null, preferred_model: null };
+    return { provider: data.provider || "lovable", api_key: data.api_key, preferred_model: data.preferred_model };
+  } catch {
+    return { provider: "lovable", api_key: null, preferred_model: null };
+  }
+}
+
+async function callAINonStreaming(settings: AISettings, messages: any[]): Promise<any> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const { provider, api_key, preferred_model } = settings;
+  // Use faster/cheaper model for analysis tasks
+  const model = provider === "lovable" ? DEFAULT_MODELS.lovable : (preferred_model || DEFAULT_MODELS[provider]);
+
+  if (provider !== "lovable" && !api_key) {
+    return callLovableAINonStreaming(LOVABLE_API_KEY!, messages, DEFAULT_MODELS.lovable);
+  }
+
+  switch (provider) {
+    case "gemini": return callGeminiAINonStreaming(api_key!, model, messages);
+    case "openai": return callOpenAINonStreaming(api_key!, model, messages);
+    case "anthropic": return callAnthropicAINonStreaming(api_key!, model, messages);
+    default: return callLovableAINonStreaming(LOVABLE_API_KEY!, messages, model);
+  }
+}
+
+async function callLovableAINonStreaming(apiKey: string, messages: any[], model: string): Promise<any> {
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model, messages }),
+  });
+  if (!response.ok) throw new Error(`AI error: ${response.status}`);
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content;
+}
+
+async function callGeminiAINonStreaming(apiKey: string, model: string, messages: any[]): Promise<any> {
+  const geminiMessages = messages.map((msg) => ({
+    role: msg.role === "assistant" ? "model" : "user",
+    parts: [{ text: msg.content }],
+  }));
+  const mergedMessages: any[] = [];
+  for (const msg of geminiMessages) {
+    if (mergedMessages.length > 0 && mergedMessages[mergedMessages.length - 1].role === msg.role) {
+      mergedMessages[mergedMessages.length - 1].parts.push(...msg.parts);
+    } else {
+      mergedMessages.push(msg);
+    }
+  }
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: mergedMessages }),
+  });
+  if (!response.ok) throw new Error(`Gemini error: ${response.status}`);
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text;
+}
+
+async function callOpenAINonStreaming(apiKey: string, model: string, messages: any[]): Promise<any> {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model, messages }),
+  });
+  if (!response.ok) throw new Error(`OpenAI error: ${response.status}`);
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content;
+}
+
+async function callAnthropicAINonStreaming(apiKey: string, model: string, messages: any[]): Promise<any> {
+  const body: any = { model, max_tokens: 4096, messages: messages.map((msg) => ({ role: msg.role, content: msg.content })) };
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`Anthropic error: ${response.status}`);
+  const data = await response.json();
+  return data.content?.[0]?.text;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify authentication
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Authentication required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -48,40 +146,29 @@ serve(async (req) => {
       throw new Error("Missing required environment variables");
     }
 
-    // Verify JWT
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    const token = authHeader.replace('Bearer ', '');
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+    const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
-    
+
     if (claimsError || !claimsData?.claims) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Validate input
+    const userId = claimsData.claims.sub as string;
     const body = await req.json();
     const parseResult = RequestSchema.safeParse(body);
-    
+
     if (!parseResult.success) {
-      return new Response(
-        JSON.stringify({ error: parseResult.error.errors[0]?.message || 'Invalid input' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: parseResult.error.errors[0]?.message || "Invalid input" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const { title, ingredients, steps } = parseResult.data;
+    console.log(`Analyzing recipe: ${title} for user: ${userId}`);
 
-    console.log(`Analyzing recipe: ${title} for user: ${claimsData.claims.sub}`);
+    const aiSettings = await getUserAISettings(supabaseClient, userId);
+    console.log("AI provider:", aiSettings.provider);
 
-    const ingredientsList = ingredients
-      .map((i: any) => `${i.quantity || ""} ${i.unit || ""} ${i.name}`.trim())
-      .join(", ");
-
+    const ingredientsList = ingredients.map((i: any) => `${i.quantity || ""} ${i.unit || ""} ${i.name}`.trim()).join(", ");
     const stepsList = steps?.map((s: any) => s.text).join(" ") || "";
 
     const prompt = `Analyse cette recette et génère un résumé descriptif, des tags nutritionnels et la saison idéale.
@@ -98,47 +185,19 @@ Réponds en JSON avec ce format exact:
   "season": "Saison de la recette en fonction des ingrédients"
 }
 
-Pour ai_summary: Une description courte et générique du plat (type de cuisine, caractéristiques principales). Évite les détails trop spécifiques.
-
+Pour ai_summary: Une description courte et générique du plat (type de cuisine, caractéristiques principales).
 Pour nutrition_tags: Choisis 1 à 3 tags maximum parmi: "protéines", "fibres", "léger", "végétarien", "végan", "sans gluten", "sans lactose", "vitamines", "fer", "oméga-3", "énergétique", "réconfortant"
-
 Pour calorie_score: Note de 1 à 5 (1=très calorique >600kcal, 5=très léger <150kcal)
-
-Pour season: Détermine la saison idéale en fonction de la saisonnalité des ingrédients en France. Choisis parmi: "printemps", "été", "automne", "hiver", "toutes saisons". Base-toi sur les calendriers de production française des fruits, légumes et autres ingrédients.
+Pour season: Choisis parmi: "printemps", "été", "automne", "hiver", "toutes saisons"
 
 Réponds uniquement avec le JSON, sans markdown ni texte supplémentaire.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content;
-
+    const aiResponse = await callAINonStreaming(aiSettings, [{ role: "user", content: prompt }]);
     console.log("AI response received");
 
-    // Parse JSON from response
     let analysis;
     try {
-      // Remove markdown code blocks if present
-      const cleanJson = aiResponse
-        .replace(/```json\n?/g, "")
-        .replace(/```\n?/g, "")
-        .trim();
+      const cleanJson = aiResponse.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       analysis = JSON.parse(cleanJson);
     } catch (parseError) {
       console.error("Failed to parse AI response:", parseError);
@@ -150,9 +209,6 @@ Réponds uniquement avec le JSON, sans markdown ni texte supplémentaire.`;
     return new Response(JSON.stringify(analysis), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
     console.error("Error in analyze-recipe function:", error);
-    return new Response(JSON.stringify({ error: "Failed to analyze recipe" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ error: "Failed to analyze recipe" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

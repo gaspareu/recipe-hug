@@ -7,7 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Input validation schema
 const MessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: z.string().max(10000, "Message content too long"),
@@ -18,6 +17,177 @@ const RequestSchema = z.object({
   currentPreferences: z.any().optional(),
   isContinuation: z.boolean().optional().default(false),
 });
+
+// ===== AI PROVIDER SUPPORT =====
+type AIProvider = "lovable" | "gemini" | "openai" | "anthropic";
+
+interface AISettings {
+  provider: AIProvider;
+  api_key: string | null;
+  preferred_model: string | null;
+}
+
+const DEFAULT_MODELS: Record<AIProvider, string> = {
+  lovable: "google/gemini-3-flash-preview",
+  gemini: "gemini-2.5-flash",
+  openai: "gpt-4o",
+  anthropic: "claude-3-5-sonnet-latest",
+};
+
+async function getUserAISettings(supabaseClient: any, userId: string): Promise<AISettings> {
+  try {
+    const { data, error } = await supabaseClient
+      .from("user_ai_settings")
+      .select("provider, api_key, preferred_model")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error || !data) return { provider: "lovable", api_key: null, preferred_model: null };
+    return { provider: data.provider || "lovable", api_key: data.api_key, preferred_model: data.preferred_model };
+  } catch {
+    return { provider: "lovable", api_key: null, preferred_model: null };
+  }
+}
+
+async function callAI(settings: AISettings, messages: any[], options: { tools?: any[]; stream?: boolean } = {}): Promise<Response> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const { provider, api_key, preferred_model } = settings;
+  const model = preferred_model || DEFAULT_MODELS[provider];
+
+  if (provider !== "lovable" && !api_key) {
+    return callLovableAI(LOVABLE_API_KEY!, messages, { ...options, model: DEFAULT_MODELS.lovable });
+  }
+
+  switch (provider) {
+    case "gemini": return callGeminiAI(api_key!, model, messages, options);
+    case "openai": return callOpenAI(api_key!, model, messages, options);
+    case "anthropic": return callAnthropicAI(api_key!, model, messages, options);
+    default: return callLovableAI(LOVABLE_API_KEY!, messages, { ...options, model });
+  }
+}
+
+async function callLovableAI(apiKey: string, messages: any[], options: any): Promise<Response> {
+  const body: any = { model: options.model, messages, stream: options.stream ?? true };
+  if (options.tools?.length) body.tools = options.tools;
+  return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function callGeminiAI(apiKey: string, model: string, messages: any[], options: any): Promise<Response> {
+  const geminiMessages = messages.map((msg) => ({
+    role: msg.role === "system" ? "user" : msg.role === "assistant" ? "model" : "user",
+    parts: [{ text: msg.role === "system" ? `[System]: ${msg.content}` : msg.content }],
+  }));
+  const mergedMessages: any[] = [];
+  for (const msg of geminiMessages) {
+    if (mergedMessages.length > 0 && mergedMessages[mergedMessages.length - 1].role === msg.role) {
+      mergedMessages[mergedMessages.length - 1].parts.push(...msg.parts);
+    } else {
+      mergedMessages.push(msg);
+    }
+  }
+  const body: any = { contents: mergedMessages, generationConfig: { temperature: 0.7, maxOutputTokens: 8192 } };
+  if (options.tools?.length) {
+    body.tools = [{ functionDeclarations: options.tools.map((t: any) => ({ name: t.function.name, description: t.function.description, parameters: t.function.parameters })) }];
+  }
+  const endpoint = options.stream
+    ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (options.stream && response.ok) return transformGeminiStream(response);
+  return response;
+}
+
+function transformGeminiStream(response: Response): Response {
+  const reader = response.body!.getReader();
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { controller.enqueue(encoder.encode("data: [DONE]\n\n")); controller.close(); break; }
+        buffer += decoder.decode(value, { stream: true });
+        try {
+          const jsonMatch = buffer.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const chunks = JSON.parse(jsonMatch[0]);
+            for (const chunk of chunks) {
+              const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text || "";
+              const toolCalls = chunk.candidates?.[0]?.content?.parts?.[0]?.functionCall;
+              const openAIChunk: any = { choices: [{ delta: {}, index: 0 }] };
+              if (text) openAIChunk.choices[0].delta.content = text;
+              if (toolCalls) openAIChunk.choices[0].delta.tool_calls = [{ id: `call_${Date.now()}`, type: "function", function: { name: toolCalls.name, arguments: JSON.stringify(toolCalls.args) } }];
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAIChunk)}\n\n`));
+            }
+            buffer = "";
+          }
+        } catch { /* Keep accumulating */ }
+      }
+    },
+  });
+  return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
+}
+
+async function callOpenAI(apiKey: string, model: string, messages: any[], options: any): Promise<Response> {
+  const body: any = { model, messages, stream: options.stream ?? true };
+  if (options.tools?.length) body.tools = options.tools;
+  return fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function callAnthropicAI(apiKey: string, model: string, messages: any[], options: any): Promise<Response> {
+  const systemMessage = messages.find((m) => m.role === "system")?.content || "";
+  const chatMessages = messages.filter((m) => m.role !== "system").map((msg) => ({ role: msg.role, content: msg.content }));
+  const body: any = { model, max_tokens: 8192, messages: chatMessages };
+  if (systemMessage) body.system = systemMessage;
+  if (options.tools?.length) body.tools = options.tools.map((t: any) => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters }));
+  if (options.stream) body.stream = true;
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (options.stream && response.ok) return transformAnthropicStream(response);
+  return response;
+}
+
+function transformAnthropicStream(response: Response): Response {
+  const reader = response.body!.getReader();
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { controller.enqueue(encoder.encode("data: [DONE]\n\n")); controller.close(); break; }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === "content_block_delta") {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: data.delta?.text || "" }, index: 0 }] })}\n\n`));
+              } else if (data.type === "tool_use") {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ id: data.id, type: "function", function: { name: data.name, arguments: JSON.stringify(data.input) } }] }, index: 0 }] })}\n\n`));
+              }
+            } catch { /* Skip */ }
+          }
+        }
+      }
+    },
+  });
+  return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
+}
 
 // ===== MEMORY MODE PROMPT =====
 const MEMORY_PROMPT = `Tu es Chef, l'assistant mémoire de Grimoire. Tu gères les connaissances culinaires de l'utilisateur.
@@ -60,28 +230,7 @@ Tu aides l'utilisateur à :
 ## COMPORTEMENT
 
 ### Affichage des préférences
-Quand l'utilisateur demande ce que tu sais de lui, utilise get_preferences puis formate joliment :
-
-"Voici ce que je connais de toi :
-
-🧂 **Goûts**
-- Tu aimes : [liked_flavors], [liked_ingredients]
-- Tu évites : [disliked_flavors], [disliked_ingredients]
-
-⚠️ **Contraintes**
-- Allergies : [allergies]
-- Régimes : [diets]
-
-🍳 **Équipement**
-- Disponible : [available]
-- Non disponible : [unavailable]
-
-👨‍🍳 **Style**
-- Cuisines favorites : [favorite_cuisines]
-- Techniques : [favorite_techniques]
-- Difficulté préférée : [preferred_difficulty]
-
-Tu veux modifier quelque chose ?"
+Quand l'utilisateur demande ce que tu sais de lui, utilise get_preferences puis formate joliment.
 
 ### Modifications
 Quand l'utilisateur veut modifier ses préférences :
@@ -91,62 +240,19 @@ Quand l'utilisateur veut modifier ses préférences :
 
 ## DÉCLENCHEMENT DES OUTILS
 
-### get_preferences
-- Au début de la conversation mémoire (automatique si isContinuation)
-- Quand l'utilisateur demande "qu'est-ce que tu sais", "mes préférences", "montre ma mémoire"
-
 ### update_preferences
 Appeler IMMÉDIATEMENT quand l'utilisateur confirme une modification :
 - "ok", "oui", "parfait", "c'est bon", "ajoute", "retire", "enlève"
 - Toute confirmation claire
 
-Format des opérations :
-{
-  "operations": [
-    { "operation": "add", "category": "dietary_constraints", "field": "allergies", "values": ["Gluten"] },
-    { "operation": "remove", "category": "taste_preferences", "field": "disliked_ingredients", "values": ["Coriandre"] },
-    { "operation": "set", "category": "culinary_style", "field": "preferred_difficulty", "value": "moyen" }
-  ]
-}
+Ton : chaleureux, enthousiaste, expert culinaire français.`;
 
-## EXEMPLES
-
-### Exemple 1 : Affichage
-User: "Qu'est-ce que tu sais de moi ?"
-[APPEL get_preferences]
-→ Affiche les préférences formatées
-
-### Exemple 2 : Ajout
-User: "Je suis allergique aux arachides"
-→ "Noté ! J'ajoute les arachides à tes allergies. ✅"
-[APPEL update_preferences avec operation: "add", category: "dietary_constraints", field: "allergies", values: ["Arachides"]]
-
-### Exemple 3 : Suppression
-User: "En fait je ne suis plus intolérant au lactose"
-→ "Super nouvelle ! Je retire le lactose de tes allergies. ✅"
-[APPEL update_preferences avec operation: "remove", category: "dietary_constraints", field: "allergies", values: ["Lactose"]]
-
-### Exemple 4 : Modification
-User: "J'ai acheté un Thermomix !"
-→ "Excellent investissement ! J'ajoute le Thermomix à ton équipement. ✅"
-[APPEL update_preferences avec operation: "add", category: "kitchen_equipment", field: "available", values: ["Thermomix"]]
-
-## RÈGLES IMPORTANTES
-1. Sois proactif : propose des suggestions pertinentes
-2. Confirme toujours les modifications effectuées
-3. Si la catégorie ou le champ n'est pas clair, demande clarification
-4. N'invente pas de préférences - base-toi uniquement sur ce que l'utilisateur dit`;
-
-// ===== MEMORY MODE TOOLS =====
 const GET_PREFERENCES_TOOL = {
   type: "function",
   function: {
     name: "get_preferences",
     description: "Récupère les préférences culinaires actuelles de l'utilisateur.",
-    parameters: {
-      type: "object",
-      properties: {},
-    },
+    parameters: { type: "object", properties: {} },
   },
 };
 
@@ -154,45 +260,26 @@ const UPDATE_PREFERENCES_TOOL = {
   type: "function",
   function: {
     name: "update_preferences",
-    description: "Met à jour les préférences culinaires de l'utilisateur. Utiliser pour ajouter, supprimer ou modifier des préférences.",
+    description: "Met à jour les préférences culinaires de l'utilisateur.",
     parameters: {
       type: "object",
       properties: {
         operations: {
           type: "array",
-          description: "Liste des opérations à effectuer",
           items: {
             type: "object",
             properties: {
-              operation: {
-                type: "string",
-                enum: ["add", "remove", "set"],
-                description: "Type d'opération : add (ajouter à une liste), remove (retirer d'une liste), set (définir une valeur)"
-              },
-              category: {
-                type: "string",
-                enum: ["taste_preferences", "kitchen_equipment", "culinary_style", "dietary_constraints"],
-                description: "Catégorie de préférence"
-              },
-              field: {
-                type: "string",
-                description: "Champ à modifier (ex: liked_ingredients, allergies, available, favorite_cuisines, preferred_difficulty)"
-              },
-              values: {
-                type: "array",
-                items: { type: "string" },
-                description: "Valeurs à ajouter ou retirer (pour add/remove)"
-              },
-              value: {
-                type: "string",
-                description: "Nouvelle valeur (pour set, ex: preferred_difficulty)"
-              }
+              operation: { type: "string", enum: ["add", "remove", "set"] },
+              category: { type: "string", enum: ["taste_preferences", "kitchen_equipment", "culinary_style", "dietary_constraints"] },
+              field: { type: "string" },
+              values: { type: "array", items: { type: "string" } },
+              value: { type: "string" },
             },
-            required: ["operation", "category", "field"]
-          }
-        }
+            required: ["operation", "category", "field"],
+          },
+        },
       },
-      required: ["operations"]
+      required: ["operations"],
     },
   },
 };
@@ -201,18 +288,14 @@ const BACK_TO_ORCHESTRATION_TOOL = {
   type: "function",
   function: {
     name: "back_to_orchestration",
-    description: "Retourne au mode principal. Utiliser quand l'utilisateur veut faire autre chose que gérer sa mémoire.",
+    description: "Retourne au mode principal.",
     parameters: { type: "object", properties: {} },
   },
 };
 
-// Format preferences for display
 function formatPreferencesForPrompt(prefs: any): string {
   if (!prefs) return "Aucune préférence enregistrée pour le moment.";
-
   const sections: string[] = [];
-
-  // Taste preferences
   const taste = prefs.taste_preferences || {};
   const tasteParts: string[] = [];
   if (taste.liked_flavors?.length > 0) tasteParts.push(`Saveurs aimées : ${taste.liked_flavors.join(", ")}`);
@@ -220,34 +303,24 @@ function formatPreferencesForPrompt(prefs: any): string {
   if (taste.liked_ingredients?.length > 0) tasteParts.push(`Ingrédients favoris : ${taste.liked_ingredients.join(", ")}`);
   if (taste.disliked_ingredients?.length > 0) tasteParts.push(`Ingrédients évités : ${taste.disliked_ingredients.join(", ")}`);
   if (tasteParts.length > 0) sections.push(`🧂 GOÛTS\n${tasteParts.join("\n")}`);
-
-  // Dietary constraints
   const diet = prefs.dietary_constraints || {};
   const dietParts: string[] = [];
   if (diet.allergies?.length > 0) dietParts.push(`⚠️ Allergies : ${diet.allergies.join(", ")}`);
   if (diet.diets?.length > 0) dietParts.push(`Régimes : ${diet.diets.join(", ")}`);
   if (diet.restrictions?.length > 0) dietParts.push(`Restrictions : ${diet.restrictions.join(", ")}`);
   if (dietParts.length > 0) sections.push(`🚫 CONTRAINTES ALIMENTAIRES\n${dietParts.join("\n")}`);
-
-  // Kitchen equipment
   const equipment = prefs.kitchen_equipment || {};
   const equipParts: string[] = [];
   if (equipment.available?.length > 0) equipParts.push(`Disponible : ${equipment.available.join(", ")}`);
   if (equipment.unavailable?.length > 0) equipParts.push(`Non disponible : ${equipment.unavailable.join(", ")}`);
   if (equipParts.length > 0) sections.push(`🍳 ÉQUIPEMENT\n${equipParts.join("\n")}`);
-
-  // Culinary style
   const style = prefs.culinary_style || {};
   const styleParts: string[] = [];
   if (style.favorite_cuisines?.length > 0) styleParts.push(`Cuisines favorites : ${style.favorite_cuisines.join(", ")}`);
   if (style.favorite_techniques?.length > 0) styleParts.push(`Techniques : ${style.favorite_techniques.join(", ")}`);
   if (style.preferred_difficulty) styleParts.push(`Difficulté préférée : ${style.preferred_difficulty}`);
   if (styleParts.length > 0) sections.push(`👨‍🍳 STYLE CULINAIRE\n${styleParts.join("\n")}`);
-
-  if (sections.length === 0) {
-    return "Tu n'as pas encore de préférences enregistrées. Dis-moi ce que tu aimes, tes allergies, ton équipement...";
-  }
-
+  if (sections.length === 0) return "Tu n'as pas encore de préférences enregistrées.";
   return sections.join("\n\n");
 }
 
@@ -257,13 +330,9 @@ serve(async (req) => {
   }
 
   try {
-    // Verify authentication
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: "unauthorized", message: "Authentication required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -274,100 +343,54 @@ serve(async (req) => {
       throw new Error("Missing required environment variables");
     }
 
-    // Verify JWT and get user
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
 
     if (claimsError || !claimsData?.claims) {
-      return new Response(
-        JSON.stringify({ error: "unauthorized", message: "Invalid token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const userId = claimsData.claims.sub;
-
-    // Validate input
+    const userId = claimsData.claims.sub as string;
     const body = await req.json();
     const parseResult = RequestSchema.safeParse(body);
 
     if (!parseResult.success) {
-      return new Response(
-        JSON.stringify({ error: "validation_error", message: parseResult.error.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "validation_error", message: parseResult.error.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const { messages, currentPreferences, isContinuation } = parseResult.data;
+    console.log("Memory assistant - messages:", messages.length, "user:", userId);
 
-    console.log("Memory assistant - messages:", messages.length, "user:", userId, "continuation:", isContinuation);
+    const aiSettings = await getUserAISettings(supabaseClient, userId);
+    console.log("AI provider:", aiSettings.provider);
 
-    // Build system prompt
     let systemPrompt = MEMORY_PROMPT;
-
-    // Add current preferences context
     if (currentPreferences) {
       systemPrompt += `\n\n--- PRÉFÉRENCES ACTUELLES ---\n${formatPreferencesForPrompt(currentPreferences)}\n--- FIN PRÉFÉRENCES ---`;
     }
-
-    // Add continuation instruction if this is after a mode switch
     if (isContinuation) {
       systemPrompt += `\n\n## MODE CONTINUATION
 Tu viens d'être activé pour gérer la mémoire culinaire de l'utilisateur.
 COMMENCE IMMÉDIATEMENT par afficher ses préférences actuelles de manière claire et structurée.
-Puis demande ce qu'il souhaite modifier.
 NE MENTIONNE PAS le changement de mode.`;
     }
 
     const tools = [GET_PREFERENCES_TOOL, UPDATE_PREFERENCES_TOOL, BACK_TO_ORCHESTRATION_TOOL];
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
-        tools,
-        stream: true,
-      }),
-    });
+    const response = await callAI(aiSettings, [{ role: "system", content: systemPrompt }, ...messages], { tools, stream: true });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Trop de requêtes, réessaie dans un moment." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Crédits épuisés." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      if (response.status === 429) return new Response(JSON.stringify({ error: "Trop de requêtes." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (response.status === 402) return new Response(JSON.stringify({ error: "Crédits épuisés." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      return new Response(JSON.stringify({ error: "Erreur du service IA" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("AI error:", response.status, errorText);
+      return new Response(JSON.stringify({ error: "Erreur du service IA" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-    });
+    return new Response(response.body, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
   } catch (error) {
     console.error("memory-assistant error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
