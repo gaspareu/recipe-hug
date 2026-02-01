@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.analyze-recipe-timeline]
 verify_jwt = false
+
+[functions.validate-ai-key]
+verify_jwt = false

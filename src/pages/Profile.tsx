@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Camera, User, Sun, ChefHat, Webhook } from 'lucide-react';
+import { ArrowLeft, Save, Camera, User, Sun, ChefHat, Webhook, Cpu } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { CollapsibleSection } from '@/components/profile/CollapsibleSection';
 import { CulinaryPreferencesContent } from '@/components/profile/CulinaryPreferencesContent';
 import { WebhookIntegrationContent } from '@/components/profile/WebhookIntegrationContent';
 import { ThemeSelectorContent } from '@/components/profile/ThemeSelectorContent';
+import { AIProviderSettingsContent } from '@/components/profile/AIProviderSettingsContent';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -251,6 +252,15 @@ export default function Profile() {
           icon={<ChefHat className="h-5 w-5" />}
         >
           <CulinaryPreferencesContent />
+        </CollapsibleSection>
+
+        {/* AI Provider Settings */}
+        <CollapsibleSection
+          title="Configuration IA"
+          description="Utilisez vos propres clés API"
+          icon={<Cpu className="h-5 w-5" />}
+        >
+          <AIProviderSettingsContent />
         </CollapsibleSection>
 
         {/* Webhook Integration */}
