@@ -1,107 +1,157 @@
 
-# Plan : Système de Webhooks pour Créer des Recettes
+# Plan : Clés API IA personnalisées
 
 ## Objectif
-Permettre de créer des recettes automatiquement en envoyant du contenu textuel vers l'application via un webhook HTTP. Cela permettra d'intégrer l'app avec des automatisations (Zapier, Make, IFTTT, shortcuts iOS, etc.).
+Permettre aux utilisateurs de configurer leurs propres clés API pour utiliser des fournisseurs IA externes (Google Gemini, OpenAI, Anthropic) à la place de Lovable AI.
 
-## Fonctionnement
+## Architecture proposée
+
+### 1. Nouvelle table `user_ai_settings`
+
+Stockage sécurisé des paramètres IA de l'utilisateur :
 
 ```text
-┌─────────────────────┐      POST /webhook-recipe       ┌──────────────────────┐
-│   Source externe    │ ─────────────────────────────▶ │   Edge Function      │
-│  (Zapier, Make,     │   { "text": "...", "token": "..." }  │  webhook-recipe      │
-│   Shortcuts, API)   │                                 └──────────────────────┘
-└─────────────────────┘                                           │
-                                                                  ▼
-                                                      ┌──────────────────────┐
-                                                      │   Lovable AI         │
-                                                      │   (Analyse + Parse)  │
-                                                      └──────────────────────┘
-                                                                  │
-                                                                  ▼
-                                                      ┌──────────────────────┐
-                                                      │   Base de données    │
-                                                      │   (Nouvelle recette) │
-                                                      └──────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    user_ai_settings                         │
+├─────────────────────────────────────────────────────────────┤
+│ id               UUID (PK)                                  │
+│ user_id          UUID (FK → auth.users, UNIQUE)             │
+│ provider         TEXT ('lovable' | 'gemini' | 'openai' |    │
+│                        'anthropic')                         │
+│ api_key          TEXT (clé chiffrée côté client)            │
+│ preferred_model  TEXT (ex: 'gpt-4o', 'claude-3-5-sonnet')   │
+│ created_at       TIMESTAMPTZ                                │
+│ updated_at       TIMESTAMPTZ                                │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Détails Techniques
+### 2. Interface utilisateur - Nouvelle section Profil
 
-### 1. Nouvelle Edge Function : `webhook-recipe`
+Une nouvelle section "Configuration IA" dans le profil :
 
-**Endpoint** : `POST /functions/v1/webhook-recipe`
+- Sélecteur de fournisseur (radio buttons avec logos)
+  - Lovable AI (défaut, gratuit inclus)
+  - Google Gemini
+  - OpenAI
+  - Anthropic
+- Champ clé API (masqué avec toggle visibilité)
+- Sélecteur de modèle par fournisseur
+- Bouton "Tester la connexion"
+- Indicateur de statut (connecté/erreur)
 
-**Authentification** : Clé API personnelle (token webhook)
-- Pas de JWT classique car appelé depuis des systèmes externes
-- Chaque utilisateur aura un token webhook unique stocké dans son profil
+### 3. Modèles disponibles par fournisseur
 
-**Payload accepté** :
-```json
-{
-  "text": "Contenu de la recette en texte libre...",
-  "webhook_token": "token_unique_utilisateur"
+| Fournisseur | Modèles proposés |
+|-------------|------------------|
+| Lovable AI | gemini-3-flash-preview (défaut) |
+| Google Gemini | gemini-2.5-flash, gemini-2.5-pro |
+| OpenAI | gpt-4o, gpt-4o-mini, gpt-4-turbo |
+| Anthropic | claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus |
+
+### 4. Modification des Edge Functions
+
+Logique de routage dans toutes les fonctions IA :
+
+```text
+┌──────────────────┐     ┌────────────────────┐
+│ Requête frontend │────▶│ Edge Function      │
+└──────────────────┘     └────────┬───────────┘
+                                  │
+                         ┌────────▼────────┐
+                         │ Lire settings   │
+                         │ user_ai_settings│
+                         └────────┬────────┘
+                                  │
+            ┌─────────────────────┼─────────────────────┐
+            │                     │                     │
+     ┌──────▼──────┐      ┌───────▼───────┐    ┌───────▼───────┐
+     │ Lovable AI  │      │ Google/OpenAI │    │   Anthropic   │
+     │ Gateway     │      │ Direct API    │    │   Direct API  │
+     └─────────────┘      └───────────────┘    └───────────────┘
+```
+
+### 5. Sécurité
+
+- **Chiffrement côté client** : Les clés API sont chiffrées avec une clé dérivée du mot de passe utilisateur avant stockage
+- **RLS strict** : Chaque utilisateur ne peut lire/écrire que ses propres paramètres
+- **Validation** : Test de connexion avant sauvegarde d'une clé
+- **Pas de logs des clés** : Les clés ne sont jamais loguées dans les Edge Functions
+
+---
+
+## Fichiers à créer/modifier
+
+### Nouveaux fichiers
+- `src/components/profile/AIProviderSettings.tsx` - Interface de configuration
+- `src/hooks/useAISettings.ts` - Hook de gestion des paramètres IA
+- `supabase/functions/validate-ai-key/index.ts` - Validation des clés API
+
+### Fichiers à modifier
+- `src/pages/Profile.tsx` - Ajouter la nouvelle section
+- `supabase/functions/home-assistant/index.ts` - Routage multi-fournisseur
+- `supabase/functions/cooking-assistant/index.ts` - Routage multi-fournisseur
+- `supabase/functions/generate-recipe/index.ts` - Routage multi-fournisseur
+- `supabase/functions/analyze-recipe/index.ts` - Routage multi-fournisseur
+- `supabase/functions/parse-recipe-image/index.ts` - Routage multi-fournisseur
+- `supabase/functions/extract-user-preferences/index.ts` - Routage multi-fournisseur
+- `supabase/functions/memory-assistant/index.ts` - Routage multi-fournisseur
+- `supabase/functions/analyze-recipe-timeline/index.ts` - Routage multi-fournisseur
+- `supabase/functions/generate-recipe-image/index.ts` - Routage multi-fournisseur (image)
+- `supabase/functions/webhook-recipe/index.ts` - Routage multi-fournisseur
+
+### Migration base de données
+- Création de la table `user_ai_settings`
+- Politiques RLS pour la nouvelle table
+
+---
+
+## Détails techniques
+
+### Hook `useAISettings`
+
+```typescript
+interface AISettings {
+  provider: 'lovable' | 'gemini' | 'openai' | 'anthropic';
+  apiKey: string | null;
+  preferredModel: string | null;
 }
+
+// Fonctions exposées
+- getSettings(): AISettings
+- updateSettings(settings): void
+- validateKey(provider, key): Promise<boolean>
 ```
 
-**Fonctionnement** :
-1. Valide le token webhook et identifie l'utilisateur
-2. Envoie le texte à l'IA pour extraction structurée (titre, ingrédients, étapes)
-3. Crée la recette dans la base de données
-4. Retourne l'ID et le titre de la recette créée
+### Composant `AIProviderSettings`
 
-### 2. Modifications de la Base de Données
+Structure du composant :
+1. Carte avec icône et description
+2. Radio group pour sélection du fournisseur
+3. Formulaire conditionnel (clé + modèle) si fournisseur externe
+4. Bouton de test avec état de chargement
+5. Messages d'erreur/succès
 
-**Nouvelle colonne dans `profiles`** :
-- `webhook_token` (text, unique, nullable) : Token personnel pour les webhooks
+### Fonction utilitaire partagée pour Edge Functions
 
-**Fonction SQL** :
-- Génération automatique du token à la demande
+Créer un module `_shared/ai-router.ts` avec :
+- `getAIConfig(userId)` - Récupère les paramètres utilisateur
+- `callAI(config, messages, options)` - Appelle le bon endpoint selon le provider
+- Gestion des erreurs spécifiques par fournisseur
 
-### 3. Interface Utilisateur (Page Profil)
+### Endpoints API par fournisseur
 
-Ajouter une section "Intégrations" dans le profil avec :
-- Affichage du token webhook (avec bouton copier)
-- Bouton pour régénérer le token
-- Instructions d'utilisation avec exemples (curl, shortcuts)
+| Fournisseur | Endpoint |
+|-------------|----------|
+| Lovable AI | `https://ai.gateway.lovable.dev/v1/chat/completions` |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` |
+| OpenAI | `https://api.openai.com/v1/chat/completions` |
+| Anthropic | `https://api.anthropic.com/v1/messages` |
 
-### 4. Sécurité
-
-- Token webhook unique par utilisateur (UUID)
-- Rate limiting sur l'endpoint
-- Validation stricte du payload (Zod)
-- Longueur max du texte : 10 000 caractères
-- Logging des appels pour audit
-
-## Fichiers à Créer/Modifier
-
-| Fichier | Action | Description |
-|---------|--------|-------------|
-| `supabase/functions/webhook-recipe/index.ts` | Créer | Edge Function du webhook |
-| `supabase/config.toml` | Modifier | Ajouter config de la fonction |
-| Migration SQL | Créer | Ajouter colonne webhook_token |
-| `src/pages/Profile.tsx` | Modifier | Section gestion du token |
-| `src/hooks/useWebhookToken.ts` | Créer | Hook pour gérer le token |
-
-## Exemple d'Utilisation
-
-### cURL
-```bash
-curl -X POST https://ggtkirrfgihghlmenrfd.supabase.co/functions/v1/webhook-recipe \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Tarte aux pommes : 4 pommes, 200g de farine, 100g de beurre...",
-    "webhook_token": "votre-token"
-  }'
-```
-
-### Shortcuts iOS
-Créer un raccourci qui :
-1. Récupère le texte partagé
-2. Envoie une requête POST au webhook
-3. Affiche une notification de confirmation
+---
 
 ## Estimation
-- Edge Function : ~150 lignes
-- Migration : ~10 lignes
-- UI Profil : ~100 lignes
-- Hook : ~50 lignes
+
+- **Complexité** : Moyenne-élevée
+- **Impact** : 12 Edge Functions + 3 nouveaux fichiers + 1 migration
+- **Risque** : Faible (fallback sur Lovable AI si erreur)
+
