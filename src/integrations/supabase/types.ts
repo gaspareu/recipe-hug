@@ -189,6 +189,7 @@ export type Database = {
       }
       user_ai_settings: {
         Row: {
+          agent_configs: Json | null
           api_key: string | null
           created_at: string
           id: string
@@ -198,6 +199,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agent_configs?: Json | null
           api_key?: string | null
           created_at?: string
           id?: string
@@ -207,6 +209,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agent_configs?: Json | null
           api_key?: string | null
           created_at?: string
           id?: string
