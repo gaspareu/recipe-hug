@@ -156,10 +156,21 @@ function IngredientItem({
   checked: boolean; 
   onToggle: () => void;
 }) {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onToggle();
+    }
+  };
+
   return (
     <li 
       onClick={onToggle}
-      className="flex items-start gap-3 py-1.5 cursor-pointer group"
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+      role="checkbox"
+      aria-checked={checked}
+      className="flex items-start gap-3 py-1.5 cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm px-1 -mx-1"
     >
       <div 
         className={cn(

@@ -35,8 +35,8 @@ export function RecipeGridItem({
         </h3>
       </div>
 
-      {/* Bouton favoris en overlay (visible au hover) */}
-      <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={e => e.preventDefault()}>
+      {/* Bouton favoris en overlay (visible au hover ou au focus) */}
+      <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200" onClick={e => e.preventDefault()}>
         <FavoriteToggle isFavorite={recipe.is_favorite ?? false} onToggle={() => onToggleFavorite(recipe.id, !recipe.is_favorite)} disabled={isTogglingFavorite} variant="overlay" />
       </div>
     </Link>;

@@ -1,0 +1,3 @@
+## 2025-05-15 - [Improving Accessibility and Keyboard Interaction]
+**Learning:** Custom interactive elements like checklists and hover-only buttons frequently miss essential accessibility attributes and keyboard support. Specifically, nested buttons inside links (like in `RecipeGridItem`) need `focus-within` visibility to be usable by keyboard users, and custom "clickable" `li` elements require `role="checkbox"`, `tabIndex`, and `onKeyDown` handlers to be accessible.
+**Action:** Always verify that icon-only buttons have `aria-label`, interactive elements are keyboard-accessible (including focus visibility), and custom controls use proper ARIA roles.
