@@ -256,6 +256,7 @@ export type Database = {
     }
     Functions: {
       generate_webhook_token: { Args: { user_uuid: string }; Returns: string }
+      get_my_webhook_token: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
