@@ -89,8 +89,8 @@ export const AGENT_REQUIRED_CAPABILITIES: Record<AgentType, ModelCapability[]> =
   webhook: ['text'],
 };
 
-// Agent display info
-export const AGENT_INFO: Record<AgentType, { name: string; icon: string; description: string }> = {
+// Agent display info with labels
+export const AGENT_LABELS: Record<AgentType, { name: string; icon: string; description: string }> = {
   chat: { name: 'Chat principal', icon: '💬', description: 'Orchestration et conversation' },
   create_recipe: { name: 'Création de recettes', icon: '🍳', description: 'Génération de nouvelles recettes' },
   cooking: { name: 'Assistant cuisine', icon: '👨‍🍳', description: 'Guidage étape par étape' },
@@ -101,16 +101,26 @@ export const AGENT_INFO: Record<AgentType, { name: string; icon: string; descrip
   webhook: { name: 'Import webhook', icon: '🔗', description: 'Import externe' },
 };
 
-// Helper to get compatible models for an agent
-export function getCompatibleModels(agentType: AgentType): { provider: AIProvider; models: ModelInfo[] }[] {
+// Flat model type for compatible models list
+export interface FlatModelInfo extends ModelInfo {
+  provider: AIProvider;
+}
+
+// Helper to get compatible models for an agent (flat list)
+export function getCompatibleModels(agentType: AgentType): FlatModelInfo[] {
   const requiredCapabilities = AGENT_REQUIRED_CAPABILITIES[agentType];
   
-  return (Object.entries(PROVIDER_MODELS) as [AIProvider, ModelInfo[]][]).map(([provider, models]) => ({
-    provider,
-    models: models.filter(model => 
-      requiredCapabilities.every(cap => model.capabilities.includes(cap))
-    ),
-  })).filter(entry => entry.models.length > 0);
+  const result: FlatModelInfo[] = [];
+  
+  for (const [provider, models] of Object.entries(PROVIDER_MODELS) as [AIProvider, ModelInfo[]][]) {
+    for (const model of models) {
+      if (requiredCapabilities.every(cap => model.capabilities.includes(cap))) {
+        result.push({ ...model, provider });
+      }
+    }
+  }
+  
+  return result;
 }
 
 export const PROVIDER_INFO: Record<AIProvider, { name: string; description: string }> = {
