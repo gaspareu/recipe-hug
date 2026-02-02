@@ -19,14 +19,11 @@ export function useWebhookToken() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('webhook_token')
-        .eq('id', user.id)
-        .maybeSingle();
+      // Use secure RPC function instead of direct SELECT to avoid exposing token in general queries
+      const { data, error } = await supabase.rpc('get_my_webhook_token');
 
       if (error) throw error;
-      setWebhookToken(data?.webhook_token || null);
+      setWebhookToken(data || null);
     } catch (error) {
       console.error('Error fetching webhook token:', error);
     } finally {
