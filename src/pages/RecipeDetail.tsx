@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { Markdown } from '@/components/ui/markdown';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, RotateCcw, ChefHat, Pencil, Save, History, Plus, Mic, MicOff, ArrowUp, X, ImagePlus } from 'lucide-react';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
@@ -821,9 +821,7 @@ function MessageBubble({
         {isUser ? (
           <p className="text-sm whitespace-pre-wrap text-foreground">{message.content}</p>
         ) : (
-          <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground">
-            <ReactMarkdown>{message.content}</ReactMarkdown>
-          </div>
+          <Markdown content={message.content} />
         )}
       </div>
     </div>

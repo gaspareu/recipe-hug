@@ -15,11 +15,11 @@ export default {
   	extend: {
   		fontFamily: {
   			solitreo: [
-  				'Solitreo"',
+				'Solitreo',
   				'cursive'
   			],
   			crimson: [
-  				'Crimson Text"',
+				'Crimson Text',
   				'serif'
   			],
   			sans: [
@@ -189,5 +189,5 @@ export default {
 		}
   	}
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
 } satisfies Config;
