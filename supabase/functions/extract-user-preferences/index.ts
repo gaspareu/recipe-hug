@@ -7,6 +7,98 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Agent type for this function - uses chat agent config since it's conversational analysis
+const AGENT_TYPE = "chat";
+
+// Provider API endpoints
+const PROVIDER_ENDPOINTS: Record<string, string> = {
+  lovable: "https://ai.gateway.lovable.dev/v1/chat/completions",
+  openai: "https://api.openai.com/v1/chat/completions",
+  anthropic: "https://api.anthropic.com/v1/messages",
+  google: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+};
+
+// Models with tool/function calling capability
+const TOOL_CAPABLE_MODELS = [
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-pro",
+  "google/gemini-3-flash-preview",
+  "google/gemini-3-pro-preview",
+  "openai/gpt-5",
+  "openai/gpt-5-mini",
+  "openai/gpt-5-nano",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "claude-3-5-sonnet-20241022",
+  "claude-3-5-haiku-20241022",
+];
+
+interface AIConfig {
+  provider: string;
+  model: string;
+  apiKey: string;
+  endpoint: string;
+}
+
+// Resolve AI configuration
+async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIConfig> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  
+  const defaultConfig: AIConfig = {
+    provider: "lovable",
+    model: "google/gemini-2.5-flash",
+    apiKey: LOVABLE_API_KEY || "",
+    endpoint: PROVIDER_ENDPOINTS.lovable,
+  };
+
+  try {
+    const { data: settings } = await supabaseClient
+      .from("user_ai_settings")
+      .select("provider, api_key, preferred_model, agent_configs")
+      .eq("user_id", userId)
+      .single();
+
+    if (!settings) return defaultConfig;
+
+    const agentConfigs = settings.agent_configs || {};
+    const agentConfig = agentConfigs[AGENT_TYPE];
+
+    if (agentConfig?.provider && agentConfig?.model && agentConfig?.provider !== "lovable") {
+      if (!TOOL_CAPABLE_MODELS.includes(agentConfig.model)) {
+        console.warn(`Model ${agentConfig.model} doesn't support tools, falling back to default`);
+        return defaultConfig;
+      }
+
+      const apiKey = settings.api_key;
+      if (!apiKey) return defaultConfig;
+
+      return {
+        provider: agentConfig.provider,
+        model: agentConfig.model,
+        apiKey,
+        endpoint: PROVIDER_ENDPOINTS[agentConfig.provider] || PROVIDER_ENDPOINTS.lovable,
+      };
+    }
+
+    // Fall back to global settings if tool-capable
+    if (settings.provider && settings.provider !== "lovable" && settings.api_key && settings.preferred_model) {
+      if (TOOL_CAPABLE_MODELS.includes(settings.preferred_model)) {
+        return {
+          provider: settings.provider,
+          model: settings.preferred_model,
+          apiKey: settings.api_key,
+          endpoint: PROVIDER_ENDPOINTS[settings.provider] || PROVIDER_ENDPOINTS.lovable,
+        };
+      }
+    }
+
+    return defaultConfig;
+  } catch (error) {
+    console.error("Error resolving AI config:", error);
+    return defaultConfig;
+  }
+}
+
 // Input validation schema
 const MessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
@@ -41,81 +133,33 @@ const EXTRACT_PREFERENCES_TOOL = {
         taste_preferences: {
           type: "object",
           properties: {
-            liked_flavors: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Saveurs aimées (épicé, sucré, umami, acide, etc.)"
-            },
-            disliked_flavors: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Saveurs détestées"
-            },
-            liked_ingredients: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Ingrédients aimés"
-            },
-            disliked_ingredients: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Ingrédients détestés"
-            }
+            liked_flavors: { type: "array", items: { type: "string" }, description: "Saveurs aimées (épicé, sucré, umami, acide, etc.)" },
+            disliked_flavors: { type: "array", items: { type: "string" }, description: "Saveurs détestées" },
+            liked_ingredients: { type: "array", items: { type: "string" }, description: "Ingrédients aimés" },
+            disliked_ingredients: { type: "array", items: { type: "string" }, description: "Ingrédients détestés" }
           }
         },
         kitchen_equipment: {
           type: "object",
           properties: {
-            available: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Équipements disponibles mentionnés"
-            },
-            unavailable: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Équipements non disponibles (ex: 'pas de four' → 'four')"
-            }
+            available: { type: "array", items: { type: "string" }, description: "Équipements disponibles mentionnés" },
+            unavailable: { type: "array", items: { type: "string" }, description: "Équipements non disponibles (ex: 'pas de four' → 'four')" }
           }
         },
         culinary_style: {
           type: "object",
           properties: {
-            favorite_cuisines: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Cuisines favorites (asiatique, française, africaine, etc.)"
-            },
-            favorite_techniques: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Techniques favorites (pickles, fermentation, wok, etc.)"
-            },
-            preferred_difficulty: { 
-              type: "string",
-              enum: ["facile", "moyen", "difficile"],
-              description: "Niveau de difficulté préféré si mentionné"
-            }
+            favorite_cuisines: { type: "array", items: { type: "string" }, description: "Cuisines favorites (asiatique, française, africaine, etc.)" },
+            favorite_techniques: { type: "array", items: { type: "string" }, description: "Techniques favorites (pickles, fermentation, wok, etc.)" },
+            preferred_difficulty: { type: "string", enum: ["facile", "moyen", "difficile"], description: "Niveau de difficulté préféré si mentionné" }
           }
         },
         dietary_constraints: {
           type: "object",
           properties: {
-            allergies: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Allergies mentionnées"
-            },
-            diets: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Régimes (végétarien, vegan, sans gluten, etc.)"
-            },
-            restrictions: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "Autres restrictions alimentaires"
-            }
+            allergies: { type: "array", items: { type: "string" }, description: "Allergies mentionnées" },
+            diets: { type: "array", items: { type: "string" }, description: "Régimes (végétarien, vegan, sans gluten, etc.)" },
+            restrictions: { type: "array", items: { type: "string" }, description: "Autres restrictions alimentaires" }
           }
         }
       },
@@ -123,6 +167,55 @@ const EXTRACT_PREFERENCES_TOOL = {
     }
   }
 };
+
+// Build request based on provider
+function buildRequest(config: AIConfig, conversationText: string): { headers: Record<string, string>; body: any } {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (config.provider === "anthropic") {
+    headers["x-api-key"] = config.apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+    return {
+      headers,
+      body: {
+        model: config.model,
+        max_tokens: 4096,
+        system: EXTRACTION_PROMPT,
+        messages: [{ role: "user", content: `Analyse cette conversation et extrait les préférences culinaires:\n\n${conversationText}` }],
+        tools: [{
+          name: EXTRACT_PREFERENCES_TOOL.function.name,
+          description: EXTRACT_PREFERENCES_TOOL.function.description,
+          input_schema: EXTRACT_PREFERENCES_TOOL.function.parameters,
+        }],
+        tool_choice: { type: "tool", name: "extract_preferences" },
+      },
+    };
+  }
+
+  headers["Authorization"] = `Bearer ${config.apiKey}`;
+  return {
+    headers,
+    body: {
+      model: config.model,
+      messages: [
+        { role: "system", content: EXTRACTION_PROMPT },
+        { role: "user", content: `Analyse cette conversation et extrait les préférences culinaires:\n\n${conversationText}` },
+      ],
+      tools: [EXTRACT_PREFERENCES_TOOL],
+      tool_choice: { type: "function", function: { name: "extract_preferences" } },
+    },
+  };
+}
+
+// Extract tool call result based on provider
+function extractToolCall(config: AIConfig, response: any): any {
+  if (config.provider === "anthropic") {
+    const toolUse = response.content?.find((c: any) => c.type === "tool_use");
+    return toolUse?.input;
+  }
+  const toolCall = response.choices?.[0]?.message?.tool_calls?.[0];
+  return toolCall?.function?.arguments ? JSON.parse(toolCall.function.arguments) : null;
+}
 
 // Merge arrays without duplicates (case-insensitive)
 function mergeArrays(existing: string[], newItems: string[]): string[] {
@@ -139,62 +232,28 @@ function mergeArrays(existing: string[], newItems: string[]): string[] {
   return result;
 }
 
-// Merge preferences objects (add new items without removing existing)
+// Merge preferences objects
 function mergePreferences(existing: any, extracted: any): any {
   return {
     taste_preferences: {
-      liked_flavors: mergeArrays(
-        existing.taste_preferences?.liked_flavors || [],
-        extracted.taste_preferences?.liked_flavors || []
-      ),
-      disliked_flavors: mergeArrays(
-        existing.taste_preferences?.disliked_flavors || [],
-        extracted.taste_preferences?.disliked_flavors || []
-      ),
-      liked_ingredients: mergeArrays(
-        existing.taste_preferences?.liked_ingredients || [],
-        extracted.taste_preferences?.liked_ingredients || []
-      ),
-      disliked_ingredients: mergeArrays(
-        existing.taste_preferences?.disliked_ingredients || [],
-        extracted.taste_preferences?.disliked_ingredients || []
-      ),
+      liked_flavors: mergeArrays(existing.taste_preferences?.liked_flavors || [], extracted.taste_preferences?.liked_flavors || []),
+      disliked_flavors: mergeArrays(existing.taste_preferences?.disliked_flavors || [], extracted.taste_preferences?.disliked_flavors || []),
+      liked_ingredients: mergeArrays(existing.taste_preferences?.liked_ingredients || [], extracted.taste_preferences?.liked_ingredients || []),
+      disliked_ingredients: mergeArrays(existing.taste_preferences?.disliked_ingredients || [], extracted.taste_preferences?.disliked_ingredients || []),
     },
     kitchen_equipment: {
-      available: mergeArrays(
-        existing.kitchen_equipment?.available || [],
-        extracted.kitchen_equipment?.available || []
-      ),
-      unavailable: mergeArrays(
-        existing.kitchen_equipment?.unavailable || [],
-        extracted.kitchen_equipment?.unavailable || []
-      ),
+      available: mergeArrays(existing.kitchen_equipment?.available || [], extracted.kitchen_equipment?.available || []),
+      unavailable: mergeArrays(existing.kitchen_equipment?.unavailable || [], extracted.kitchen_equipment?.unavailable || []),
     },
     culinary_style: {
-      favorite_cuisines: mergeArrays(
-        existing.culinary_style?.favorite_cuisines || [],
-        extracted.culinary_style?.favorite_cuisines || []
-      ),
-      favorite_techniques: mergeArrays(
-        existing.culinary_style?.favorite_techniques || [],
-        extracted.culinary_style?.favorite_techniques || []
-      ),
-      preferred_difficulty: extracted.culinary_style?.preferred_difficulty || 
-        existing.culinary_style?.preferred_difficulty || null,
+      favorite_cuisines: mergeArrays(existing.culinary_style?.favorite_cuisines || [], extracted.culinary_style?.favorite_cuisines || []),
+      favorite_techniques: mergeArrays(existing.culinary_style?.favorite_techniques || [], extracted.culinary_style?.favorite_techniques || []),
+      preferred_difficulty: extracted.culinary_style?.preferred_difficulty || existing.culinary_style?.preferred_difficulty || null,
     },
     dietary_constraints: {
-      allergies: mergeArrays(
-        existing.dietary_constraints?.allergies || [],
-        extracted.dietary_constraints?.allergies || []
-      ),
-      diets: mergeArrays(
-        existing.dietary_constraints?.diets || [],
-        extracted.dietary_constraints?.diets || []
-      ),
-      restrictions: mergeArrays(
-        existing.dietary_constraints?.restrictions || [],
-        extracted.dietary_constraints?.restrictions || []
-      ),
+      allergies: mergeArrays(existing.dietary_constraints?.allergies || [], extracted.dietary_constraints?.allergies || []),
+      diets: mergeArrays(existing.dietary_constraints?.diets || [], extracted.dietary_constraints?.diets || []),
+      restrictions: mergeArrays(existing.dietary_constraints?.restrictions || [], extracted.dietary_constraints?.restrictions || []),
     },
   };
 }
@@ -205,7 +264,6 @@ serve(async (req) => {
   }
 
   try {
-    // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -214,15 +272,13 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Missing required environment variables");
     }
 
-    // Verify JWT and get user
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } }
     });
@@ -252,17 +308,22 @@ serve(async (req) => {
 
     const { messages } = parseResult.data;
 
-    console.log("Extracting preferences for user:", userId);
-    console.log("Messages count:", messages.length);
+    // Resolve AI config
+    const aiConfig = await resolveAIConfig(supabaseClient, userId);
+    console.log(`Extracting preferences using ${aiConfig.provider}/${aiConfig.model}`);
 
-    // Get existing preferences using user's auth context
+    if (!aiConfig.apiKey) {
+      throw new Error("AI service not configured");
+    }
+
+    // Get existing preferences
     const { data: existingPrefs } = await supabaseClient
       .from('user_culinary_preferences')
       .select('*')
       .eq('user_id', userId)
       .single();
 
-    // Format conversation for extraction
+    // Format conversation
     const conversationText = messages
       .filter((m: any) => m.role === 'user')
       .map((m: any) => m.content)
@@ -275,34 +336,25 @@ serve(async (req) => {
       );
     }
 
-    // Call AI to extract preferences
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Build and send request
+    const { headers, body: requestBody } = buildRequest(aiConfig, conversationText);
+
+    const response = await fetch(aiConfig.endpoint, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: EXTRACTION_PROMPT },
-          { role: "user", content: `Analyse cette conversation et extrait les préférences culinaires:\n\n${conversationText}` },
-        ],
-        tools: [EXTRACT_PREFERENCES_TOOL],
-        tool_choice: { type: "function", function: { name: "extract_preferences" } },
-      }),
+      headers,
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI extraction error:", response.status, errorText);
+      console.error("AI API error:", response.status, errorText);
       throw new Error("AI extraction failed");
     }
 
     const aiResult = await response.json();
-    const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
+    const extractedPrefs = extractToolCall(aiConfig, aiResult);
 
-    if (!toolCall?.function?.arguments) {
+    if (!extractedPrefs) {
       console.log("No preferences extracted from conversation");
       return new Response(
         JSON.stringify({ success: true, message: "No new preferences detected" }),
@@ -310,10 +362,8 @@ serve(async (req) => {
       );
     }
 
-    const extractedPrefs = JSON.parse(toolCall.function.arguments);
     console.log("Extracted preferences:", extractedPrefs);
 
-    // Merge with existing preferences
     const defaultPrefs = {
       taste_preferences: { liked_flavors: [], disliked_flavors: [], liked_ingredients: [], disliked_ingredients: [] },
       kitchen_equipment: { available: [], unavailable: [] },
@@ -323,7 +373,7 @@ serve(async (req) => {
 
     const mergedPrefs = mergePreferences(existingPrefs || defaultPrefs, extractedPrefs);
 
-    // Upsert preferences using user's auth context (RLS will enforce ownership)
+    // Upsert preferences
     const { error: upsertError } = await supabaseClient
       .from('user_culinary_preferences')
       .upsert({

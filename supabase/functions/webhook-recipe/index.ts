@@ -6,12 +6,129 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Validation schema for incoming webhook payload
+// Agent types for this function
+const AGENT_TYPE_EXTRACT = "webhook";
+const AGENT_TYPE_IMAGE = "generate_image";
+
+// Provider API endpoints
+const PROVIDER_ENDPOINTS: Record<string, string> = {
+  lovable: "https://ai.gateway.lovable.dev/v1/chat/completions",
+  openai: "https://api.openai.com/v1/chat/completions",
+  anthropic: "https://api.anthropic.com/v1/messages",
+  google: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+};
+
+interface AIConfig {
+  provider: string;
+  model: string;
+  apiKey: string;
+  endpoint: string;
+}
+
+// Resolve AI configuration for an agent type
+async function resolveAIConfig(
+  supabaseAdmin: any,
+  userId: string,
+  agentType: string,
+  defaultModel: string
+): Promise<AIConfig> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  
+  const defaultConfig: AIConfig = {
+    provider: "lovable",
+    model: defaultModel,
+    apiKey: LOVABLE_API_KEY || "",
+    endpoint: PROVIDER_ENDPOINTS.lovable,
+  };
+
+  try {
+    const { data: settings } = await supabaseAdmin
+      .from("user_ai_settings")
+      .select("provider, api_key, preferred_model, agent_configs")
+      .eq("user_id", userId)
+      .single();
+
+    if (!settings) return defaultConfig;
+
+    // Check agent-specific config first
+    const agentConfigs = settings.agent_configs || {};
+    const agentConfig = agentConfigs[agentType];
+
+    if (agentConfig?.provider && agentConfig?.model && agentConfig?.provider !== "lovable") {
+      const apiKey = settings.api_key;
+      if (!apiKey) return defaultConfig;
+
+      return {
+        provider: agentConfig.provider,
+        model: agentConfig.model,
+        apiKey,
+        endpoint: PROVIDER_ENDPOINTS[agentConfig.provider] || PROVIDER_ENDPOINTS.lovable,
+      };
+    }
+
+    // Fall back to global user settings for text extraction
+    if (agentType === AGENT_TYPE_EXTRACT && settings.provider && settings.provider !== "lovable" && settings.api_key && settings.preferred_model) {
+      return {
+        provider: settings.provider,
+        model: settings.preferred_model,
+        apiKey: settings.api_key,
+        endpoint: PROVIDER_ENDPOINTS[settings.provider] || PROVIDER_ENDPOINTS.lovable,
+      };
+    }
+
+    return defaultConfig;
+  } catch (error) {
+    console.error("Error resolving AI config:", error);
+    return defaultConfig;
+  }
+}
+
+// Build request for text extraction based on provider
+function buildExtractRequest(config: AIConfig, systemPrompt: string, text: string): { headers: Record<string, string>; body: any } {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (config.provider === "anthropic") {
+    headers["x-api-key"] = config.apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+    return {
+      headers,
+      body: {
+        model: config.model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: text }],
+      },
+    };
+  }
+
+  headers["Authorization"] = `Bearer ${config.apiKey}`;
+  return {
+    headers,
+    body: {
+      model: config.model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: text },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+    },
+  };
+}
+
+// Extract content from response based on provider
+function extractContent(config: AIConfig, response: any): string | null {
+  if (config.provider === "anthropic") {
+    return response.content?.[0]?.text || null;
+  }
+  return response.choices?.[0]?.message?.content || null;
+}
+
+// Validation schemas
 const WebhookPayloadSchema = z.object({
   text: z.string().min(1, "Text is required").max(10000, "Text too long (max 10000 chars)"),
 });
 
-// Schema for extracted recipe from AI
 const ExtractedRecipeSchema = z.object({
   title: z.string(),
   servings: z.number().nullable().optional(),
@@ -28,7 +145,7 @@ const ExtractedRecipeSchema = z.object({
   nutrition_tags: z.array(z.string()).optional(),
 });
 
-// Background image generation function (fire and forget)
+// Background image generation function
 async function triggerImageGeneration(
   supabaseAdmin: any,
   recipeId: string,
@@ -36,103 +153,87 @@ async function triggerImageGeneration(
   ingredients: any[],
   userId: string
 ) {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    console.warn("LOVABLE_API_KEY not configured, skipping image generation");
-    return;
-  }
+  try {
+    const aiConfig = await resolveAIConfig(supabaseAdmin, userId, AGENT_TYPE_IMAGE, "google/gemini-2.5-flash-image");
+    
+    if (!aiConfig.apiKey) {
+      console.warn("No API key configured, skipping image generation");
+      return;
+    }
 
-  console.log("Starting background image generation for recipe:", recipeId);
+    console.log(`Background image generation using ${aiConfig.provider}/${aiConfig.model}`);
 
-  // Build prompt for image generation
-  const ingredientsList = Array.isArray(ingredients)
-    ? ingredients.slice(0, 8).map((i: any) => i.name || i).join(", ")
-    : "";
+    const ingredientsList = Array.isArray(ingredients)
+      ? ingredients.slice(0, 8).map((i: any) => i.name || i).join(", ")
+      : "";
 
-  const prompt = `Professional food photography of "${title}". ${
-    ingredientsList ? `Main ingredients: ${ingredientsList}.` : ""
-  } Beautifully plated dish on a rustic wooden table, warm natural lighting, shallow depth of field, appetizing presentation. Ultra high resolution, 16:9 aspect ratio.`;
+    const prompt = `Professional food photography of "${title}". ${
+      ingredientsList ? `Main ingredients: ${ingredientsList}.` : ""
+    } Beautifully plated dish on a rustic wooden table, warm natural lighting, shallow depth of field, appetizing presentation. Ultra high resolution, 16:9 aspect ratio.`;
 
-  console.log("Generating image with prompt:", prompt);
-
-  // Call Lovable AI Gateway for image generation
-  const aiResponse = await fetch(
-    "https://ai.gateway.lovable.dev/v1/chat/completions",
-    {
+    const response = await fetch(aiConfig.endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
+        model: aiConfig.model,
         messages: [{ role: "user", content: prompt }],
         modalities: ["image", "text"],
       }),
-    }
-  );
-
-  if (!aiResponse.ok) {
-    const errorText = await aiResponse.text();
-    console.error("AI gateway error:", aiResponse.status, errorText);
-    return;
-  }
-
-  const aiData = await aiResponse.json();
-
-  // Extract image from response
-  const imageUrl = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  if (!imageUrl) {
-    console.error("No image in AI response");
-    return;
-  }
-
-  // Convert base64 to blob and upload to storage
-  const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, "");
-  const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-
-  const fileName = `${userId}/${recipeId}-${Date.now()}.webp`;
-
-  const { error: uploadError } = await supabaseAdmin.storage
-    .from("recipe-images")
-    .upload(fileName, imageBytes, {
-      contentType: "image/webp",
-      upsert: true,
     });
 
-  if (uploadError) {
-    console.error("Upload error:", uploadError);
-    return;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("AI gateway error:", response.status, errorText);
+      return;
+    }
+
+    const aiData = await response.json();
+    const imageUrl = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    if (!imageUrl) {
+      console.error("No image in AI response");
+      return;
+    }
+
+    const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, "");
+    const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+    const fileName = `${userId}/${recipeId}-${Date.now()}.webp`;
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from("recipe-images")
+      .upload(fileName, imageBytes, { contentType: "image/webp", upsert: true });
+
+    if (uploadError) {
+      console.error("Upload error:", uploadError);
+      return;
+    }
+
+    const { data: urlData } = supabaseAdmin.storage.from("recipe-images").getPublicUrl(fileName);
+    const publicUrl = urlData.publicUrl;
+
+    const { error: updateError } = await supabaseAdmin
+      .from("recipes")
+      .update({ source_image_url: publicUrl })
+      .eq("id", recipeId);
+
+    if (updateError) {
+      console.error("Update error:", updateError);
+      return;
+    }
+
+    console.log("Image generated and saved for recipe:", recipeId, publicUrl);
+  } catch (err) {
+    console.warn("Background image generation failed:", err);
   }
-
-  // Get public URL
-  const { data: urlData } = supabaseAdmin.storage
-    .from("recipe-images")
-    .getPublicUrl(fileName);
-
-  const publicUrl = urlData.publicUrl;
-
-  // Update recipe with new image URL
-  const { error: updateError } = await supabaseAdmin
-    .from("recipes")
-    .update({ source_image_url: publicUrl })
-    .eq("id", recipeId);
-
-  if (updateError) {
-    console.error("Update error:", updateError);
-    return;
-  }
-
-  console.log("Image generated and saved for recipe:", recipeId, publicUrl);
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Only accept POST requests
   if (req.method !== "POST") {
     return new Response(
       JSON.stringify({ error: "Method not allowed" }),
@@ -141,17 +242,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Parse and validate request body
     const body = await req.json();
     const validationResult = WebhookPayloadSchema.safeParse(body);
 
     if (!validationResult.success) {
       console.error("Validation error:", validationResult.error.errors);
       return new Response(
-        JSON.stringify({ 
-          error: "Invalid payload", 
-          details: validationResult.error.errors 
-        }),
+        JSON.stringify({ error: "Invalid payload", details: validationResult.error.errors }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -162,7 +259,6 @@ Deno.serve(async (req) => {
     // Extract token from Authorization header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.warn("Missing or invalid Authorization header");
       return new Response(
         JSON.stringify({ error: "Missing Authorization header. Use: Authorization: Bearer <your-token>" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -170,24 +266,19 @@ Deno.serve(async (req) => {
     }
 
     const webhook_token = authHeader.replace("Bearer ", "").trim();
-    
-    // Validate token format (UUID)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(webhook_token)) {
-      console.warn("Invalid token format");
       return new Response(
         JSON.stringify({ error: "Invalid token format" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Create Supabase client with service role for token lookup
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Validate webhook token and get user
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("id")
@@ -203,7 +294,6 @@ Deno.serve(async (req) => {
     }
 
     if (!profile) {
-      console.warn("Invalid webhook token attempted");
       return new Response(
         JSON.stringify({ error: "Invalid webhook token" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -213,15 +303,9 @@ Deno.serve(async (req) => {
     const userId = profile.id;
     console.log("Token validated for user:", userId);
 
-    // Call Lovable AI to extract structured recipe from text
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY not configured");
-      return new Response(
-        JSON.stringify({ error: "AI service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // Resolve AI config for extraction
+    const aiConfig = await resolveAIConfig(supabaseAdmin, userId, AGENT_TYPE_EXTRACT, "google/gemini-2.5-flash");
+    console.log(`Extracting recipe using ${aiConfig.provider}/${aiConfig.model}`);
 
     const systemPrompt = `Tu es un assistant spécialisé dans l'extraction de recettes culinaires.
 À partir du texte fourni, extrais les informations de la recette au format JSON structuré.
@@ -246,21 +330,12 @@ EXEMPLE DE FORMAT ATTENDU:
 
 RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const { headers, body: requestBody } = buildExtractRequest(aiConfig, systemPrompt, text);
+
+    const aiResponse = await fetch(aiConfig.endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: text },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.3,
-      }),
+      headers,
+      body: JSON.stringify(requestBody),
     });
 
     if (!aiResponse.ok) {
@@ -273,19 +348,17 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
     }
 
     const aiResult = await aiResponse.json();
-    const aiContent = aiResult.choices?.[0]?.message?.content;
+    const aiContent = extractContent(aiConfig, aiResult);
 
     if (!aiContent) {
-      console.error("No content in AI response");
       return new Response(
         JSON.stringify({ error: "AI returned no content" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("AI response:", aiContent);
+    console.log("AI response received");
 
-    // Parse AI response
     let extractedRecipe;
     try {
       extractedRecipe = JSON.parse(aiContent);
@@ -297,13 +370,12 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
       );
     }
 
-    // Normalize steps: convert string arrays to objects if needed
+    // Normalize steps
     if (Array.isArray(extractedRecipe.steps)) {
       extractedRecipe.steps = extractedRecipe.steps.map((step: any, index: number) => {
         if (typeof step === 'string') {
           return { order: index + 1, text: step };
         }
-        // Handle "instruction" vs "text" field name mismatch
         if (step.instruction && !step.text) {
           return { order: step.order || index + 1, text: step.instruction };
         }
@@ -311,11 +383,8 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
       });
     }
 
-    // Validate extracted recipe structure
     const recipeValidation = ExtractedRecipeSchema.safeParse(extractedRecipe);
     if (!recipeValidation.success) {
-      console.error("Recipe validation error:", recipeValidation.error.errors);
-      // Try to use partial data anyway with proper defaults
       extractedRecipe = {
         title: extractedRecipe.title || "Recette sans titre",
         servings: extractedRecipe.servings ?? extractedRecipe.portions ?? null,
@@ -328,7 +397,6 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
       extractedRecipe = recipeValidation.data;
     }
 
-    // Insert recipe into database
     const { data: newRecipe, error: insertError } = await supabaseAdmin
       .from("recipes")
       .insert({
@@ -367,10 +435,7 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
     return new Response(
       JSON.stringify({
         success: true,
-        recipe: {
-          id: newRecipe.id,
-          title: newRecipe.title,
-        },
+        recipe: { id: newRecipe.id, title: newRecipe.title },
         message: `Recette "${newRecipe.title}" créée avec succès`,
       }),
       { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
