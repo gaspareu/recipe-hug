@@ -6,6 +6,39 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Agent type for this function
+const AGENT_TYPE = "timeline";
+
+// Provider API endpoints
+const PROVIDER_ENDPOINTS: Record<string, string> = {
+  lovable: "https://ai.gateway.lovable.dev/v1/chat/completions",
+  openai: "https://api.openai.com/v1/chat/completions",
+  anthropic: "https://api.anthropic.com/v1/messages",
+  google: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+};
+
+// Models with tool/function calling capability
+const TOOL_CAPABLE_MODELS = [
+  "google/gemini-3-flash-preview",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-pro",
+  "google/gemini-3-pro-preview",
+  "openai/gpt-5",
+  "openai/gpt-5-mini",
+  "openai/gpt-5-nano",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "claude-3-5-sonnet-20241022",
+  "claude-3-5-haiku-20241022",
+];
+
+interface AIConfig {
+  provider: string;
+  model: string;
+  apiKey: string;
+  endpoint: string;
+}
+
 interface Step {
   order: number;
   text: string;
@@ -19,13 +52,154 @@ interface AnalyzedStep {
   is_passive: boolean;
 }
 
+// Resolve AI configuration for this agent
+async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIConfig> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  
+  const defaultConfig: AIConfig = {
+    provider: "lovable",
+    model: "google/gemini-3-flash-preview",
+    apiKey: LOVABLE_API_KEY || "",
+    endpoint: PROVIDER_ENDPOINTS.lovable,
+  };
+
+  try {
+    const { data: settings } = await supabaseClient
+      .from("user_ai_settings")
+      .select("provider, api_key, preferred_model, agent_configs")
+      .eq("user_id", userId)
+      .single();
+
+    if (!settings) return defaultConfig;
+
+    const agentConfigs = settings.agent_configs || {};
+    const agentConfig = agentConfigs[AGENT_TYPE];
+
+    if (agentConfig?.provider && agentConfig?.model && agentConfig?.provider !== "lovable") {
+      if (!TOOL_CAPABLE_MODELS.includes(agentConfig.model)) {
+        console.warn(`Model ${agentConfig.model} doesn't support tools, falling back to default`);
+        return defaultConfig;
+      }
+
+      const apiKey = settings.api_key;
+      if (!apiKey) return defaultConfig;
+
+      return {
+        provider: agentConfig.provider,
+        model: agentConfig.model,
+        apiKey,
+        endpoint: PROVIDER_ENDPOINTS[agentConfig.provider] || PROVIDER_ENDPOINTS.lovable,
+      };
+    }
+
+    // Fall back to global settings if tool-capable
+    if (settings.provider && settings.provider !== "lovable" && settings.api_key && settings.preferred_model) {
+      if (TOOL_CAPABLE_MODELS.includes(settings.preferred_model)) {
+        return {
+          provider: settings.provider,
+          model: settings.preferred_model,
+          apiKey: settings.api_key,
+          endpoint: PROVIDER_ENDPOINTS[settings.provider] || PROVIDER_ENDPOINTS.lovable,
+        };
+      }
+    }
+
+    return defaultConfig;
+  } catch (error) {
+    console.error("Error resolving AI config:", error);
+    return defaultConfig;
+  }
+}
+
+const TOOL_DEFINITION = {
+  type: "function",
+  function: {
+    name: "analyze_timeline",
+    description: "Retourne l'analyse temporelle des étapes de la recette",
+    parameters: {
+      type: "object",
+      properties: {
+        steps: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              order: { type: "number", description: "Numéro de l'étape (1, 2, 3...)" },
+              duration_minutes: { type: "number", description: "Durée estimée en minutes" },
+              parallel_with: { 
+                type: "array", 
+                items: { type: "number" },
+                description: "Numéros des étapes qui peuvent être faites en parallèle" 
+              },
+              is_passive: { 
+                type: "boolean", 
+                description: "true si tâche passive (cuisson, repos, marinade), false si tâche active (couper, mélanger)" 
+              },
+            },
+            required: ["order", "duration_minutes", "parallel_with", "is_passive"],
+          },
+        },
+      },
+      required: ["steps"],
+    },
+  },
+};
+
+// Build request based on provider
+function buildRequest(config: AIConfig, systemPrompt: string, userPrompt: string): { headers: Record<string, string>; body: any } {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (config.provider === "anthropic") {
+    headers["x-api-key"] = config.apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+    return {
+      headers,
+      body: {
+        model: config.model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        tools: [{
+          name: TOOL_DEFINITION.function.name,
+          description: TOOL_DEFINITION.function.description,
+          input_schema: TOOL_DEFINITION.function.parameters,
+        }],
+        tool_choice: { type: "tool", name: "analyze_timeline" },
+      },
+    };
+  }
+
+  headers["Authorization"] = `Bearer ${config.apiKey}`;
+  return {
+    headers,
+    body: {
+      model: config.model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      tools: [TOOL_DEFINITION],
+      tool_choice: { type: "function", function: { name: "analyze_timeline" } },
+    },
+  };
+}
+
+// Extract tool call result based on provider
+function extractToolCall(config: AIConfig, response: any): any {
+  if (config.provider === "anthropic") {
+    const toolUse = response.content?.find((c: any) => c.type === "tool_use");
+    return toolUse?.input;
+  }
+  const toolCall = response.choices?.[0]?.message?.tool_calls?.[0];
+  return toolCall?.function?.arguments ? JSON.parse(toolCall.function.arguments) : null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify JWT
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing authorization header" }), {
@@ -59,15 +233,17 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    // Resolve AI config
+    const aiConfig = await resolveAIConfig(supabaseClient, user.id);
+    console.log(`Analyzing timeline using ${aiConfig.provider}/${aiConfig.model}`);
+
+    if (!aiConfig.apiKey) {
       return new Response(JSON.stringify({ error: "AI service not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Prepare steps for analysis
     const stepsText = (steps as Step[])
       .sort((a, b) => a.order - b.order)
       .map((s, i) => `Étape ${i + 1}: ${s.text}`)
@@ -98,60 +274,17 @@ Pour chaque étape:
 
 IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS être en parallèle car une seule personne cuisine.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const { headers, body } = buildRequest(aiConfig, systemPrompt, userPrompt);
+
+    const response = await fetch(aiConfig.endpoint, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "analyze_timeline",
-              description: "Retourne l'analyse temporelle des étapes de la recette",
-              parameters: {
-                type: "object",
-                properties: {
-                  steps: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        order: { type: "number", description: "Numéro de l'étape (1, 2, 3...)" },
-                        duration_minutes: { type: "number", description: "Durée estimée en minutes" },
-                        parallel_with: { 
-                          type: "array", 
-                          items: { type: "number" },
-                          description: "Numéros des étapes qui peuvent être faites en parallèle" 
-                        },
-                        is_passive: { 
-                          type: "boolean", 
-                          description: "true si tâche passive (cuisson, repos, marinade), false si tâche active (couper, mélanger)" 
-                        },
-                      },
-                      required: ["order", "duration_minutes", "parallel_with", "is_passive"],
-                    },
-                  },
-                },
-                required: ["steps"],
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "analyze_timeline" } },
-      }),
+      headers,
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("AI API error:", response.status, errorText);
       return new Response(JSON.stringify({ error: "AI analysis failed" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -159,9 +292,9 @@ IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS 
     }
 
     const aiData = await response.json();
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
+    const analysisResult = extractToolCall(aiConfig, aiData);
     
-    if (!toolCall?.function?.arguments) {
+    if (!analysisResult?.steps) {
       console.error("No tool call in response:", JSON.stringify(aiData));
       return new Response(JSON.stringify({ error: "AI response format error" }), {
         status: 500,
@@ -169,7 +302,6 @@ IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS 
       });
     }
 
-    const analysisResult = JSON.parse(toolCall.function.arguments);
     const analyzedSteps = analysisResult.steps as Array<{
       order: number;
       duration_minutes: number;
@@ -177,22 +309,15 @@ IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS 
       is_passive: boolean;
     }>;
 
-    // Calculate start_offset for Gantt chart positioning
-    // Build a map of original step orders to their positions
+    // Calculate start offsets
     const originalSteps = (steps as Step[]).sort((a, b) => a.order - b.order);
-    const orderMap = new Map<number, number>();
-    originalSteps.forEach((s, i) => orderMap.set(s.order, i + 1));
-
-    // Calculate start offsets considering parallelism
     const stepsWithOffsets: AnalyzedStep[] = [];
     const stepEndTimes = new Map<number, number>();
     
     for (const step of analyzedSteps.sort((a, b) => a.order - b.order)) {
       let startOffset = 0;
       
-      // If this step can run in parallel with others, find the earliest start time
       if (step.parallel_with.length > 0) {
-        // Start at the same time as the parallel step
         const parallelStarts = step.parallel_with
           .map(p => stepEndTimes.get(p) !== undefined ? stepEndTimes.get(p)! - (analyzedSteps.find(s => s.order === p)?.duration_minutes || 0) : 0)
           .filter(t => t >= 0);
@@ -201,7 +326,6 @@ IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS 
           startOffset = Math.min(...parallelStarts);
         }
       } else {
-        // Sequential: start after previous step ends
         const prevStep = step.order - 1;
         if (stepEndTimes.has(prevStep)) {
           startOffset = stepEndTimes.get(prevStep)!;
@@ -225,7 +349,7 @@ IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS 
       steps: stepsWithOffsets,
     };
 
-    // Save to database using service role for the update
+    // Save to database
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -239,7 +363,6 @@ IMPORTANT: Deux tâches actives (couper, mélanger, nettoyer) ne peuvent JAMAIS 
 
     if (updateError) {
       console.error("Error saving timeline:", updateError);
-      // Still return the data even if save fails
     }
 
     return new Response(JSON.stringify(timelineData), {

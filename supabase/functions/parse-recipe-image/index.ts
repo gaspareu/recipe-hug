@@ -7,35 +7,180 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Agent type for this function
+const AGENT_TYPE = "parse_image";
+
+// Provider API endpoints
+const PROVIDER_ENDPOINTS: Record<string, string> = {
+  lovable: "https://ai.gateway.lovable.dev/v1/chat/completions",
+  openai: "https://api.openai.com/v1/chat/completions",
+  anthropic: "https://api.anthropic.com/v1/messages",
+  google: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+};
+
+// Model capabilities - only vision-capable models work for this agent
+const VISION_MODELS = [
+  "google/gemini-2.5-pro",
+  "google/gemini-2.5-flash",
+  "google/gemini-3-pro-preview",
+  "google/gemini-3-flash-preview",
+  "openai/gpt-5",
+  "openai/gpt-5-mini",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "claude-3-5-sonnet-20241022",
+  "claude-3-5-haiku-20241022",
+  "gemini-2.5-pro-preview-05-06",
+  "gemini-2.5-flash-preview-05-20",
+];
+
+interface AIConfig {
+  provider: string;
+  model: string;
+  apiKey: string;
+  endpoint: string;
+}
+
+// Resolve AI configuration for this agent
+async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIConfig> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  
+  // Default config
+  const defaultConfig: AIConfig = {
+    provider: "lovable",
+    model: "google/gemini-2.5-pro",
+    apiKey: LOVABLE_API_KEY || "",
+    endpoint: PROVIDER_ENDPOINTS.lovable,
+  };
+
+  try {
+    // Fetch user AI settings
+    const { data: settings } = await supabaseClient
+      .from("user_ai_settings")
+      .select("provider, api_key, preferred_model, agent_configs")
+      .eq("user_id", userId)
+      .single();
+
+    if (!settings) return defaultConfig;
+
+    // Check agent-specific config first
+    const agentConfigs = settings.agent_configs || {};
+    const agentConfig = agentConfigs[AGENT_TYPE];
+
+    if (agentConfig?.provider && agentConfig?.model && agentConfig?.provider !== "lovable") {
+      // Verify the model has vision capability
+      if (!VISION_MODELS.includes(agentConfig.model)) {
+        console.warn(`Model ${agentConfig.model} doesn't support vision, falling back to default`);
+        return defaultConfig;
+      }
+
+      const apiKey = settings.api_key;
+      if (!apiKey) return defaultConfig;
+
+      return {
+        provider: agentConfig.provider,
+        model: agentConfig.model,
+        apiKey,
+        endpoint: PROVIDER_ENDPOINTS[agentConfig.provider] || PROVIDER_ENDPOINTS.lovable,
+      };
+    }
+
+    // Fall back to global user settings
+    if (settings.provider && settings.provider !== "lovable" && settings.api_key && settings.preferred_model) {
+      if (!VISION_MODELS.includes(settings.preferred_model)) {
+        console.warn(`Global model ${settings.preferred_model} doesn't support vision, falling back to default`);
+        return defaultConfig;
+      }
+
+      return {
+        provider: settings.provider,
+        model: settings.preferred_model,
+        apiKey: settings.api_key,
+        endpoint: PROVIDER_ENDPOINTS[settings.provider] || PROVIDER_ENDPOINTS.lovable,
+      };
+    }
+
+    return defaultConfig;
+  } catch (error) {
+    console.error("Error resolving AI config:", error);
+    return defaultConfig;
+  }
+}
+
+// Build request body based on provider
+function buildRequestBody(config: AIConfig, systemPrompt: string, imageUrl: string): any {
+  if (config.provider === "anthropic") {
+    return {
+      model: config.model,
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Analyse cette image de recette et extrais les informations au format JSON." },
+            { type: "image", source: { type: "url", url: imageUrl } },
+          ],
+        },
+      ],
+    };
+  }
+
+  // OpenAI / Lovable / Google format
+  return {
+    model: config.model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Analyse cette image de recette et extrais les informations au format JSON." },
+          { type: "image_url", image_url: { url: imageUrl } },
+        ],
+      },
+    ],
+  };
+}
+
+// Build request headers based on provider
+function buildHeaders(config: AIConfig): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (config.provider === "anthropic") {
+    headers["x-api-key"] = config.apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+  } else {
+    headers["Authorization"] = `Bearer ${config.apiKey}`;
+  }
+
+  return headers;
+}
+
+// Extract content from response based on provider
+function extractContent(config: AIConfig, response: any): string | null {
+  if (config.provider === "anthropic") {
+    return response.content?.[0]?.text || null;
+  }
+  return response.choices?.[0]?.message?.content || null;
+}
+
 // SSRF protection: validate URL is safe
 function isUrlSafe(urlString: string): boolean {
   try {
     const url = new URL(urlString);
-
-    // Only allow HTTPS
     if (url.protocol !== "https:") return false;
 
     const hostname = url.hostname.toLowerCase();
-
-    // Block localhost and loopback
     if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return false;
-
-    // Block AWS metadata endpoint
     if (hostname === "169.254.169.254") return false;
 
-    // Block private IP ranges
     const parts = hostname.split(".");
     if (parts.length === 4) {
       const firstOctet = parseInt(parts[0], 10);
       const secondOctet = parseInt(parts[1], 10);
-
-      // 10.x.x.x
       if (firstOctet === 10) return false;
-      // 172.16.x.x - 172.31.x.x
       if (firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31) return false;
-      // 192.168.x.x
       if (firstOctet === 192 && secondOctet === 168) return false;
-      // 169.254.x.x (link-local)
       if (firstOctet === 169 && secondOctet === 254) return false;
     }
 
@@ -84,13 +229,11 @@ Règles importantes:
 - Réponds UNIQUEMENT avec le JSON, sans texte explicatif ni markdown`;
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify authentication
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Authentication required" }), {
@@ -101,13 +244,11 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Missing required environment variables");
     }
 
-    // Verify JWT
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -122,6 +263,8 @@ serve(async (req) => {
       });
     }
 
+    const userId = claimsData.claims.sub as string;
+
     // Validate input
     const body = await req.json();
     const parseResult = RequestSchema.safeParse(body);
@@ -135,44 +278,23 @@ serve(async (req) => {
 
     const { image_url } = parseResult.data;
 
-    console.log("Parsing recipe from image for user:", claimsData.claims.sub);
+    // Resolve AI configuration for this agent
+    const aiConfig = await resolveAIConfig(supabaseClient, userId);
+    console.log(`Parsing recipe image for user ${userId} using ${aiConfig.provider}/${aiConfig.model}`);
 
-    // Call Lovable AI Gateway with vision model
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Build and send request
+    const requestBody = buildRequestBody(aiConfig, SYSTEM_PROMPT, image_url);
+    const headers = buildHeaders(aiConfig);
+
+    const response = await fetch(aiConfig.endpoint, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        messages: [
-          {
-            role: "system",
-            content: SYSTEM_PROMPT,
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Analyse cette image de recette et extrais les informations au format JSON.",
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: image_url,
-                },
-              },
-            ],
-          },
-        ],
-      }),
+      headers,
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI Gateway error:", response.status, errorText);
+      console.error("AI API error:", response.status, errorText);
 
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Trop de requêtes. Veuillez réessayer dans quelques instants." }), {
@@ -187,11 +309,11 @@ serve(async (req) => {
         });
       }
 
-      throw new Error(`AI Gateway error: ${response.status}`);
+      throw new Error(`AI API error: ${response.status}`);
     }
 
     const aiResponse = await response.json();
-    const content = aiResponse.choices?.[0]?.message?.content;
+    const content = extractContent(aiConfig, aiResponse);
 
     if (!content) {
       throw new Error("No content in AI response");
@@ -200,7 +322,6 @@ serve(async (req) => {
     console.log("AI response content received");
 
     // Parse the JSON from the response
-    // Remove potential markdown code blocks
     let jsonContent = content.trim();
     if (jsonContent.startsWith("```json")) {
       jsonContent = jsonContent.slice(7);

@@ -7,13 +7,148 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Agent type for this function
+const AGENT_TYPE = "generate_image";
+
+// Provider API endpoints
+const PROVIDER_ENDPOINTS: Record<string, string> = {
+  lovable: "https://ai.gateway.lovable.dev/v1/chat/completions",
+  openai: "https://api.openai.com/v1/images/generations",
+  google: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+};
+
+// Image generation capable models
+const IMAGE_GEN_MODELS = [
+  "google/gemini-2.5-flash-image",
+  "google/gemini-3-pro-image-preview",
+  "dall-e-3",
+  "gemini-2.0-flash-exp-image-generation",
+];
+
+interface AIConfig {
+  provider: string;
+  model: string;
+  apiKey: string;
+  endpoint: string;
+}
+
+// Resolve AI configuration for this agent
+async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIConfig> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  
+  const defaultConfig: AIConfig = {
+    provider: "lovable",
+    model: "google/gemini-2.5-flash-image",
+    apiKey: LOVABLE_API_KEY || "",
+    endpoint: PROVIDER_ENDPOINTS.lovable,
+  };
+
+  try {
+    const { data: settings } = await supabaseClient
+      .from("user_ai_settings")
+      .select("provider, api_key, preferred_model, agent_configs")
+      .eq("user_id", userId)
+      .single();
+
+    if (!settings) return defaultConfig;
+
+    // Check agent-specific config first
+    const agentConfigs = settings.agent_configs || {};
+    const agentConfig = agentConfigs[AGENT_TYPE];
+
+    if (agentConfig?.provider && agentConfig?.model && agentConfig?.provider !== "lovable") {
+      if (!IMAGE_GEN_MODELS.includes(agentConfig.model)) {
+        console.warn(`Model ${agentConfig.model} doesn't support image generation, falling back to default`);
+        return defaultConfig;
+      }
+
+      const apiKey = settings.api_key;
+      if (!apiKey) return defaultConfig;
+
+      return {
+        provider: agentConfig.provider,
+        model: agentConfig.model,
+        apiKey,
+        endpoint: PROVIDER_ENDPOINTS[agentConfig.provider] || PROVIDER_ENDPOINTS.lovable,
+      };
+    }
+
+    return defaultConfig;
+  } catch (error) {
+    console.error("Error resolving AI config:", error);
+    return defaultConfig;
+  }
+}
+
+// Generate image based on provider
+async function generateImage(config: AIConfig, prompt: string): Promise<string> {
+  if (config.provider === "openai" && config.model === "dall-e-3") {
+    // OpenAI DALL-E 3 API
+    const response = await fetch(config.endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "dall-e-3",
+        prompt,
+        n: 1,
+        size: "1792x1024",
+        response_format: "b64_json",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("DALL-E error:", response.status, errorText);
+      throw new Error(`DALL-E error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const base64 = data.data?.[0]?.b64_json;
+    if (!base64) throw new Error("No image in DALL-E response");
+    
+    return `data:image/png;base64,${base64}`;
+  }
+
+  // Lovable / Google Gemini format
+  const response = await fetch(config.endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["image", "text"],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("AI gateway error:", response.status, errorText);
+    throw new Error(`AI gateway error: ${response.status}`);
+  }
+
+  const aiData = await response.json();
+  const imageUrl = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  
+  if (!imageUrl) {
+    console.error("No image in response:", JSON.stringify(aiData));
+    throw new Error("No image generated");
+  }
+
+  return imageUrl;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Auth verification
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -39,8 +174,6 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub as string;
-
-    // Parse request body
     const { recipeId, title, ingredients } = await req.json();
 
     if (!recipeId || !title) {
@@ -67,7 +200,11 @@ serve(async (req) => {
       });
     }
 
-    // Build prompt for image generation
+    // Resolve AI configuration for this agent
+    const aiConfig = await resolveAIConfig(supabase, userId);
+    console.log(`Generating image for recipe ${recipeId} using ${aiConfig.provider}/${aiConfig.model}`);
+
+    // Build prompt
     const ingredientsList = Array.isArray(ingredients)
       ? ingredients.slice(0, 8).map((i: any) => i.name || i).join(", ")
       : "";
@@ -78,65 +215,26 @@ serve(async (req) => {
 
     console.log("Generating image with prompt:", prompt);
 
-    // Call Lovable AI Gateway for image generation
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
-
-    const aiResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          modalities: ["image", "text"],
-        }),
+    // Generate image
+    let imageUrl: string;
+    try {
+      imageUrl = await generateImage(aiConfig, prompt);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes("429")) {
+          return new Response(
+            JSON.stringify({ error: "Rate limit exceeded, please try again later" }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (error.message.includes("402")) {
+          return new Response(
+            JSON.stringify({ error: "Payment required, please add credits" }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
-    );
-
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded, please try again later" }),
-          {
-            status: 429,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Payment required, please add credits" }),
-          {
-            status: 402,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-      const errorText = await aiResponse.text();
-      console.error("AI gateway error:", aiResponse.status, errorText);
-      throw new Error(`AI gateway error: ${aiResponse.status}`);
-    }
-
-    const aiData = await aiResponse.json();
-    console.log("AI response received");
-
-    // Extract image from response
-    const imageUrl = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!imageUrl) {
-      console.error("No image in response:", JSON.stringify(aiData));
-      throw new Error("No image generated");
+      throw error;
     }
 
     // Convert base64 to blob and upload to storage
