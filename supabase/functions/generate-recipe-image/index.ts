@@ -43,28 +43,52 @@ async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIC
     endpoint: PROVIDER_ENDPOINTS.lovable,
   };
 
+  console.log(`[AI Config] Resolving config for agent: ${AGENT_TYPE}, user: ${userId}`);
+
   try {
-    const { data: settings } = await supabaseClient
+    const { data: settings, error: settingsError } = await supabaseClient
       .from("user_ai_settings")
       .select("provider, api_key, preferred_model, agent_configs")
       .eq("user_id", userId)
       .single();
 
-    if (!settings) return defaultConfig;
+    if (settingsError || !settings) {
+      console.log(`[AI Config] No user settings found, using default: ${defaultConfig.provider}/${defaultConfig.model}`);
+      return defaultConfig;
+    }
+
+    console.log(`[AI Config] User settings found - global provider: ${settings.provider}, global model: ${settings.preferred_model}`);
+    console.log(`[AI Config] Agent configs available: ${Object.keys(settings.agent_configs || {}).join(", ") || "none"}`);
 
     // Check agent-specific config first
     const agentConfigs = settings.agent_configs || {};
     const agentConfig = agentConfigs[AGENT_TYPE];
 
-    if (agentConfig?.provider && agentConfig?.model && agentConfig?.provider !== "lovable") {
+    if (agentConfig?.provider && agentConfig?.model) {
+      console.log(`[AI Config] Found agent-specific config: ${agentConfig.provider}/${agentConfig.model}`);
+      
+      if (agentConfig.provider === "lovable") {
+        console.log(`[AI Config] Agent uses Lovable provider, using: lovable/${agentConfig.model}`);
+        return {
+          provider: "lovable",
+          model: agentConfig.model,
+          apiKey: LOVABLE_API_KEY || "",
+          endpoint: PROVIDER_ENDPOINTS.lovable,
+        };
+      }
+
       if (!IMAGE_GEN_MODELS.includes(agentConfig.model)) {
-        console.warn(`Model ${agentConfig.model} doesn't support image generation, falling back to default`);
+        console.warn(`[AI Config] Model ${agentConfig.model} doesn't support image generation, falling back to default`);
         return defaultConfig;
       }
 
       const apiKey = settings.api_key;
-      if (!apiKey) return defaultConfig;
+      if (!apiKey) {
+        console.warn(`[AI Config] No API key found for external provider, falling back to default`);
+        return defaultConfig;
+      }
 
+      console.log(`[AI Config] Using agent-specific external config: ${agentConfig.provider}/${agentConfig.model}`);
       return {
         provider: agentConfig.provider,
         model: agentConfig.model,
@@ -73,9 +97,10 @@ async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIC
       };
     }
 
+    console.log(`[AI Config] No agent-specific config, using default: ${defaultConfig.provider}/${defaultConfig.model}`);
     return defaultConfig;
   } catch (error) {
-    console.error("Error resolving AI config:", error);
+    console.error("[AI Config] Error resolving config:", error);
     return defaultConfig;
   }
 }
