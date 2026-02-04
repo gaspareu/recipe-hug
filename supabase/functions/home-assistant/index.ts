@@ -81,7 +81,7 @@ const DEFAULT_MODELS: Record<AIProvider, string> = {
   lovable: "google/gemini-3-flash-preview",
   gemini: "gemini-2.5-flash",
   openai: "gpt-4o",
-  anthropic: "claude-3-5-sonnet-latest",
+  anthropic: "claude-sonnet-4-20250514",
 };
 
 // Get user AI settings from database

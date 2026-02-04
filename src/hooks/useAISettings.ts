@@ -71,9 +71,9 @@ export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
     { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', capabilities: ['text', 'streaming', 'vision', 'tools'] },
   ],
   anthropic: [
-    { value: 'claude-3-5-sonnet-latest', label: 'Claude 3.5 Sonnet', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku', capabilities: ['text', 'streaming', 'tools'] },
-    { value: 'claude-3-opus-latest', label: 'Claude 3 Opus', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', capabilities: ['text', 'streaming', 'tools'] },
+    { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', capabilities: ['text', 'streaming', 'vision', 'tools'] },
   ],
 };
 
