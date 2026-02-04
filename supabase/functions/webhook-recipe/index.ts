@@ -41,23 +41,47 @@ async function resolveAIConfig(
     endpoint: PROVIDER_ENDPOINTS.lovable,
   };
 
+  console.log(`[AI Config] Resolving config for agent: ${agentType}, user: ${userId}, default model: ${defaultModel}`);
+
   try {
-    const { data: settings } = await supabaseAdmin
+    const { data: settings, error: settingsError } = await supabaseAdmin
       .from("user_ai_settings")
       .select("provider, api_key, preferred_model, agent_configs")
       .eq("user_id", userId)
       .single();
 
-    if (!settings) return defaultConfig;
+    if (settingsError || !settings) {
+      console.log(`[AI Config] No user settings found, using default: ${defaultConfig.provider}/${defaultConfig.model}`);
+      return defaultConfig;
+    }
+
+    console.log(`[AI Config] User settings found - global provider: ${settings.provider}, global model: ${settings.preferred_model}`);
+    console.log(`[AI Config] Agent configs available: ${Object.keys(settings.agent_configs || {}).join(", ") || "none"}`);
 
     // Check agent-specific config first
     const agentConfigs = settings.agent_configs || {};
     const agentConfig = agentConfigs[agentType];
 
-    if (agentConfig?.provider && agentConfig?.model && agentConfig?.provider !== "lovable") {
-      const apiKey = settings.api_key;
-      if (!apiKey) return defaultConfig;
+    if (agentConfig?.provider && agentConfig?.model) {
+      console.log(`[AI Config] Found agent-specific config: ${agentConfig.provider}/${agentConfig.model}`);
+      
+      if (agentConfig.provider === "lovable") {
+        console.log(`[AI Config] Agent uses Lovable provider, using: lovable/${agentConfig.model}`);
+        return {
+          provider: "lovable",
+          model: agentConfig.model,
+          apiKey: LOVABLE_API_KEY || "",
+          endpoint: PROVIDER_ENDPOINTS.lovable,
+        };
+      }
 
+      const apiKey = settings.api_key;
+      if (!apiKey) {
+        console.warn(`[AI Config] No API key found for external provider, falling back to default`);
+        return defaultConfig;
+      }
+
+      console.log(`[AI Config] Using agent-specific external config: ${agentConfig.provider}/${agentConfig.model}`);
       return {
         provider: agentConfig.provider,
         model: agentConfig.model,
@@ -68,6 +92,7 @@ async function resolveAIConfig(
 
     // Fall back to global user settings for text extraction
     if (agentType === AGENT_TYPE_EXTRACT && settings.provider && settings.provider !== "lovable" && settings.api_key && settings.preferred_model) {
+      console.log(`[AI Config] Using global external config for extraction: ${settings.provider}/${settings.preferred_model}`);
       return {
         provider: settings.provider,
         model: settings.preferred_model,
@@ -76,9 +101,10 @@ async function resolveAIConfig(
       };
     }
 
+    console.log(`[AI Config] No valid external config, using default: ${defaultConfig.provider}/${defaultConfig.model}`);
     return defaultConfig;
   } catch (error) {
-    console.error("Error resolving AI config:", error);
+    console.error("[AI Config] Error resolving config:", error);
     return defaultConfig;
   }
 }
