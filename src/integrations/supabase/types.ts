@@ -195,6 +195,7 @@ export type Database = {
           id: string
           preferred_model: string | null
           provider: string
+          provider_api_keys: Json
           updated_at: string
           user_id: string
         }
@@ -205,6 +206,7 @@ export type Database = {
           id?: string
           preferred_model?: string | null
           provider?: string
+          provider_api_keys?: Json
           updated_at?: string
           user_id: string
         }
@@ -215,6 +217,7 @@ export type Database = {
           id?: string
           preferred_model?: string | null
           provider?: string
+          provider_api_keys?: Json
           updated_at?: string
           user_id?: string
         }

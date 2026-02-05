@@ -23,14 +23,18 @@ export interface AgentConfig {
   model: string;
 }
 
+// API keys per provider
+export type ProviderApiKeys = Partial<Record<Exclude<AIProvider, 'lovable'>, string>>;
+
 // Full AI settings including per-agent configs
 export interface AISettings {
   id: string;
   user_id: string;
   provider: AIProvider;
-  api_key: string | null;
+  api_key: string | null; // Deprecated - kept for backwards compatibility
   preferred_model: string | null;
   agent_configs: Partial<Record<AgentType, AgentConfig>> | null;
+  provider_api_keys: ProviderApiKeys;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +44,7 @@ export interface AISettingsInput {
   api_key?: string | null;
   preferred_model?: string | null;
   agent_configs?: Partial<Record<AgentType, AgentConfig>> | null;
+  provider_api_keys?: ProviderApiKeys;
 }
 
 // Model capabilities for filtering
@@ -123,7 +128,7 @@ export function getCompatibleModels(agentType: AgentType): FlatModelInfo[] {
   return result;
 }
 
-export const PROVIDER_INFO: Record<AIProvider, { name: string; description: string }> = {
+export const PROVIDER_INFO: Record<AIProvider, { name: string; description: string; keyUrl?: string }> = {
   lovable: {
     name: 'Lovable AI',
     description: 'Inclus dans votre abonnement, aucune configuration requise',
@@ -131,14 +136,17 @@ export const PROVIDER_INFO: Record<AIProvider, { name: string; description: stri
   gemini: {
     name: 'Google Gemini',
     description: 'API Google AI Studio',
+    keyUrl: 'https://aistudio.google.com/apikey',
   },
   openai: {
     name: 'OpenAI',
     description: 'API OpenAI (GPT-4)',
+    keyUrl: 'https://platform.openai.com/api-keys',
   },
   anthropic: {
     name: 'Anthropic',
     description: 'API Claude',
+    keyUrl: 'https://console.anthropic.com/settings/keys',
   },
 };
 
@@ -160,11 +168,12 @@ export function useAISettings() {
       if (error) throw error;
       if (!data) return null;
       
-      // Parse agent_configs from JSON
+      // Parse agent_configs and provider_api_keys from JSON
       return {
         ...data,
         provider: data.provider as AIProvider,
         agent_configs: data.agent_configs as Partial<Record<AgentType, AgentConfig>> | null,
+        provider_api_keys: (data.provider_api_keys as ProviderApiKeys) || {},
       } as AISettings;
     },
     enabled: !!user?.id,
@@ -180,6 +189,7 @@ export function useAISettings() {
         api_key: input.api_key || null,
         preferred_model: input.preferred_model || null,
         agent_configs: (input.agent_configs || {}) as Json,
+        provider_api_keys: (input.provider_api_keys || {}) as Json,
       };
 
       // Upsert - insert or update
@@ -195,6 +205,7 @@ export function useAISettings() {
         ...data,
         provider: data.provider as AIProvider,
         agent_configs: data.agent_configs as Partial<Record<AgentType, AgentConfig>> | null,
+        provider_api_keys: (data.provider_api_keys as ProviderApiKeys) || {},
       } as AISettings;
     },
     onSuccess: () => {
@@ -223,12 +234,25 @@ export function useAISettings() {
     },
   });
 
+  // Helper to check if a provider has a configured API key
+  const hasApiKeyForProvider = (provider: AIProvider): boolean => {
+    if (provider === 'lovable') return true;
+    return !!settings?.provider_api_keys?.[provider];
+  };
+
+  // Helper to get API key for a provider
+  const getApiKeyForProvider = (provider: Exclude<AIProvider, 'lovable'>): string | undefined => {
+    return settings?.provider_api_keys?.[provider];
+  };
+
   return {
     settings,
     isLoading,
     error,
     updateSettings,
     validateApiKey,
+    hasApiKeyForProvider,
+    getApiKeyForProvider,
     // Helper to get effective provider (default to lovable)
     effectiveProvider: (settings?.provider || 'lovable') as AIProvider,
     effectiveModel: settings?.preferred_model || PROVIDER_MODELS[settings?.provider || 'lovable'][0]?.value,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, Check, Loader2, Sparkles, AlertCircle, ChevronDown, Settings2 } from 'lucide-react';
+import { Eye, EyeOff, Check, Loader2, Sparkles, AlertCircle, ChevronDown, Settings2, Key, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +17,8 @@ import {
   AGENT_REQUIRED_CAPABILITIES,
   getCompatibleModels,
   AgentConfig,
-  FlatModelInfo
+  FlatModelInfo,
+  ProviderApiKeys
 } from '@/hooks/useAISettings';
 import { cn } from '@/lib/utils';
 
@@ -46,6 +47,35 @@ const ProviderBadge = ({ provider, size = 'md' }: { provider: AIProvider; size?:
   );
 };
 
+// API Key status indicator
+const ApiKeyStatusIndicator = ({ 
+  hasKey, 
+  isValidated,
+  isValidating,
+  size = 'sm' 
+}: { 
+  hasKey: boolean; 
+  isValidated?: boolean;
+  isValidating?: boolean;
+  size?: 'sm' | 'md';
+}) => {
+  const sizeClasses = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5';
+  
+  if (isValidating) {
+    return <Loader2 className={cn(sizeClasses, 'animate-spin text-muted-foreground')} />;
+  }
+  
+  if (!hasKey) {
+    return <XCircle className={cn(sizeClasses, 'text-muted-foreground/50')} />;
+  }
+  
+  if (isValidated) {
+    return <CheckCircle2 className={cn(sizeClasses, 'text-green-500')} />;
+  }
+  
+  return <Key className={cn(sizeClasses, 'text-amber-500')} />;
+};
+
 // Capability badges
 const CapabilityBadge = ({ capability }: { capability: string }) => {
   const labels: Record<string, string> = {
@@ -63,18 +93,229 @@ const CapabilityBadge = ({ capability }: { capability: string }) => {
   );
 };
 
+// Provider API Key input component
+const ProviderApiKeyInput = ({
+  provider,
+  apiKey,
+  onApiKeyChange,
+  onValidate,
+  isValidating,
+  validationStatus,
+  validationError,
+}: {
+  provider: Exclude<AIProvider, 'lovable'>;
+  apiKey: string;
+  onApiKeyChange: (key: string) => void;
+  onValidate: () => void;
+  isValidating: boolean;
+  validationStatus: 'idle' | 'valid' | 'invalid';
+  validationError: string | null;
+}) => {
+  const [showKey, setShowKey] = useState(false);
+  const providerInfo = PROVIDER_INFO[provider];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Input
+            type={showKey ? 'text' : 'password'}
+            value={apiKey}
+            onChange={(e) => onApiKeyChange(e.target.value)}
+            placeholder={`Clé API ${providerInfo.name}`}
+            className="pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setShowKey(!showKey)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onValidate}
+          disabled={!apiKey.trim() || isValidating}
+        >
+          {isValidating ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : validationStatus === 'valid' ? (
+            <Check className="h-4 w-4 text-green-500" />
+          ) : (
+            'Tester'
+          )}
+        </Button>
+      </div>
+      
+      {/* Validation feedback */}
+      {validationStatus === 'valid' && (
+        <p className="text-xs text-green-600 flex items-center gap-1">
+          <Check className="h-3 w-3" />
+          Clé API valide
+        </p>
+      )}
+      {validationStatus === 'invalid' && (
+        <p className="text-xs text-destructive flex items-center gap-1">
+          <AlertCircle className="h-3 w-3" />
+          {validationError}
+        </p>
+      )}
+
+      {/* Help text */}
+      {providerInfo.keyUrl && (
+        <p className="text-xs text-muted-foreground">
+          Obtenez votre clé sur{' '}
+          <a href={providerInfo.keyUrl} target="_blank" rel="noopener noreferrer" className="underline">
+            {providerInfo.name}
+          </a>
+        </p>
+      )}
+    </div>
+  );
+};
+
+// Provider card with API key management
+const ProviderCard = ({
+  provider,
+  isDefault,
+  apiKey,
+  onApiKeyChange,
+  onValidate,
+  onSetDefault,
+  isValidating,
+  validationStatus,
+  validationError,
+}: {
+  provider: AIProvider;
+  isDefault: boolean;
+  apiKey: string;
+  onApiKeyChange: (key: string) => void;
+  onValidate: () => void;
+  onSetDefault: () => void;
+  isValidating: boolean;
+  validationStatus: 'idle' | 'valid' | 'invalid';
+  validationError: string | null;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const providerInfo = PROVIDER_INFO[provider];
+  const isLovable = provider === 'lovable';
+  const hasKey = isLovable || !!apiKey.trim();
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors',
+            isDefault ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50'
+          )}
+        >
+          <ProviderBadge provider={provider} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-foreground">{providerInfo.name}</span>
+              {isDefault && (
+                <Badge variant="default" className="text-xs">
+                  Par défaut
+                </Badge>
+              )}
+              {isLovable && (
+                <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-0">
+                  Inclus
+                </Badge>
+              )}
+            </div>
+            <div className="text-sm text-muted-foreground truncate">
+              {providerInfo.description}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {!isLovable && (
+              <ApiKeyStatusIndicator 
+                hasKey={hasKey} 
+                isValidated={validationStatus === 'valid'}
+                isValidating={isValidating}
+              />
+            )}
+            <ChevronDown className={cn(
+              'h-4 w-4 text-muted-foreground transition-transform',
+              isOpen && 'rotate-180'
+            )} />
+          </div>
+        </button>
+      </CollapsibleTrigger>
+      
+      <CollapsibleContent className="pt-3 pb-1">
+        <div className="space-y-4 pl-2 border-l-2 border-muted ml-4">
+          {!isLovable && (
+            <div className="pl-4">
+              <Label className="text-sm mb-2 block">Clé API</Label>
+              <ProviderApiKeyInput
+                provider={provider as Exclude<AIProvider, 'lovable'>}
+                apiKey={apiKey}
+                onApiKeyChange={onApiKeyChange}
+                onValidate={onValidate}
+                isValidating={isValidating}
+                validationStatus={validationStatus}
+                validationError={validationError}
+              />
+            </div>
+          )}
+          
+          {isLovable && (
+            <div className="pl-4">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <div className="text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">Aucune configuration requise</p>
+                  <p className="mt-1">
+                    Accès aux meilleurs modèles (Gemini, GPT-5) inclus dans votre abonnement.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!isDefault && (
+            <div className="pl-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onSetDefault}
+                disabled={!isLovable && !hasKey}
+              >
+                Définir par défaut
+              </Button>
+              {!isLovable && !hasKey && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Ajoutez une clé API pour utiliser ce fournisseur par défaut
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
+
 // Agent configuration row component
 const AgentConfigRow = ({
   agentType,
   config,
   globalProvider,
-  globalApiKey,
+  providerApiKeys,
   onChange,
 }: {
   agentType: AgentType;
   config?: AgentConfig;
   globalProvider: AIProvider;
-  globalApiKey: string | null;
+  providerApiKeys: ProviderApiKeys;
   onChange: (config: AgentConfig | undefined) => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -90,6 +331,9 @@ const AgentConfigRow = ({
   const availableModels = compatibleModels.filter(m => 
     effectiveProvider === 'lovable' || m.provider === effectiveProvider
   );
+
+  // Check if provider has API key
+  const hasApiKey = effectiveProvider === 'lovable' || !!providerApiKeys[effectiveProvider as Exclude<AIProvider, 'lovable'>];
 
   const handleProviderChange = (provider: AIProvider) => {
     if (provider === globalProvider && !config?.model) {
@@ -122,7 +366,6 @@ const AgentConfigRow = ({
 
   // Check if selected provider requires API key and if it's configured
   const requiresApiKey = effectiveProvider !== 'lovable';
-  const hasApiKey = !!globalApiKey && globalProvider === effectiveProvider;
   const showApiKeyWarning = requiresApiKey && !hasApiKey && isCustomized;
 
   return (
@@ -142,6 +385,9 @@ const AgentConfigRow = ({
                 <Badge variant="outline" className="text-xs">
                   Personnalisé
                 </Badge>
+              )}
+              {showApiKeyWarning && (
+                <AlertCircle className="h-4 w-4 text-amber-500" />
               )}
             </div>
             <div className="text-sm text-muted-foreground truncate">
@@ -178,24 +424,30 @@ const AgentConfigRow = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(['lovable', 'gemini', 'openai', 'anthropic'] as AIProvider[]).map((provider) => (
-                  <SelectItem key={provider} value={provider}>
-                    <div className="flex items-center gap-2">
-                      <ProviderBadge provider={provider} size="sm" />
-                      <span>{PROVIDER_INFO[provider].name}</span>
-                      {provider === globalProvider && !isCustomized && (
-                        <span className="text-xs text-muted-foreground">(par défaut)</span>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
+                {(['lovable', 'gemini', 'openai', 'anthropic'] as AIProvider[]).map((provider) => {
+                  const providerHasKey = provider === 'lovable' || !!providerApiKeys[provider as Exclude<AIProvider, 'lovable'>];
+                  return (
+                    <SelectItem key={provider} value={provider}>
+                      <div className="flex items-center gap-2">
+                        <ProviderBadge provider={provider} size="sm" />
+                        <span>{PROVIDER_INFO[provider].name}</span>
+                        {provider === globalProvider && !isCustomized && (
+                          <span className="text-xs text-muted-foreground">(par défaut)</span>
+                        )}
+                        {provider !== 'lovable' && !providerHasKey && (
+                          <XCircle className="h-3 w-3 text-muted-foreground/50" />
+                        )}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
 
             {showApiKeyWarning && (
               <p className="text-xs text-amber-600 flex items-center gap-1">
                 <AlertCircle className="h-3 w-3" />
-                Configurez d'abord {PROVIDER_INFO[effectiveProvider].name} comme fournisseur par défaut avec une clé API
+                Configurez d'abord une clé API pour {PROVIDER_INFO[effectiveProvider].name} dans l'onglet Global
               </p>
             )}
           </div>
@@ -247,19 +499,22 @@ export function AIProviderSettings() {
   const { settings, isLoading, updateSettings, validateApiKey } = useAISettings();
 
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('lovable');
-  const [apiKey, setApiKey] = useState('');
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [providerApiKeys, setProviderApiKeys] = useState<ProviderApiKeys>({});
   const [selectedModel, setSelectedModel] = useState<string>('');
-  const [isValidating, setIsValidating] = useState(false);
-  const [validationStatus, setValidationStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
-  const [validationError, setValidationError] = useState<string | null>(null);
   const [agentConfigs, setAgentConfigs] = useState<Partial<Record<AgentType, AgentConfig>>>({});
+  
+  // Validation state per provider
+  const [validationStates, setValidationStates] = useState<Record<string, {
+    isValidating: boolean;
+    status: 'idle' | 'valid' | 'invalid';
+    error: string | null;
+  }>>({});
 
   // Initialize from saved settings
   useEffect(() => {
     if (settings) {
       setSelectedProvider(settings.provider);
-      setApiKey(settings.api_key || '');
+      setProviderApiKeys(settings.provider_api_keys || {});
       setSelectedModel(settings.preferred_model || '');
       setAgentConfigs(settings.agent_configs || {});
     }
@@ -271,35 +526,52 @@ export function AIProviderSettings() {
     if (models.length > 0 && !models.find(m => m.value === selectedModel)) {
       setSelectedModel(models[0].value);
     }
-    // Reset validation when provider changes
-    setValidationStatus('idle');
-    setValidationError(null);
   }, [selectedProvider]);
 
-  const handleValidateKey = async () => {
-    if (!apiKey.trim()) return;
+  const handleApiKeyChange = (provider: Exclude<AIProvider, 'lovable'>, key: string) => {
+    setProviderApiKeys(prev => ({
+      ...prev,
+      [provider]: key,
+    }));
+    // Reset validation when key changes
+    setValidationStates(prev => ({
+      ...prev,
+      [provider]: { isValidating: false, status: 'idle', error: null },
+    }));
+  };
 
-    setIsValidating(true);
-    setValidationStatus('idle');
-    setValidationError(null);
+  const handleValidateKey = async (provider: Exclude<AIProvider, 'lovable'>) => {
+    const apiKey = providerApiKeys[provider];
+    if (!apiKey?.trim()) return;
+
+    setValidationStates(prev => ({
+      ...prev,
+      [provider]: { isValidating: true, status: 'idle', error: null },
+    }));
 
     try {
       const result = await validateApiKey.mutateAsync({
-        provider: selectedProvider,
+        provider,
         apiKey: apiKey.trim(),
       });
 
-      if (result.valid) {
-        setValidationStatus('valid');
-      } else {
-        setValidationStatus('invalid');
-        setValidationError(result.error || 'Clé API invalide');
-      }
+      setValidationStates(prev => ({
+        ...prev,
+        [provider]: {
+          isValidating: false,
+          status: result.valid ? 'valid' : 'invalid',
+          error: result.valid ? null : (result.error || 'Clé API invalide'),
+        },
+      }));
     } catch (error) {
-      setValidationStatus('invalid');
-      setValidationError('Erreur lors de la validation');
-    } finally {
-      setIsValidating(false);
+      setValidationStates(prev => ({
+        ...prev,
+        [provider]: {
+          isValidating: false,
+          status: 'invalid',
+          error: 'Erreur lors de la validation',
+        },
+      }));
     }
   };
 
@@ -316,16 +588,20 @@ export function AIProviderSettings() {
   };
 
   const handleSave = async () => {
+    // Get the API key for the selected provider (for backwards compatibility)
+    const currentApiKey = selectedProvider === 'lovable' ? null : providerApiKeys[selectedProvider] || null;
+    
     await updateSettings.mutateAsync({
       provider: selectedProvider,
-      api_key: selectedProvider === 'lovable' ? null : apiKey.trim() || null,
+      api_key: currentApiKey,
       preferred_model: selectedModel || null,
       agent_configs: Object.keys(agentConfigs).length > 0 ? agentConfigs : null,
+      provider_api_keys: providerApiKeys,
     });
   };
 
   const providers: AIProvider[] = ['lovable', 'gemini', 'openai', 'anthropic'];
-  const requiresApiKey = selectedProvider !== 'lovable';
+  const externalProviders: Exclude<AIProvider, 'lovable'>[] = ['gemini', 'openai', 'anthropic'];
   const models = PROVIDER_MODELS[selectedProvider];
   
   const agentTypes: AgentType[] = [
@@ -341,9 +617,12 @@ export function AIProviderSettings() {
 
   const hasChanges = 
     selectedProvider !== (settings?.provider || 'lovable') ||
-    apiKey !== (settings?.api_key || '') ||
+    JSON.stringify(providerApiKeys) !== JSON.stringify(settings?.provider_api_keys || {}) ||
     selectedModel !== (settings?.preferred_model || '') ||
     JSON.stringify(agentConfigs) !== JSON.stringify(settings?.agent_configs || {});
+
+  // Check if current default provider has a valid key
+  const defaultProviderHasKey = selectedProvider === 'lovable' || !!providerApiKeys[selectedProvider]?.trim();
 
   if (isLoading) {
     return (
@@ -358,8 +637,8 @@ export function AIProviderSettings() {
       <Tabs defaultValue="global" className="w-full">
         <TabsList className="w-full">
           <TabsTrigger value="global" className="flex-1">
-            <Sparkles className="h-4 w-4 mr-2" />
-            Global
+            <Key className="h-4 w-4 mr-2" />
+            Clés API
           </TabsTrigger>
           <TabsTrigger value="agents" className="flex-1">
             <Settings2 className="h-4 w-4 mr-2" />
@@ -368,115 +647,42 @@ export function AIProviderSettings() {
         </TabsList>
 
         <TabsContent value="global" className="space-y-6 mt-4">
-          {/* Provider Selection */}
-          <div className="space-y-3">
-            <Label>Fournisseur IA par défaut</Label>
-            <div className="grid gap-3">
-              {providers.map((provider) => (
-                <button
-                  key={provider}
-                  type="button"
-                  onClick={() => setSelectedProvider(provider)}
-                  className={cn(
-                    'flex items-center gap-3 p-3 rounded-lg border text-left transition-colors',
-                    selectedProvider === provider
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:bg-muted/50'
-                  )}
-                >
-                  <ProviderBadge provider={provider} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-foreground">{PROVIDER_INFO[provider].name}</div>
-                    <div className="text-sm text-muted-foreground truncate">
-                      {PROVIDER_INFO[provider].description}
-                    </div>
-                  </div>
-                  {selectedProvider === provider && (
-                    <Check className="h-5 w-5 text-primary shrink-0" />
-                  )}
-                  {provider === 'lovable' && (
-                    <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full shrink-0">
-                      Inclus
-                    </span>
-                  )}
-                </button>
-              ))}
+          {/* API Keys Overview */}
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+            <Key className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Configuration des fournisseurs IA</p>
+              <p className="mt-1">
+                Configurez vos clés API pour chaque fournisseur. Seul le fournisseur par défaut sera utilisé, 
+                sauf si vous personnalisez les agents dans l'onglet "Par fonction".
+              </p>
             </div>
           </div>
 
-          {/* API Key Input (for external providers) */}
-          {requiresApiKey && (
-            <div className="space-y-2">
-              <Label htmlFor="api-key">Clé API {PROVIDER_INFO[selectedProvider].name}</Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    id="api-key"
-                    type={showApiKey ? 'text' : 'password'}
-                    value={apiKey}
-                    onChange={(e) => {
-                      setApiKey(e.target.value);
-                      setValidationStatus('idle');
-                    }}
-                    placeholder={`Entrez votre clé API ${PROVIDER_INFO[selectedProvider].name}`}
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleValidateKey}
-                  disabled={!apiKey.trim() || isValidating}
-                >
-                  {isValidating ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : validationStatus === 'valid' ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    'Tester'
-                  )}
-                </Button>
-              </div>
-              
-              {/* Validation feedback */}
-              {validationStatus === 'valid' && (
-                <p className="text-sm text-green-600 flex items-center gap-1">
-                  <Check className="h-4 w-4" />
-                  Clé API valide
-                </p>
-              )}
-              {validationStatus === 'invalid' && (
-                <p className="text-sm text-destructive flex items-center gap-1">
-                  <AlertCircle className="h-4 w-4" />
-                  {validationError}
-                </p>
-              )}
-
-              {/* Help text */}
-              <p className="text-xs text-muted-foreground">
-                {selectedProvider === 'gemini' && (
-                  <>Obtenez votre clé sur <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="underline">Google AI Studio</a></>
-                )}
-                {selectedProvider === 'openai' && (
-                  <>Obtenez votre clé sur <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">OpenAI Platform</a></>
-                )}
-                {selectedProvider === 'anthropic' && (
-                  <>Obtenez votre clé sur <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="underline">Anthropic Console</a></>
-                )}
-              </p>
-            </div>
-          )}
-
-          {/* Model Selection */}
+          {/* Provider Cards */}
           <div className="space-y-2">
-            <Label htmlFor="model">Modèle préféré par défaut</Label>
+            {providers.map((provider) => {
+              const state = validationStates[provider] || { isValidating: false, status: 'idle', error: null };
+              return (
+                <ProviderCard
+                  key={provider}
+                  provider={provider}
+                  isDefault={selectedProvider === provider}
+                  apiKey={provider === 'lovable' ? '' : (providerApiKeys[provider as Exclude<AIProvider, 'lovable'>] || '')}
+                  onApiKeyChange={(key) => handleApiKeyChange(provider as Exclude<AIProvider, 'lovable'>, key)}
+                  onValidate={() => handleValidateKey(provider as Exclude<AIProvider, 'lovable'>)}
+                  onSetDefault={() => setSelectedProvider(provider)}
+                  isValidating={state.isValidating}
+                  validationStatus={state.status}
+                  validationError={state.error}
+                />
+              );
+            })}
+          </div>
+
+          {/* Model Selection for default provider */}
+          <div className="space-y-2">
+            <Label htmlFor="model">Modèle préféré par défaut ({PROVIDER_INFO[selectedProvider].name})</Label>
             <Select value={selectedModel} onValueChange={setSelectedModel}>
               <SelectTrigger>
                 <SelectValue placeholder="Choisir un modèle" />
@@ -490,19 +696,6 @@ export function AIProviderSettings() {
               </SelectContent>
             </Select>
           </div>
-
-          {/* Info banner for Lovable */}
-          {selectedProvider === 'lovable' && (
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
-              <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <div className="text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">Lovable AI est inclus dans votre abonnement</p>
-                <p className="mt-1">
-                  Accès aux meilleurs modèles (Gemini, GPT-5) sans configuration supplémentaire.
-                </p>
-              </div>
-            </div>
-          )}
         </TabsContent>
 
         <TabsContent value="agents" className="space-y-4 mt-4">
@@ -524,7 +717,7 @@ export function AIProviderSettings() {
                 agentType={agentType}
                 config={agentConfigs[agentType]}
                 globalProvider={selectedProvider}
-                globalApiKey={apiKey || null}
+                providerApiKeys={providerApiKeys}
                 onChange={(config) => handleAgentConfigChange(agentType, config)}
               />
             ))}
@@ -535,7 +728,7 @@ export function AIProviderSettings() {
       {/* Save Button */}
       <Button
         onClick={handleSave}
-        disabled={updateSettings.isPending || !hasChanges || (requiresApiKey && !apiKey.trim())}
+        disabled={updateSettings.isPending || !hasChanges || !defaultProviderHasKey}
         className="w-full"
       >
         {updateSettings.isPending ? (
@@ -547,6 +740,12 @@ export function AIProviderSettings() {
           'Enregistrer la configuration'
         )}
       </Button>
+      
+      {!defaultProviderHasKey && (
+        <p className="text-sm text-center text-amber-600">
+          Ajoutez une clé API pour {PROVIDER_INFO[selectedProvider].name} avant d'enregistrer
+        </p>
+      )}
     </div>
   );
 }
