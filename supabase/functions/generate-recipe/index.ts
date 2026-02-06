@@ -14,10 +14,17 @@ const RequestSchema = z.object({
 // ===== AI PROVIDER SUPPORT =====
 type AIProvider = "lovable" | "gemini" | "openai" | "anthropic";
 
+interface ProviderApiKeys {
+  gemini?: string;
+  openai?: string;
+  anthropic?: string;
+}
+
 interface AISettings {
   provider: AIProvider;
   api_key: string | null;
   preferred_model: string | null;
+  provider_api_keys: ProviderApiKeys;
 }
 
 const DEFAULT_MODELS: Record<AIProvider, string> = {
@@ -27,33 +34,48 @@ const DEFAULT_MODELS: Record<AIProvider, string> = {
   anthropic: "claude-sonnet-4-20250514",
 };
 
+function getApiKeyForProvider(settings: AISettings, provider: AIProvider): string | null {
+  if (provider === "lovable") return null;
+  const providerKey = settings.provider_api_keys?.[provider];
+  if (providerKey) return providerKey;
+  if (settings.provider === provider && settings.api_key) return settings.api_key;
+  return null;
+}
+
 async function getUserAISettings(supabaseClient: any, userId: string): Promise<AISettings> {
   try {
     const { data, error } = await supabaseClient
       .from("user_ai_settings")
-      .select("provider, api_key, preferred_model")
+      .select("provider, api_key, preferred_model, provider_api_keys")
       .eq("user_id", userId)
       .maybeSingle();
-    if (error || !data) return { provider: "lovable", api_key: null, preferred_model: null };
-    return { provider: data.provider || "lovable", api_key: data.api_key, preferred_model: data.preferred_model };
+    if (error || !data) return { provider: "lovable", api_key: null, preferred_model: null, provider_api_keys: {} };
+    return {
+      provider: data.provider || "lovable",
+      api_key: data.api_key,
+      preferred_model: data.preferred_model,
+      provider_api_keys: data.provider_api_keys || {},
+    };
   } catch {
-    return { provider: "lovable", api_key: null, preferred_model: null };
+    return { provider: "lovable", api_key: null, preferred_model: null, provider_api_keys: {} };
   }
 }
 
 async function callAINonStreaming(settings: AISettings, messages: any[]): Promise<any> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  const { provider, api_key, preferred_model } = settings;
+  const { provider, preferred_model } = settings;
   const model = preferred_model || DEFAULT_MODELS[provider];
+  const apiKey = getApiKeyForProvider(settings, provider);
 
-  if (provider !== "lovable" && !api_key) {
+  if (provider !== "lovable" && !apiKey) {
+    console.log(`No API key for provider ${provider}, falling back to Lovable AI`);
     return callLovableAINonStreaming(LOVABLE_API_KEY!, messages, DEFAULT_MODELS.lovable);
   }
 
   switch (provider) {
-    case "gemini": return callGeminiAINonStreaming(api_key!, model, messages);
-    case "openai": return callOpenAINonStreaming(api_key!, model, messages);
-    case "anthropic": return callAnthropicAINonStreaming(api_key!, model, messages);
+    case "gemini": return callGeminiAINonStreaming(apiKey!, model, messages);
+    case "openai": return callOpenAINonStreaming(apiKey!, model, messages);
+    case "anthropic": return callAnthropicAINonStreaming(apiKey!, model, messages);
     default: return callLovableAINonStreaming(LOVABLE_API_KEY!, messages, model);
   }
 }
