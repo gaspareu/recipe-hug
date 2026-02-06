@@ -32,6 +32,16 @@ interface AIConfig {
   endpoint: string;
 }
 
+// Get API key for specific provider from provider_api_keys or legacy api_key
+function getApiKeyForProvider(settings: any, provider: string): string | null {
+  if (provider === "lovable") return null;
+  const providerApiKeys = settings.provider_api_keys || {};
+  const providerKey = providerApiKeys[provider];
+  if (providerKey) return providerKey;
+  if (settings.provider === provider && settings.api_key) return settings.api_key;
+  return null;
+}
+
 // Resolve AI configuration for this agent
 async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIConfig> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -48,7 +58,7 @@ async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIC
   try {
     const { data: settings, error: settingsError } = await supabaseClient
       .from("user_ai_settings")
-      .select("provider, api_key, preferred_model, agent_configs")
+      .select("provider, api_key, preferred_model, agent_configs, provider_api_keys")
       .eq("user_id", userId)
       .single();
 
@@ -59,6 +69,7 @@ async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIC
 
     console.log(`[AI Config] User settings found - global provider: ${settings.provider}, global model: ${settings.preferred_model}`);
     console.log(`[AI Config] Agent configs available: ${Object.keys(settings.agent_configs || {}).join(", ") || "none"}`);
+    console.log(`[AI Config] Provider API keys available: ${Object.keys(settings.provider_api_keys || {}).join(", ") || "none"}`);
 
     // Check agent-specific config first
     const agentConfigs = settings.agent_configs || {};
@@ -82,9 +93,9 @@ async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIC
         return defaultConfig;
       }
 
-      const apiKey = settings.api_key;
+      const apiKey = getApiKeyForProvider(settings, agentConfig.provider);
       if (!apiKey) {
-        console.warn(`[AI Config] No API key found for external provider, falling back to default`);
+        console.warn(`[AI Config] No API key found for provider ${agentConfig.provider}, falling back to default`);
         return defaultConfig;
       }
 
