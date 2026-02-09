@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { decryptProviderKeys } from "../_shared/decrypt-keys.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,6 +75,9 @@ async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIC
       console.log(`[AI Config] No user settings found, using default: ${defaultConfig.provider}/${defaultConfig.model}`);
       return defaultConfig;
     }
+
+    // Decrypt provider API keys
+    settings.provider_api_keys = await decryptProviderKeys(settings.provider_api_keys || {});
 
     console.log(`[AI Config] User settings found - global provider: ${settings.provider}, global model: ${settings.preferred_model}`);
     console.log(`[AI Config] Agent configs available: ${Object.keys(settings.agent_configs || {}).join(", ") || "none"}`);

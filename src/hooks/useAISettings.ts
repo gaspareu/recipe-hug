@@ -26,6 +26,12 @@ export interface AgentConfig {
 // API keys per provider
 export type ProviderApiKeys = Partial<Record<Exclude<AIProvider, 'lovable'>, string>>;
 
+// Masked key info returned from server
+export interface MaskedKeyInfo {
+  has_key: boolean;
+  masked: string | null;
+}
+
 // Full AI settings including per-agent configs
 export interface AISettings {
   id: string;
@@ -34,7 +40,7 @@ export interface AISettings {
   api_key: string | null; // Deprecated - kept for backwards compatibility
   preferred_model: string | null;
   agent_configs: Partial<Record<AgentType, AgentConfig>> | null;
-  provider_api_keys: ProviderApiKeys;
+  provider_api_keys: ProviderApiKeys; // Contains encrypted blobs from DB (used for presence check only)
   created_at: string;
   updated_at: string;
 }
@@ -44,7 +50,7 @@ export interface AISettingsInput {
   api_key?: string | null;
   preferred_model?: string | null;
   agent_configs?: Partial<Record<AgentType, AgentConfig>> | null;
-  provider_api_keys?: ProviderApiKeys;
+  provider_api_keys?: ProviderApiKeys; // Raw plaintext keys to be encrypted server-side
 }
 
 // Model capabilities for filtering
@@ -168,7 +174,8 @@ export function useAISettings() {
       if (error) throw error;
       if (!data) return null;
       
-      // Parse agent_configs and provider_api_keys from JSON
+      // Note: provider_api_keys contains encrypted blobs from DB
+      // They are only used for presence checks (truthy), never displayed
       return {
         ...data,
         provider: data.provider as AIProvider,
@@ -179,37 +186,41 @@ export function useAISettings() {
     enabled: !!user?.id,
   });
 
+  // Fetch masked keys info from edge function
+  const { data: maskedKeys } = useQuery({
+    queryKey: ['ai-masked-keys', user?.id],
+    queryFn: async (): Promise<Record<string, MaskedKeyInfo>> => {
+      const response = await supabase.functions.invoke('manage-ai-keys', {
+        method: 'GET',
+      });
+      if (response.error) throw response.error;
+      return response.data?.keys || {};
+    },
+    enabled: !!user?.id && !!settings,
+  });
+
   const updateSettings = useMutation({
     mutationFn: async (input: AISettingsInput) => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      const payload = {
-        user_id: user.id,
-        provider: input.provider,
-        api_key: input.api_key || null,
-        preferred_model: input.preferred_model || null,
-        agent_configs: (input.agent_configs || {}) as Json,
-        provider_api_keys: (input.provider_api_keys || {}) as Json,
-      };
+      // Send all settings including raw API keys to the edge function
+      // The edge function encrypts API keys before storing
+      const response = await supabase.functions.invoke('manage-ai-keys', {
+        body: {
+          provider: input.provider,
+          api_key: input.api_key || null,
+          preferred_model: input.preferred_model || null,
+          agent_configs: input.agent_configs || {},
+          provider_api_keys: input.provider_api_keys || {},
+        },
+      });
 
-      // Upsert - insert or update
-      const { data, error } = await supabase
-        .from('user_ai_settings')
-        .upsert(payload, { onConflict: 'user_id' })
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      return {
-        ...data,
-        provider: data.provider as AIProvider,
-        agent_configs: data.agent_configs as Partial<Record<AgentType, AgentConfig>> | null,
-        provider_api_keys: (data.provider_api_keys as ProviderApiKeys) || {},
-      } as AISettings;
+      if (response.error) throw response.error;
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-settings', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['ai-masked-keys', user?.id] });
       toast.success('Configuration IA sauvegardée');
     },
     onError: (error) => {
@@ -234,15 +245,15 @@ export function useAISettings() {
     },
   });
 
-  // Helper to check if a provider has a configured API key
+  // Helper to check if a provider has a configured API key (checks encrypted blob presence)
   const hasApiKeyForProvider = (provider: AIProvider): boolean => {
     if (provider === 'lovable') return true;
     return !!settings?.provider_api_keys?.[provider];
   };
 
-  // Helper to get API key for a provider
-  const getApiKeyForProvider = (provider: Exclude<AIProvider, 'lovable'>): string | undefined => {
-    return settings?.provider_api_keys?.[provider];
+  // Helper to get masked key for display
+  const getMaskedKeyForProvider = (provider: Exclude<AIProvider, 'lovable'>): string | null => {
+    return maskedKeys?.[provider]?.masked || null;
   };
 
   return {
@@ -251,8 +262,9 @@ export function useAISettings() {
     error,
     updateSettings,
     validateApiKey,
+    maskedKeys,
     hasApiKeyForProvider,
-    getApiKeyForProvider,
+    getMaskedKeyForProvider,
     // Helper to get effective provider (default to lovable)
     effectiveProvider: (settings?.provider || 'lovable') as AIProvider,
     effectiveModel: settings?.preferred_model || PROVIDER_MODELS[settings?.provider || 'lovable'][0]?.value,
