@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Eye, EyeOff, Check, Loader2, Sparkles, AlertCircle, ChevronDown, Settings2, Key, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -517,6 +518,8 @@ export function AIProviderSettings() {
   const [providerApiKeys, setProviderApiKeys] = useState<ProviderApiKeys>({});
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [agentConfigs, setAgentConfigs] = useState<Partial<Record<AgentType, AgentConfig>>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [savePhase, setSavePhase] = useState<'idle' | 'validating' | 'saving'>('idle');
   
   // Validation state per provider
   const [validationStates, setValidationStates] = useState<Record<string, {
@@ -603,16 +606,91 @@ export function AIProviderSettings() {
   };
 
   const handleSave = async () => {
-    // Get the API key for the selected provider (for backwards compatibility)
-    const currentApiKey = selectedProvider === 'lovable' ? null : providerApiKeys[selectedProvider] || null;
+    const newKeysToValidate: { provider: Exclude<AIProvider, 'lovable'>; key: string }[] = [];
     
-    await updateSettings.mutateAsync({
-      provider: selectedProvider,
-      api_key: currentApiKey,
-      preferred_model: selectedModel || null,
-      agent_configs: Object.keys(agentConfigs).length > 0 ? agentConfigs : null,
-      provider_api_keys: providerApiKeys,
-    });
+    // Collect all new keys that need validation
+    for (const provider of ['gemini', 'openai', 'anthropic'] as Exclude<AIProvider, 'lovable'>[]) {
+      const key = providerApiKeys[provider];
+      if (key?.trim()) {
+        // Skip if already validated as valid
+        const state = validationStates[provider];
+        if (state?.status !== 'valid') {
+          newKeysToValidate.push({ provider, key: key.trim() });
+        }
+      }
+    }
+
+    // Validate all new keys before saving
+    if (newKeysToValidate.length > 0) {
+      setIsSaving(true);
+      setSavePhase('validating');
+      
+      let allValid = true;
+      
+      // Validate all keys in parallel
+      const validationPromises = newKeysToValidate.map(async ({ provider, key }) => {
+        setValidationStates(prev => ({
+          ...prev,
+          [provider]: { isValidating: true, status: 'idle', error: null },
+        }));
+
+        try {
+          const result = await validateApiKey.mutateAsync({ provider, apiKey: key });
+          
+          setValidationStates(prev => ({
+            ...prev,
+            [provider]: {
+              isValidating: false,
+              status: result.valid ? 'valid' : 'invalid',
+              error: result.valid ? null : (result.error || 'Clé API invalide'),
+            },
+          }));
+          
+          if (!result.valid) allValid = false;
+        } catch {
+          setValidationStates(prev => ({
+            ...prev,
+            [provider]: {
+              isValidating: false,
+              status: 'invalid',
+              error: 'Erreur lors de la validation',
+            },
+          }));
+          allValid = false;
+        }
+      });
+      
+      await Promise.all(validationPromises);
+      
+      if (!allValid) {
+        setIsSaving(false);
+        setSavePhase('idle');
+        toast.error('Certaines clés API sont invalides. Corrigez-les avant d\'enregistrer.');
+        return;
+      }
+    }
+
+    // All keys valid - proceed to save
+    setSavePhase('saving');
+    setIsSaving(true);
+    
+    try {
+      const currentApiKey = selectedProvider === 'lovable' ? null : providerApiKeys[selectedProvider] || null;
+      
+      await updateSettings.mutateAsync({
+        provider: selectedProvider,
+        api_key: currentApiKey,
+        preferred_model: selectedModel || null,
+        agent_configs: Object.keys(agentConfigs).length > 0 ? agentConfigs : null,
+        provider_api_keys: providerApiKeys,
+      });
+      
+      // Clear typed keys after successful save (they're now encrypted in DB)
+      setProviderApiKeys({});
+    } finally {
+      setIsSaving(false);
+      setSavePhase('idle');
+    }
   };
 
   const providers: AIProvider[] = ['lovable', 'gemini', 'openai', 'anthropic'];
@@ -747,13 +825,13 @@ export function AIProviderSettings() {
       {/* Save Button */}
       <Button
         onClick={handleSave}
-        disabled={updateSettings.isPending || !hasChanges || !defaultProviderHasKey}
+        disabled={isSaving || updateSettings.isPending || !hasChanges || !defaultProviderHasKey}
         className="w-full"
       >
-        {updateSettings.isPending ? (
+        {isSaving ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Enregistrement...
+            {savePhase === 'validating' ? 'Validation des clés API...' : 'Enregistrement...'}
           </>
         ) : (
           'Enregistrer la configuration'
