@@ -113,21 +113,29 @@ serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "claude-3-5-haiku-latest",
+              model: "claude-sonnet-4-20250514",
               max_tokens: 1,
               messages: [{ role: "user", content: "Hi" }],
             }),
           });
 
-          // For Anthropic, we consider it valid if we get a response (even rate limited)
-          // Invalid keys return 401
-          if (response.ok || response.status === 429) {
+          console.log("Anthropic response status:", response.status);
+          const responseBody = await response.text();
+          console.log("Anthropic response body:", responseBody);
+
+          // Valid keys: 200 (success) or 429 (rate limited) or 529 (overloaded)
+          // Invalid keys: 401
+          if (response.ok || response.status === 429 || response.status === 529) {
             valid = true;
           } else if (response.status === 401) {
             errorMessage = "Clé API invalide";
           } else {
-            const errorData = await response.json().catch(() => ({}));
-            errorMessage = errorData.error?.message || `Erreur ${response.status}`;
+            try {
+              const errorData = JSON.parse(responseBody);
+              errorMessage = errorData.error?.message || `Erreur ${response.status}`;
+            } catch {
+              errorMessage = `Erreur ${response.status}`;
+            }
           }
           break;
         }
