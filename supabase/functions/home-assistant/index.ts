@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { decryptProviderKeys } from "../_shared/decrypt-keys.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,7 +120,7 @@ async function getUserAISettings(supabaseClient: any, userId: string): Promise<A
       provider: data.provider || "lovable",
       api_key: data.api_key,
       preferred_model: data.preferred_model,
-      provider_api_keys: data.provider_api_keys || {},
+      provider_api_keys: await decryptProviderKeys(data.provider_api_keys || {}),
     };
   } catch {
     return { provider: "lovable", api_key: null, preferred_model: null, provider_api_keys: {} };

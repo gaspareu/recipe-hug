@@ -182,6 +182,8 @@ const ProviderCard = ({
   provider,
   isDefault,
   apiKey,
+  hasExistingKey,
+  maskedKey,
   onApiKeyChange,
   onValidate,
   onSetDefault,
@@ -192,6 +194,8 @@ const ProviderCard = ({
   provider: AIProvider;
   isDefault: boolean;
   apiKey: string;
+  hasExistingKey: boolean;
+  maskedKey?: string | null;
   onApiKeyChange: (key: string) => void;
   onValidate: () => void;
   onSetDefault: () => void;
@@ -202,7 +206,7 @@ const ProviderCard = ({
   const [isOpen, setIsOpen] = useState(false);
   const providerInfo = PROVIDER_INFO[provider];
   const isLovable = provider === 'lovable';
-  const hasKey = isLovable || !!apiKey.trim();
+  const hasKey = isLovable || !!apiKey.trim() || hasExistingKey;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -254,6 +258,12 @@ const ProviderCard = ({
           {!isLovable && (
             <div className="pl-4">
               <Label className="text-sm mb-2 block">Clé API</Label>
+              {hasExistingKey && !apiKey.trim() && maskedKey && (
+                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-green-500" />
+                  Clé configurée : <span className="font-mono">{maskedKey}</span>
+                </p>
+              )}
               <ProviderApiKeyInput
                 provider={provider as Exclude<AIProvider, 'lovable'>}
                 apiKey={apiKey}
@@ -263,6 +273,11 @@ const ProviderCard = ({
                 validationStatus={validationStatus}
                 validationError={validationError}
               />
+              {hasExistingKey && !apiKey.trim() && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Saisissez une nouvelle clé pour remplacer l'existante
+                </p>
+              )}
             </div>
           )}
           
@@ -496,7 +511,7 @@ const AgentConfigRow = ({
 };
 
 export function AIProviderSettings() {
-  const { settings, isLoading, updateSettings, validateApiKey } = useAISettings();
+  const { settings, isLoading, updateSettings, validateApiKey, maskedKeys } = useAISettings();
 
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('lovable');
   const [providerApiKeys, setProviderApiKeys] = useState<ProviderApiKeys>({});
@@ -510,11 +525,11 @@ export function AIProviderSettings() {
     error: string | null;
   }>>({});
 
-  // Initialize from saved settings
+  // Initialize from saved settings (API keys are NOT populated - they're encrypted in DB)
   useEffect(() => {
     if (settings) {
       setSelectedProvider(settings.provider);
-      setProviderApiKeys(settings.provider_api_keys || {});
+      // Don't populate providerApiKeys from settings - they contain encrypted blobs
       setSelectedModel(settings.preferred_model || '');
       setAgentConfigs(settings.agent_configs || {});
     }
@@ -617,12 +632,14 @@ export function AIProviderSettings() {
 
   const hasChanges = 
     selectedProvider !== (settings?.provider || 'lovable') ||
-    JSON.stringify(providerApiKeys) !== JSON.stringify(settings?.provider_api_keys || {}) ||
+    Object.values(providerApiKeys).some(k => k?.trim()) || // Any new key typed
     selectedModel !== (settings?.preferred_model || '') ||
     JSON.stringify(agentConfigs) !== JSON.stringify(settings?.agent_configs || {});
 
-  // Check if current default provider has a valid key
-  const defaultProviderHasKey = selectedProvider === 'lovable' || !!providerApiKeys[selectedProvider]?.trim();
+  // Check if current default provider has a valid key (new typed key OR existing encrypted key)
+  const defaultProviderHasKey = selectedProvider === 'lovable' || 
+    !!providerApiKeys[selectedProvider]?.trim() ||
+    !!settings?.provider_api_keys?.[selectedProvider as Exclude<AIProvider, 'lovable'>];
 
   if (isLoading) {
     return (
@@ -669,6 +686,8 @@ export function AIProviderSettings() {
                   provider={provider}
                   isDefault={selectedProvider === provider}
                   apiKey={provider === 'lovable' ? '' : (providerApiKeys[provider as Exclude<AIProvider, 'lovable'>] || '')}
+                  hasExistingKey={provider !== 'lovable' && !!settings?.provider_api_keys?.[provider as Exclude<AIProvider, 'lovable'>]}
+                  maskedKey={provider !== 'lovable' ? maskedKeys?.[provider as Exclude<AIProvider, 'lovable'>]?.masked : null}
                   onApiKeyChange={(key) => handleApiKeyChange(provider as Exclude<AIProvider, 'lovable'>, key)}
                   onValidate={() => handleValidateKey(provider as Exclude<AIProvider, 'lovable'>)}
                   onSetDefault={() => setSelectedProvider(provider)}
