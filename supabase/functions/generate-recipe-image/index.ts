@@ -1,130 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { decryptProviderKeys } from "../_shared/decrypt-keys.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
-
-// Agent type for this function
-const AGENT_TYPE = "generate_image";
-
-// Provider API endpoints
-const PROVIDER_ENDPOINTS: Record<string, string> = {
-  lovable: "https://ai.gateway.lovable.dev/v1/chat/completions",
-  openai: "https://api.openai.com/v1/images/generations",
-  google: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-};
-
-// Image generation capable models
-const IMAGE_GEN_MODELS = [
-  "google/gemini-2.5-flash-image",
-  "google/gemini-3-pro-image-preview",
-  "dall-e-3",
-  "gemini-2.0-flash-exp-image-generation",
-];
-
-interface AIConfig {
-  provider: string;
-  model: string;
-  apiKey: string;
-  endpoint: string;
-}
-
-// Get API key for specific provider from provider_api_keys or legacy api_key
-function getApiKeyForProvider(settings: any, provider: string): string | null {
-  if (provider === "lovable") return null;
-  const providerApiKeys = settings.provider_api_keys || {};
-  const providerKey = providerApiKeys[provider];
-  if (providerKey) return providerKey;
-  if (settings.provider === provider && settings.api_key) return settings.api_key;
-  return null;
-}
-
-// Resolve AI configuration for this agent
-async function resolveAIConfig(supabaseClient: any, userId: string): Promise<AIConfig> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  
-  const defaultConfig: AIConfig = {
-    provider: "lovable",
-    model: "google/gemini-2.5-flash-image",
-    apiKey: LOVABLE_API_KEY || "",
-    endpoint: PROVIDER_ENDPOINTS.lovable,
-  };
-
-  console.log(`[AI Config] Resolving config for agent: ${AGENT_TYPE}, user: ${userId}`);
-
-  try {
-    const { data: settings, error: settingsError } = await supabaseClient
-      .from("user_ai_settings")
-      .select("provider, api_key, preferred_model, agent_configs, provider_api_keys")
-      .eq("user_id", userId)
-      .single();
-
-    if (settingsError || !settings) {
-      console.log(`[AI Config] No user settings found, using default: ${defaultConfig.provider}/${defaultConfig.model}`);
-      return defaultConfig;
-    }
-
-    // Decrypt provider API keys
-    settings.provider_api_keys = await decryptProviderKeys(settings.provider_api_keys || {});
-
-    console.log(`[AI Config] User settings found - global provider: ${settings.provider}, global model: ${settings.preferred_model}`);
-    console.log(`[AI Config] Agent configs available: ${Object.keys(settings.agent_configs || {}).join(", ") || "none"}`);
-    console.log(`[AI Config] Provider API keys available: ${Object.keys(settings.provider_api_keys || {}).join(", ") || "none"}`);
-
-    // Check agent-specific config first
-    const agentConfigs = settings.agent_configs || {};
-    const agentConfig = agentConfigs[AGENT_TYPE];
-
-    if (agentConfig?.provider && agentConfig?.model) {
-      console.log(`[AI Config] Found agent-specific config: ${agentConfig.provider}/${agentConfig.model}`);
-      
-      if (agentConfig.provider === "lovable") {
-        console.log(`[AI Config] Agent uses Lovable provider, using: lovable/${agentConfig.model}`);
-        return {
-          provider: "lovable",
-          model: agentConfig.model,
-          apiKey: LOVABLE_API_KEY || "",
-          endpoint: PROVIDER_ENDPOINTS.lovable,
-        };
-      }
-
-      if (!IMAGE_GEN_MODELS.includes(agentConfig.model)) {
-        console.warn(`[AI Config] Model ${agentConfig.model} doesn't support image generation, falling back to default`);
-        return defaultConfig;
-      }
-
-      const apiKey = getApiKeyForProvider(settings, agentConfig.provider);
-      if (!apiKey) {
-        console.warn(`[AI Config] No API key found for provider ${agentConfig.provider}, falling back to default`);
-        return defaultConfig;
-      }
-
-      console.log(`[AI Config] Using agent-specific external config: ${agentConfig.provider}/${agentConfig.model}`);
-      return {
-        provider: agentConfig.provider,
-        model: agentConfig.model,
-        apiKey,
-        endpoint: PROVIDER_ENDPOINTS[agentConfig.provider] || PROVIDER_ENDPOINTS.lovable,
-      };
-    }
-
-    console.log(`[AI Config] No agent-specific config, using default: ${defaultConfig.provider}/${defaultConfig.model}`);
-    return defaultConfig;
-  } catch (error) {
-    console.error("[AI Config] Error resolving config:", error);
-    return defaultConfig;
-  }
-}
+import { corsHeaders } from "../_shared/cors.ts";
+import { resolveAIConfig } from "../_shared/ai-config.ts";
 
 // Generate image based on provider
-async function generateImage(config: AIConfig, prompt: string): Promise<string> {
+async function generateImage(config: any, prompt: string): Promise<string> {
   if (config.provider === "openai" && config.model === "dall-e-3") {
-    // OpenAI DALL-E 3 API
-    const response = await fetch(config.endpoint, {
+    const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
@@ -148,7 +30,7 @@ async function generateImage(config: AIConfig, prompt: string): Promise<string> 
     const data = await response.json();
     const base64 = data.data?.[0]?.b64_json;
     if (!base64) throw new Error("No image in DALL-E response");
-    
+
     return `data:image/png;base64,${base64}`;
   }
 
@@ -174,7 +56,7 @@ async function generateImage(config: AIConfig, prompt: string): Promise<string> 
 
   const aiData = await response.json();
   const imageUrl = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  
+
   if (!imageUrl) {
     console.error("No image in response:", JSON.stringify(aiData));
     throw new Error("No image generated");
@@ -219,10 +101,7 @@ serve(async (req) => {
     if (!recipeId || !title) {
       return new Response(
         JSON.stringify({ error: "Missing recipeId or title" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -240,8 +119,12 @@ serve(async (req) => {
       });
     }
 
-    // Resolve AI configuration for this agent
-    const aiConfig = await resolveAIConfig(supabase, userId);
+    // Resolve AI configuration
+    const aiConfig = await resolveAIConfig(supabase, userId, {
+      agentType: "generate_image",
+      defaultModel: "google/gemini-2.5-flash-image",
+      requiredCapabilities: ["image_generation"],
+    });
     console.log(`Generating image for recipe ${recipeId} using ${aiConfig.provider}/${aiConfig.model}`);
 
     // Build prompt
@@ -295,14 +178,12 @@ serve(async (req) => {
       throw new Error("Failed to upload image");
     }
 
-    // Get public URL
     const { data: urlData } = supabase.storage
       .from("recipe-images")
       .getPublicUrl(fileName);
 
     const publicUrl = urlData.publicUrl;
 
-    // Update recipe with new image URL
     const { error: updateError } = await supabase
       .from("recipes")
       .update({ source_image_url: publicUrl })
@@ -317,10 +198,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, imageUrl: publicUrl }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error generating recipe image:", error);

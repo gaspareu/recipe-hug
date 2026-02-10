@@ -1,0 +1,75 @@
+// ===== Shared AI Types & Constants =====
+
+export type AIProvider = "lovable" | "gemini" | "openai" | "anthropic";
+
+export interface ProviderApiKeys {
+  gemini?: string;
+  openai?: string;
+  anthropic?: string;
+}
+
+export interface AISettings {
+  provider: AIProvider;
+  api_key: string | null;
+  preferred_model: string | null;
+  provider_api_keys: ProviderApiKeys;
+  agent_configs?: Record<string, { provider: string; model: string }>;
+}
+
+export interface AIConfig {
+  provider: string;
+  model: string;
+  apiKey: string;
+  endpoint: string;
+}
+
+export const PROVIDER_ENDPOINTS: Record<string, string> = {
+  lovable: "https://ai.gateway.lovable.dev/v1/chat/completions",
+  openai: "https://api.openai.com/v1/chat/completions",
+  anthropic: "https://api.anthropic.com/v1/messages",
+  gemini: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+};
+
+export const DEFAULT_MODELS: Record<AIProvider, string> = {
+  lovable: "google/gemini-3-flash-preview",
+  gemini: "gemini-2.5-flash",
+  openai: "gpt-4o",
+  anthropic: "claude-sonnet-4-20250514",
+};
+
+// Capability lists for model validation
+export const TOOL_CAPABLE_MODELS = [
+  "google/gemini-3-flash-preview",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-pro",
+  "google/gemini-3-pro-preview",
+  "openai/gpt-5",
+  "openai/gpt-5-mini",
+  "openai/gpt-5-nano",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "claude-3-5-sonnet-20241022",
+  "claude-3-5-haiku-20241022",
+  "claude-sonnet-4-20250514",
+];
+
+export const VISION_MODELS = [
+  ...TOOL_CAPABLE_MODELS,
+  "gemini-2.5-pro-preview-05-06",
+  "gemini-2.5-flash-preview-05-20",
+];
+
+export const IMAGE_GEN_MODELS = [
+  "google/gemini-2.5-flash-image",
+  "google/gemini-3-pro-image-preview",
+  "dall-e-3",
+  "gemini-2.0-flash-exp-image-generation",
+];
+
+export type Capability = "tools" | "vision" | "image_generation";
+
+export const CAPABILITY_MODELS: Record<Capability, string[]> = {
+  tools: TOOL_CAPABLE_MODELS,
+  vision: VISION_MODELS,
+  image_generation: IMAGE_GEN_MODELS,
+};
