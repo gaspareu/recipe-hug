@@ -1,157 +1,69 @@
 
-# Plan : Clés API IA personnalisées
+# Documentation des Edge Functions
 
 ## Objectif
-Permettre aux utilisateurs de configurer leurs propres clés API pour utiliser des fournisseurs IA externes (Google Gemini, OpenAI, Anthropic) à la place de Lovable AI.
+Creer un fichier `.md` a la racine du projet qui repertorie toutes les fonctions backend, leur role, leur type d'agent IA, et les patterns de code utilises.
 
-## Architecture proposée
+## Contenu du fichier `EDGE_FUNCTIONS.md`
 
-### 1. Nouvelle table `user_ai_settings`
-
-Stockage sécurisé des paramètres IA de l'utilisateur :
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    user_ai_settings                         │
-├─────────────────────────────────────────────────────────────┤
-│ id               UUID (PK)                                  │
-│ user_id          UUID (FK → auth.users, UNIQUE)             │
-│ provider         TEXT ('lovable' | 'gemini' | 'openai' |    │
-│                        'anthropic')                         │
-│ api_key          TEXT (clé chiffrée côté client)            │
-│ preferred_model  TEXT (ex: 'gpt-4o', 'claude-3-5-sonnet')   │
-│ created_at       TIMESTAMPTZ                                │
-│ updated_at       TIMESTAMPTZ                                │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 2. Interface utilisateur - Nouvelle section Profil
-
-Une nouvelle section "Configuration IA" dans le profil :
-
-- Sélecteur de fournisseur (radio buttons avec logos)
-  - Lovable AI (défaut, gratuit inclus)
-  - Google Gemini
-  - OpenAI
-  - Anthropic
-- Champ clé API (masqué avec toggle visibilité)
-- Sélecteur de modèle par fournisseur
-- Bouton "Tester la connexion"
-- Indicateur de statut (connecté/erreur)
-
-### 3. Modèles disponibles par fournisseur
-
-| Fournisseur | Modèles proposés |
-|-------------|------------------|
-| Lovable AI | gemini-3-flash-preview (défaut) |
-| Google Gemini | gemini-2.5-flash, gemini-2.5-pro |
-| OpenAI | gpt-4o, gpt-4o-mini, gpt-4-turbo |
-| Anthropic | claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus |
-
-### 4. Modification des Edge Functions
-
-Logique de routage dans toutes les fonctions IA :
-
-```text
-┌──────────────────┐     ┌────────────────────┐
-│ Requête frontend │────▶│ Edge Function      │
-└──────────────────┘     └────────┬───────────┘
-                                  │
-                         ┌────────▼────────┐
-                         │ Lire settings   │
-                         │ user_ai_settings│
-                         └────────┬────────┘
-                                  │
-            ┌─────────────────────┼─────────────────────┐
-            │                     │                     │
-     ┌──────▼──────┐      ┌───────▼───────┐    ┌───────▼───────┐
-     │ Lovable AI  │      │ Google/OpenAI │    │   Anthropic   │
-     │ Gateway     │      │ Direct API    │    │   Direct API  │
-     └─────────────┘      └───────────────┘    └───────────────┘
-```
-
-### 5. Sécurité
-
-- **Chiffrement côté client** : Les clés API sont chiffrées avec une clé dérivée du mot de passe utilisateur avant stockage
-- **RLS strict** : Chaque utilisateur ne peut lire/écrire que ses propres paramètres
-- **Validation** : Test de connexion avant sauvegarde d'une clé
-- **Pas de logs des clés** : Les clés ne sont jamais loguées dans les Edge Functions
+### 14 fonctions identifiees, classees en 4 categories :
 
 ---
 
-## Fichiers à créer/modifier
+### 1. Agents IA conversationnels (streaming)
+| Fonction | Role | Agent Type | Capabilities requises |
+|---|---|---|---|
+| `home-assistant` | Orchestrateur central du chat. Gere les modes orchestration, creation, cuisson, edition, memoire. Detecte les intentions, route vers les sous-modes, supporte le multimodal (images). **1132 lignes** - la plus grosse fonction. | `chat` | streaming, tools, vision |
+| `cooking-assistant` | Assistant de cuisson/edition pour une recette specifique. Guide etape par etape, suggere des substitutions, peut modifier ou creer une recette via tool calling. **464 lignes** | `chat` (non configurable par agent) | streaming, tools |
+| `memory-assistant` | Gestion des preferences culinaires de l'utilisateur. Permet de consulter, ajouter, supprimer des preferences via tool calling. **419 lignes** | `chat` (non configurable par agent) | streaming, tools |
 
-### Nouveaux fichiers
-- `src/components/profile/AIProviderSettings.tsx` - Interface de configuration
-- `src/hooks/useAISettings.ts` - Hook de gestion des paramètres IA
-- `supabase/functions/validate-ai-key/index.ts` - Validation des clés API
+### 2. Agents IA de traitement (non-streaming)
+| Fonction | Role | Agent Type | Capabilities requises |
+|---|---|---|---|
+| `generate-recipe` | Genere une recette complete (titre, ingredients, etapes) a partir d'un prompt texte. Retourne du JSON. | Non configurable par agent | - |
+| `analyze-recipe` | Analyse une recette et genere un resume, des tags nutritionnels, un score calorique et la saison. | Non configurable par agent | - |
+| `analyze-recipe-timeline` | Analyse les etapes d'une recette pour creer un diagramme de Gantt (duree, parallelisme, taches passives/actives). Utilise le tool calling. | `timeline` | tools |
+| `extract-user-preferences` | Analyse une conversation pour extraire automatiquement les preferences culinaires (gouts, allergies, equipement). Utilise le tool calling. | `chat` | tools |
+| `parse-recipe-image` | Extrait une recette structuree a partir d'une photo (OCR via vision IA). Inclut une protection SSRF. | `parse_image` | vision |
+| `generate-recipe-image` | Genere une photo realiste d'un plat a partir du titre et des ingredients, puis la stocke dans le bucket. | `generate_image` | image_generation |
 
-### Fichiers à modifier
-- `src/pages/Profile.tsx` - Ajouter la nouvelle section
-- `supabase/functions/home-assistant/index.ts` - Routage multi-fournisseur
-- `supabase/functions/cooking-assistant/index.ts` - Routage multi-fournisseur
-- `supabase/functions/generate-recipe/index.ts` - Routage multi-fournisseur
-- `supabase/functions/analyze-recipe/index.ts` - Routage multi-fournisseur
-- `supabase/functions/parse-recipe-image/index.ts` - Routage multi-fournisseur
-- `supabase/functions/extract-user-preferences/index.ts` - Routage multi-fournisseur
-- `supabase/functions/memory-assistant/index.ts` - Routage multi-fournisseur
-- `supabase/functions/analyze-recipe-timeline/index.ts` - Routage multi-fournisseur
-- `supabase/functions/generate-recipe-image/index.ts` - Routage multi-fournisseur (image)
-- `supabase/functions/webhook-recipe/index.ts` - Routage multi-fournisseur
+### 3. Services webhook / externes
+| Fonction | Role | Agent Type |
+|---|---|---|
+| `webhook-recipe` | Point d'entree externe (ex: Home Assistant). Recoit du texte, extrait une recette via IA, la sauvegarde, et declenche la generation d'image en arriere-plan. Authentification par webhook token (pas JWT). | `webhook` + `generate_image` |
 
-### Migration base de données
-- Création de la table `user_ai_settings`
-- Politiques RLS pour la nouvelle table
+### 4. Services utilitaires (sans IA)
+| Fonction | Role |
+|---|---|
+| `manage-ai-keys` | CRUD securise des cles API. Chiffre les cles (AES-GCM) a l'ecriture, retourne des cles masquees a la lecture. |
+| `validate-ai-key` | Teste la validite d'une cle API en faisant un appel minimal au provider (Gemini, OpenAI, Anthropic). |
+| `elevenlabs-tts` | Convertit du texte en audio MP3 via l'API ElevenLabs (Text-to-Speech). |
+| `elevenlabs-scribe-token` | Genere un token usage unique pour le service ElevenLabs Scribe (transcription temps reel). |
 
----
-
-## Détails techniques
-
-### Hook `useAISettings`
-
-```typescript
-interface AISettings {
-  provider: 'lovable' | 'gemini' | 'openai' | 'anthropic';
-  apiKey: string | null;
-  preferredModel: string | null;
-}
-
-// Fonctions exposées
-- getSettings(): AISettings
-- updateSettings(settings): void
-- validateKey(provider, key): Promise<boolean>
-```
-
-### Composant `AIProviderSettings`
-
-Structure du composant :
-1. Carte avec icône et description
-2. Radio group pour sélection du fournisseur
-3. Formulaire conditionnel (clé + modèle) si fournisseur externe
-4. Bouton de test avec état de chargement
-5. Messages d'erreur/succès
-
-### Fonction utilitaire partagée pour Edge Functions
-
-Créer un module `_shared/ai-router.ts` avec :
-- `getAIConfig(userId)` - Récupère les paramètres utilisateur
-- `callAI(config, messages, options)` - Appelle le bon endpoint selon le provider
-- Gestion des erreurs spécifiques par fournisseur
-
-### Endpoints API par fournisseur
-
-| Fournisseur | Endpoint |
-|-------------|----------|
-| Lovable AI | `https://ai.gateway.lovable.dev/v1/chat/completions` |
-| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` |
-| OpenAI | `https://api.openai.com/v1/chat/completions` |
-| Anthropic | `https://api.anthropic.com/v1/messages` |
+### 5. Module partage
+| Fichier | Role |
+|---|---|
+| `_shared/decrypt-keys.ts` | Utilitaires de chiffrement/dechiffrement AES-GCM pour les cles API. Exporte `encryptValue`, `decryptValue`, `decryptProviderKeys`, `maskApiKey`. |
 
 ---
 
-## Estimation
+### Observation : duplication massive de code
 
-- **Complexité** : Moyenne-élevée
-- **Impact** : 12 Edge Functions + 3 nouveaux fichiers + 1 migration
-- **Risque** : Faible (fallback sur Lovable AI si erreur)
+**Probleme identifie** : Chaque fonction qui utilise l'IA re-declare independamment :
+- Les types `AIProvider`, `AISettings`, `ProviderApiKeys`
+- Les fonctions `getApiKeyForProvider`, `getUserAISettings`
+- Les fonctions d'appel par provider (`callLovableAI`, `callGeminiAI`, `callOpenAI`, `callAnthropicAI`)
+- Les transformations de stream (`transformGeminiStreamToOpenAI`, `transformAnthropicStreamToOpenAI`)
+- Les constantes `DEFAULT_MODELS`, `PROVIDER_ENDPOINTS`, `corsHeaders`
+
+Deux patterns coexistent sans raison technique :
+1. **Pattern "simple"** (`analyze-recipe`, `generate-recipe`, `memory-assistant`) : `getUserAISettings` + `callAINonStreaming` sans support `agent_configs`
+2. **Pattern "avance"** (`analyze-recipe-timeline`, `extract-user-preferences`, `parse-recipe-image`, `generate-recipe-image`) : `resolveAIConfig` avec support `agent_configs` et validation de capacites
+
+Le fichier documentera cet etat pour servir de base a une future refactorisation.
+
+---
+
+## Fichier a creer
+- `EDGE_FUNCTIONS.md` : documentation complete avec tableau recapitulatif, description de chaque fonction, et notes sur la duplication de code.
 
