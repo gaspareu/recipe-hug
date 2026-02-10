@@ -1,158 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-// Agent types for this function
-const AGENT_TYPE_EXTRACT = "webhook";
-const AGENT_TYPE_IMAGE = "generate_image";
-
-// Provider API endpoints
-const PROVIDER_ENDPOINTS: Record<string, string> = {
-  lovable: "https://ai.gateway.lovable.dev/v1/chat/completions",
-  openai: "https://api.openai.com/v1/chat/completions",
-  anthropic: "https://api.anthropic.com/v1/messages",
-  google: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-};
-
-interface AIConfig {
-  provider: string;
-  model: string;
-  apiKey: string;
-  endpoint: string;
-}
-
-// Resolve AI configuration for an agent type
-async function resolveAIConfig(
-  supabaseAdmin: any,
-  userId: string,
-  agentType: string,
-  defaultModel: string
-): Promise<AIConfig> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  
-  const defaultConfig: AIConfig = {
-    provider: "lovable",
-    model: defaultModel,
-    apiKey: LOVABLE_API_KEY || "",
-    endpoint: PROVIDER_ENDPOINTS.lovable,
-  };
-
-  console.log(`[AI Config] Resolving config for agent: ${agentType}, user: ${userId}, default model: ${defaultModel}`);
-
-  try {
-    const { data: settings, error: settingsError } = await supabaseAdmin
-      .from("user_ai_settings")
-      .select("provider, api_key, preferred_model, agent_configs")
-      .eq("user_id", userId)
-      .single();
-
-    if (settingsError || !settings) {
-      console.log(`[AI Config] No user settings found, using default: ${defaultConfig.provider}/${defaultConfig.model}`);
-      return defaultConfig;
-    }
-
-    console.log(`[AI Config] User settings found - global provider: ${settings.provider}, global model: ${settings.preferred_model}`);
-    console.log(`[AI Config] Agent configs available: ${Object.keys(settings.agent_configs || {}).join(", ") || "none"}`);
-
-    // Check agent-specific config first
-    const agentConfigs = settings.agent_configs || {};
-    const agentConfig = agentConfigs[agentType];
-
-    if (agentConfig?.provider && agentConfig?.model) {
-      console.log(`[AI Config] Found agent-specific config: ${agentConfig.provider}/${agentConfig.model}`);
-      
-      if (agentConfig.provider === "lovable") {
-        console.log(`[AI Config] Agent uses Lovable provider, using: lovable/${agentConfig.model}`);
-        return {
-          provider: "lovable",
-          model: agentConfig.model,
-          apiKey: LOVABLE_API_KEY || "",
-          endpoint: PROVIDER_ENDPOINTS.lovable,
-        };
-      }
-
-      const apiKey = settings.api_key;
-      if (!apiKey) {
-        console.warn(`[AI Config] No API key found for external provider, falling back to default`);
-        return defaultConfig;
-      }
-
-      console.log(`[AI Config] Using agent-specific external config: ${agentConfig.provider}/${agentConfig.model}`);
-      return {
-        provider: agentConfig.provider,
-        model: agentConfig.model,
-        apiKey,
-        endpoint: PROVIDER_ENDPOINTS[agentConfig.provider] || PROVIDER_ENDPOINTS.lovable,
-      };
-    }
-
-    // Fall back to global user settings for text extraction
-    if (agentType === AGENT_TYPE_EXTRACT && settings.provider && settings.provider !== "lovable" && settings.api_key && settings.preferred_model) {
-      console.log(`[AI Config] Using global external config for extraction: ${settings.provider}/${settings.preferred_model}`);
-      return {
-        provider: settings.provider,
-        model: settings.preferred_model,
-        apiKey: settings.api_key,
-        endpoint: PROVIDER_ENDPOINTS[settings.provider] || PROVIDER_ENDPOINTS.lovable,
-      };
-    }
-
-    console.log(`[AI Config] No valid external config, using default: ${defaultConfig.provider}/${defaultConfig.model}`);
-    return defaultConfig;
-  } catch (error) {
-    console.error("[AI Config] Error resolving config:", error);
-    return defaultConfig;
-  }
-}
-
-// Build request for text extraction based on provider
-function buildExtractRequest(config: AIConfig, systemPrompt: string, text: string): { headers: Record<string, string>; body: any } {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-
-  if (config.provider === "anthropic") {
-    headers["x-api-key"] = config.apiKey;
-    headers["anthropic-version"] = "2023-06-01";
-    return {
-      headers,
-      body: {
-        model: config.model,
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: "user", content: text }],
-      },
-    };
-  }
-
-  headers["Authorization"] = `Bearer ${config.apiKey}`;
-  return {
-    headers,
-    body: {
-      model: config.model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: text },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.3,
-    },
-  };
-}
-
-// Extract content from response based on provider
-function extractContent(config: AIConfig, response: any): string | null {
-  if (config.provider === "anthropic") {
-    return response.content?.[0]?.text || null;
-  }
-  return response.choices?.[0]?.message?.content || null;
-}
+import { corsHeaders } from "../_shared/cors.ts";
+import { resolveAIConfig } from "../_shared/ai-config.ts";
+import { buildSimpleRequest, extractContentFromResponse } from "../_shared/ai-providers.ts";
 
 // Validation schemas
 const WebhookPayloadSchema = z.object({
-  text: z.string().min(1, "Text is required").max(10000, "Text too long (max 10000 chars)"),
+  text: z.string().min(1, "Text is required").max(10000, "Text too long"),
 });
 
 const ExtractedRecipeSchema = z.object({
@@ -180,8 +34,12 @@ async function triggerImageGeneration(
   userId: string
 ) {
   try {
-    const aiConfig = await resolveAIConfig(supabaseAdmin, userId, AGENT_TYPE_IMAGE, "google/gemini-2.5-flash-image");
-    
+    const aiConfig = await resolveAIConfig(supabaseAdmin, userId, {
+      agentType: "generate_image",
+      defaultModel: "google/gemini-2.5-flash-image",
+      requiredCapabilities: ["image_generation"],
+    });
+
     if (!aiConfig.apiKey) {
       console.warn("No API key configured, skipping image generation");
       return;
@@ -330,7 +188,10 @@ Deno.serve(async (req) => {
     console.log("Token validated for user:", userId);
 
     // Resolve AI config for extraction
-    const aiConfig = await resolveAIConfig(supabaseAdmin, userId, AGENT_TYPE_EXTRACT, "google/gemini-2.5-flash");
+    const aiConfig = await resolveAIConfig(supabaseAdmin, userId, {
+      agentType: "webhook",
+      defaultModel: "google/gemini-2.5-flash",
+    });
     console.log(`Extracting recipe using ${aiConfig.provider}/${aiConfig.model}`);
 
     const systemPrompt = `Tu es un assistant spécialisé dans l'extraction de recettes culinaires.
@@ -356,7 +217,10 @@ EXEMPLE DE FORMAT ATTENDU:
 
 RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
 
-    const { headers, body: requestBody } = buildExtractRequest(aiConfig, systemPrompt, text);
+    const { headers, body: requestBody } = buildSimpleRequest(aiConfig, systemPrompt, text, {
+      response_format: aiConfig.provider !== "anthropic" ? { type: "json_object" } : undefined,
+      temperature: 0.3,
+    });
 
     const aiResponse = await fetch(aiConfig.endpoint, {
       method: "POST",
@@ -374,7 +238,7 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
     }
 
     const aiResult = await aiResponse.json();
-    const aiContent = extractContent(aiConfig, aiResult);
+    const aiContent = extractContentFromResponse(aiConfig, aiResult);
 
     if (!aiContent) {
       return new Response(
@@ -399,13 +263,13 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
     // Normalize steps
     if (Array.isArray(extractedRecipe.steps)) {
       extractedRecipe.steps = extractedRecipe.steps.map((step: any, index: number) => {
-        if (typeof step === 'string') {
+        if (typeof step === "string") {
           return { order: index + 1, text: step };
         }
         if (step.instruction && !step.text) {
           return { order: step.order || index + 1, text: step.instruction };
         }
-        return { order: step.order || index + 1, text: step.text || '' };
+        return { order: step.order || index + 1, text: step.text || "" };
       });
     }
 
@@ -456,7 +320,7 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
       newRecipe.title,
       newRecipe.ingredients,
       userId
-    ).catch(err => console.warn("Background image generation failed:", err));
+    ).catch((err) => console.warn("Background image generation failed:", err));
 
     return new Response(
       JSON.stringify({

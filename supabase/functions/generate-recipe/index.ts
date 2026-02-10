@@ -1,145 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-import { decryptProviderKeys } from "../_shared/decrypt-keys.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
+import { resolveAIConfig } from "../_shared/ai-config.ts";
+import { callAINonStreaming } from "../_shared/ai-providers.ts";
 
 const RequestSchema = z.object({
   prompt: z.string().min(1, "Prompt is required").max(2000, "Prompt too long"),
 });
-
-// ===== AI PROVIDER SUPPORT =====
-type AIProvider = "lovable" | "gemini" | "openai" | "anthropic";
-
-interface ProviderApiKeys {
-  gemini?: string;
-  openai?: string;
-  anthropic?: string;
-}
-
-interface AISettings {
-  provider: AIProvider;
-  api_key: string | null;
-  preferred_model: string | null;
-  provider_api_keys: ProviderApiKeys;
-}
-
-const DEFAULT_MODELS: Record<AIProvider, string> = {
-  lovable: "google/gemini-3-flash-preview",
-  gemini: "gemini-2.5-flash",
-  openai: "gpt-4o",
-  anthropic: "claude-sonnet-4-20250514",
-};
-
-function getApiKeyForProvider(settings: AISettings, provider: AIProvider): string | null {
-  if (provider === "lovable") return null;
-  const providerKey = settings.provider_api_keys?.[provider];
-  if (providerKey) return providerKey;
-  if (settings.provider === provider && settings.api_key) return settings.api_key;
-  return null;
-}
-
-async function getUserAISettings(supabaseClient: any, userId: string): Promise<AISettings> {
-  try {
-    const { data, error } = await supabaseClient
-      .from("user_ai_settings")
-      .select("provider, api_key, preferred_model, provider_api_keys")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (error || !data) return { provider: "lovable", api_key: null, preferred_model: null, provider_api_keys: {} };
-    return {
-      provider: data.provider || "lovable",
-      api_key: data.api_key,
-      preferred_model: data.preferred_model,
-      provider_api_keys: await decryptProviderKeys(data.provider_api_keys || {}),
-    };
-  } catch {
-    return { provider: "lovable", api_key: null, preferred_model: null, provider_api_keys: {} };
-  }
-}
-
-async function callAINonStreaming(settings: AISettings, messages: any[]): Promise<any> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  const { provider, preferred_model } = settings;
-  const model = preferred_model || DEFAULT_MODELS[provider];
-  const apiKey = getApiKeyForProvider(settings, provider);
-
-  if (provider !== "lovable" && !apiKey) {
-    console.log(`No API key for provider ${provider}, falling back to Lovable AI`);
-    return callLovableAINonStreaming(LOVABLE_API_KEY!, messages, DEFAULT_MODELS.lovable);
-  }
-
-  switch (provider) {
-    case "gemini": return callGeminiAINonStreaming(apiKey!, model, messages);
-    case "openai": return callOpenAINonStreaming(apiKey!, model, messages);
-    case "anthropic": return callAnthropicAINonStreaming(apiKey!, model, messages);
-    default: return callLovableAINonStreaming(LOVABLE_API_KEY!, messages, model);
-  }
-}
-
-async function callLovableAINonStreaming(apiKey: string, messages: any[], model: string): Promise<any> {
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages }),
-  });
-  if (!response.ok) throw new Error(`AI error: ${response.status}`);
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content;
-}
-
-async function callGeminiAINonStreaming(apiKey: string, model: string, messages: any[]): Promise<any> {
-  const geminiMessages = messages.map((msg) => ({
-    role: msg.role === "system" ? "user" : msg.role === "assistant" ? "model" : "user",
-    parts: [{ text: msg.role === "system" ? `[System]: ${msg.content}` : msg.content }],
-  }));
-  const mergedMessages: any[] = [];
-  for (const msg of geminiMessages) {
-    if (mergedMessages.length > 0 && mergedMessages[mergedMessages.length - 1].role === msg.role) {
-      mergedMessages[mergedMessages.length - 1].parts.push(...msg.parts);
-    } else {
-      mergedMessages.push(msg);
-    }
-  }
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: mergedMessages, generationConfig: { temperature: 0.7, maxOutputTokens: 8192 } }),
-  });
-  if (!response.ok) throw new Error(`Gemini error: ${response.status}`);
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text;
-}
-
-async function callOpenAINonStreaming(apiKey: string, model: string, messages: any[]): Promise<any> {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages }),
-  });
-  if (!response.ok) throw new Error(`OpenAI error: ${response.status}`);
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content;
-}
-
-async function callAnthropicAINonStreaming(apiKey: string, model: string, messages: any[]): Promise<any> {
-  const systemMessage = messages.find((m) => m.role === "system")?.content || "";
-  const chatMessages = messages.filter((m) => m.role !== "system").map((msg) => ({ role: msg.role, content: msg.content }));
-  const body: any = { model, max_tokens: 8192, messages: chatMessages };
-  if (systemMessage) body.system = systemMessage;
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(`Anthropic error: ${response.status}`);
-  const data = await response.json();
-  return data.content?.[0]?.text;
-}
 
 const systemPrompt = `Tu es un chef cuisinier français passionné avec 20 ans d'expérience dans des restaurants étoilés. Tu crées des recettes détaillées, créatives et accessibles.
 
@@ -179,9 +47,8 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Missing required environment variables");
     }
 
@@ -204,10 +71,13 @@ serve(async (req) => {
     const { prompt } = parseResult.data;
     console.log("Generating recipe for user:", userId, "prompt:", prompt);
 
-    const aiSettings = await getUserAISettings(supabaseClient, userId);
-    console.log("AI provider:", aiSettings.provider);
+    const aiConfig = await resolveAIConfig(supabaseClient, userId, {
+      agentType: "generate",
+      defaultModel: "google/gemini-3-flash-preview",
+    });
+    console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
 
-    const content = await callAINonStreaming(aiSettings, [
+    const content = await callAINonStreaming(aiConfig, [
       { role: "system", content: systemPrompt },
       { role: "user", content: prompt },
     ]);

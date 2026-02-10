@@ -1,0 +1,394 @@
+// ===== Shared AI Provider Call Helpers =====
+
+import { AIConfig } from "./ai-types.ts";
+
+// ============================================================
+// NON-STREAMING CALLS
+// ============================================================
+
+/** Call AI (non-streaming) and return the text content */
+export async function callAINonStreaming(config: AIConfig, messages: any[]): Promise<string> {
+  if (config.provider === "anthropic") {
+    return callAnthropicNonStreaming(config, messages);
+  }
+
+  // OpenAI-compatible format (Lovable, OpenAI, Gemini OpenAI-compat)
+  const response = await fetch(config.endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: config.model, messages }),
+  });
+
+  if (!response.ok) throw new Error(`AI error (${config.provider}): ${response.status}`);
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content;
+}
+
+async function callAnthropicNonStreaming(config: AIConfig, messages: any[]): Promise<string> {
+  const systemMessage = messages.find((m: any) => m.role === "system")?.content || "";
+  const chatMessages = messages
+    .filter((m: any) => m.role !== "system")
+    .map((msg: any) => ({ role: msg.role, content: msg.content }));
+
+  const body: any = { model: config.model, max_tokens: 8192, messages: chatMessages };
+  if (systemMessage) body.system = systemMessage;
+
+  const response = await fetch(config.endpoint, {
+    method: "POST",
+    headers: { "x-api-key": config.apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error(`Anthropic error: ${response.status}`);
+  const data = await response.json();
+  return data.content?.[0]?.text;
+}
+
+// ============================================================
+// STREAMING CALLS (returns raw Response for SSE piping)
+// ============================================================
+
+/** Call AI (streaming) and return a Response (SSE-compatible) */
+export async function callAIStreaming(
+  config: AIConfig,
+  messages: any[],
+  options: { tools?: any[]; stream?: boolean } = {}
+): Promise<Response> {
+  const stream = options.stream ?? true;
+
+  switch (config.provider) {
+    case "gemini":
+      return callGeminiStreaming(config, messages, { ...options, stream });
+    case "anthropic":
+      return callAnthropicStreaming(config, messages, { ...options, stream });
+    default:
+      // OpenAI-compatible (Lovable, OpenAI)
+      return callOpenAICompatStreaming(config, messages, { ...options, stream });
+  }
+}
+
+async function callOpenAICompatStreaming(config: AIConfig, messages: any[], options: any): Promise<Response> {
+  const body: any = { model: config.model, messages, stream: options.stream ?? true };
+  if (options.tools?.length) body.tools = options.tools;
+
+  return fetch(config.endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function callGeminiStreaming(config: AIConfig, messages: any[], options: any): Promise<Response> {
+  // Convert to Gemini native format
+  const geminiMessages = messages.map((msg: any) => {
+    if (msg.role === "system") {
+      return { role: "user", parts: [{ text: `[System]: ${msg.content}` }] };
+    }
+    return {
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: typeof msg.content === "string"
+        ? [{ text: msg.content }]
+        : msg.content.map((c: any) =>
+            c.type === "text"
+              ? { text: c.text }
+              : { inlineData: { mimeType: "image/jpeg", data: c.image_url.url.split(",")[1] } }
+          ),
+    };
+  });
+
+  // Merge consecutive same-role messages (Gemini requirement)
+  const mergedMessages: any[] = [];
+  for (const msg of geminiMessages) {
+    if (mergedMessages.length > 0 && mergedMessages[mergedMessages.length - 1].role === msg.role) {
+      mergedMessages[mergedMessages.length - 1].parts.push(...msg.parts);
+    } else {
+      mergedMessages.push(msg);
+    }
+  }
+
+  const body: any = { contents: mergedMessages, generationConfig: { temperature: 0.7, maxOutputTokens: 8192 } };
+  if (options.tools?.length) {
+    body.tools = [{
+      functionDeclarations: options.tools.map((t: any) => ({
+        name: t.function.name,
+        description: t.function.description,
+        parameters: t.function.parameters,
+      })),
+    }];
+  }
+
+  // Use native Gemini endpoint (not OpenAI-compat) for streaming
+  const endpoint = options.stream
+    ? `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?key=${config.apiKey}`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (options.stream && response.ok) return transformGeminiStreamToOpenAI(response);
+  return response;
+}
+
+async function callAnthropicStreaming(config: AIConfig, messages: any[], options: any): Promise<Response> {
+  const systemMessage = messages.find((m: any) => m.role === "system")?.content || "";
+  const chatMessages = messages.filter((m: any) => m.role !== "system").map((msg: any) => ({
+    role: msg.role,
+    content: typeof msg.content === "string"
+      ? msg.content
+      : msg.content.map((c: any) =>
+          c.type === "text"
+            ? { type: "text", text: c.text }
+            : { type: "image", source: { type: "base64", media_type: "image/jpeg", data: c.image_url.url.split(",")[1] } }
+        ),
+  }));
+
+  const body: any = { model: config.model, max_tokens: 8192, messages: chatMessages };
+  if (systemMessage) body.system = systemMessage;
+  if (options.tools?.length) {
+    body.tools = options.tools.map((t: any) => ({
+      name: t.function.name,
+      description: t.function.description,
+      input_schema: t.function.parameters,
+    }));
+  }
+  if (options.stream) body.stream = true;
+
+  const response = await fetch(config.endpoint, {
+    method: "POST",
+    headers: { "x-api-key": config.apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (options.stream && response.ok) return transformAnthropicStreamToOpenAI(response);
+  return response;
+}
+
+// ============================================================
+// STREAM TRANSFORMERS
+// ============================================================
+
+function transformGeminiStreamToOpenAI(response: Response): Response {
+  const reader = response.body!.getReader();
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { controller.enqueue(encoder.encode("data: [DONE]\n\n")); controller.close(); break; }
+        buffer += decoder.decode(value, { stream: true });
+        try {
+          const jsonMatch = buffer.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const chunks = JSON.parse(jsonMatch[0]);
+            for (const chunk of chunks) {
+              const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text || "";
+              const toolCalls = chunk.candidates?.[0]?.content?.parts?.[0]?.functionCall;
+              const openAIChunk: any = { choices: [{ delta: {}, index: 0 }] };
+              if (text) openAIChunk.choices[0].delta.content = text;
+              if (toolCalls) {
+                openAIChunk.choices[0].delta.tool_calls = [{
+                  id: `call_${Date.now()}`, type: "function",
+                  function: { name: toolCalls.name, arguments: JSON.stringify(toolCalls.args) },
+                }];
+              }
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAIChunk)}\n\n`));
+            }
+            buffer = "";
+          }
+        } catch { /* Keep accumulating */ }
+      }
+    },
+  });
+  return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
+}
+
+function transformAnthropicStreamToOpenAI(response: Response): Response {
+  const reader = response.body!.getReader();
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { controller.enqueue(encoder.encode("data: [DONE]\n\n")); controller.close(); break; }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === "content_block_delta") {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: data.delta?.text || "" }, index: 0 }] })}\n\n`));
+              } else if (data.type === "tool_use") {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ id: data.id, type: "function", function: { name: data.name, arguments: JSON.stringify(data.input) } }] }, index: 0 }] })}\n\n`));
+              }
+            } catch { /* Skip invalid */ }
+          }
+        }
+      }
+    },
+  });
+  return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
+}
+
+// ============================================================
+// TOOL CALL HELPERS (for non-streaming tool-calling functions)
+// ============================================================
+
+/** Build a request with tool calling for any provider */
+export function buildToolCallRequest(
+  config: AIConfig,
+  systemPrompt: string,
+  userPrompt: string,
+  tools: any[],
+  forcedToolName?: string
+): { headers: Record<string, string>; body: any } {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (config.provider === "anthropic") {
+    headers["x-api-key"] = config.apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+    return {
+      headers,
+      body: {
+        model: config.model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        tools: tools.map((t) => ({
+          name: t.function.name,
+          description: t.function.description,
+          input_schema: t.function.parameters,
+        })),
+        ...(forcedToolName ? { tool_choice: { type: "tool", name: forcedToolName } } : {}),
+      },
+    };
+  }
+
+  headers["Authorization"] = `Bearer ${config.apiKey}`;
+  return {
+    headers,
+    body: {
+      model: config.model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      tools,
+      ...(forcedToolName ? { tool_choice: { type: "function", function: { name: forcedToolName } } } : {}),
+    },
+  };
+}
+
+/** Extract the tool call result from any provider's response */
+export function extractToolCallResult(config: AIConfig, response: any): any {
+  if (config.provider === "anthropic") {
+    const toolUse = response.content?.find((c: any) => c.type === "tool_use");
+    return toolUse?.input;
+  }
+  const toolCall = response.choices?.[0]?.message?.tool_calls?.[0];
+  return toolCall?.function?.arguments ? JSON.parse(toolCall.function.arguments) : null;
+}
+
+// ============================================================
+// VISION HELPERS
+// ============================================================
+
+/** Build a vision request body for any provider */
+export function buildVisionRequest(config: AIConfig, systemPrompt: string, imageUrl: string, userPrompt: string): any {
+  if (config.provider === "anthropic") {
+    return {
+      model: config.model,
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: userPrompt },
+          { type: "image", source: { type: "url", url: imageUrl } },
+        ],
+      }],
+    };
+  }
+
+  return {
+    model: config.model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: userPrompt },
+          { type: "image_url", image_url: { url: imageUrl } },
+        ],
+      },
+    ],
+  };
+}
+
+/** Build request headers for any provider */
+export function buildRequestHeaders(config: AIConfig): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (config.provider === "anthropic") {
+    headers["x-api-key"] = config.apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+  } else {
+    headers["Authorization"] = `Bearer ${config.apiKey}`;
+  }
+  return headers;
+}
+
+/** Extract text content from any provider's response */
+export function extractContentFromResponse(config: AIConfig, response: any): string | null {
+  if (config.provider === "anthropic") {
+    return response.content?.[0]?.text || null;
+  }
+  return response.choices?.[0]?.message?.content || null;
+}
+
+/** Build a simple text request (non-tool, non-vision) for any provider */
+export function buildSimpleRequest(
+  config: AIConfig,
+  systemPrompt: string,
+  userPrompt: string,
+  extraOptions?: Record<string, any>
+): { headers: Record<string, string>; body: any } {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (config.provider === "anthropic") {
+    headers["x-api-key"] = config.apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+    return {
+      headers,
+      body: {
+        model: config.model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        ...extraOptions,
+      },
+    };
+  }
+
+  headers["Authorization"] = `Bearer ${config.apiKey}`;
+  return {
+    headers,
+    body: {
+      model: config.model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      ...extraOptions,
+    },
+  };
+}
