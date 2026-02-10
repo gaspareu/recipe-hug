@@ -1,12 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-import { decryptProviderKeys } from "../_shared/decrypt-keys.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
+import { resolveAIConfig } from "../_shared/ai-config.ts";
+import { callAIStreaming } from "../_shared/ai-providers.ts";
 
 // Input validation schema
 // Message content can be string or array (for multimodal)
@@ -67,420 +64,6 @@ const RequestSchema = z.object({
   activeRecipe: ActiveRecipeSchema,
   isContinuation: z.boolean().optional().default(false),
 });
-
-// ===== AI PROVIDER TYPES =====
-type AIProvider = "lovable" | "gemini" | "openai" | "anthropic";
-
-interface ProviderApiKeys {
-  gemini?: string;
-  openai?: string;
-  anthropic?: string;
-}
-
-interface AISettings {
-  provider: AIProvider;
-  api_key: string | null;
-  preferred_model: string | null;
-  provider_api_keys: ProviderApiKeys;
-}
-
-// Default models per provider
-const DEFAULT_MODELS: Record<AIProvider, string> = {
-  lovable: "google/gemini-3-flash-preview",
-  gemini: "gemini-2.5-flash",
-  openai: "gpt-4o",
-  anthropic: "claude-sonnet-4-20250514",
-};
-
-// Get API key for specific provider from provider_api_keys or legacy api_key
-function getApiKeyForProvider(settings: AISettings, provider: AIProvider): string | null {
-  if (provider === "lovable") return null;
-  // Check provider-specific key first
-  const providerKey = settings.provider_api_keys?.[provider];
-  if (providerKey) return providerKey;
-  // Fall back to legacy api_key if provider matches
-  if (settings.provider === provider && settings.api_key) return settings.api_key;
-  return null;
-}
-
-// Get user AI settings from database
-async function getUserAISettings(supabaseClient: any, userId: string): Promise<AISettings> {
-  try {
-    const { data, error } = await supabaseClient
-      .from("user_ai_settings")
-      .select("provider, api_key, preferred_model, provider_api_keys")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (error || !data) {
-      return { provider: "lovable", api_key: null, preferred_model: null, provider_api_keys: {} };
-    }
-
-    return {
-      provider: data.provider || "lovable",
-      api_key: data.api_key,
-      preferred_model: data.preferred_model,
-      provider_api_keys: await decryptProviderKeys(data.provider_api_keys || {}),
-    };
-  } catch {
-    return { provider: "lovable", api_key: null, preferred_model: null, provider_api_keys: {} };
-  }
-}
-
-// Call AI based on provider settings
-async function callAI(
-  settings: AISettings,
-  messages: any[],
-  options: {
-    tools?: any[];
-    stream?: boolean;
-    model?: string;
-  } = {}
-): Promise<Response> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  const { provider, preferred_model } = settings;
-  const model = options.model || preferred_model || DEFAULT_MODELS[provider];
-  const stream = options.stream ?? true;
-
-  // Get API key for the selected provider
-  const apiKey = getApiKeyForProvider(settings, provider);
-
-  // Fallback to Lovable if no API key for external provider
-  if (provider !== "lovable" && !apiKey) {
-    console.log(`No API key for provider ${provider}, falling back to Lovable AI`);
-    return callLovableAI(LOVABLE_API_KEY!, messages, { ...options, model: DEFAULT_MODELS.lovable });
-  }
-
-  switch (provider) {
-    case "gemini":
-      return callGeminiAI(apiKey!, model, messages, options);
-    case "openai":
-      return callOpenAI(apiKey!, model, messages, options);
-    case "anthropic":
-      return callAnthropicAI(apiKey!, model, messages, options);
-    case "lovable":
-    default:
-      return callLovableAI(LOVABLE_API_KEY!, messages, { ...options, model });
-  }
-}
-
-// Lovable AI Gateway call
-async function callLovableAI(
-  apiKey: string,
-  messages: any[],
-  options: { tools?: any[]; stream?: boolean; model?: string }
-): Promise<Response> {
-  const body: any = {
-    model: options.model || DEFAULT_MODELS.lovable,
-    messages,
-    stream: options.stream ?? true,
-  };
-
-  if (options.tools?.length) {
-    body.tools = options.tools;
-  }
-
-  return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-}
-
-// Google Gemini API call
-async function callGeminiAI(
-  apiKey: string,
-  model: string,
-  messages: any[],
-  options: { tools?: any[]; stream?: boolean }
-): Promise<Response> {
-  // Convert OpenAI format to Gemini format
-  const geminiMessages = messages.map((msg) => {
-    if (msg.role === "system") {
-      return { role: "user", parts: [{ text: `[System]: ${msg.content}` }] };
-    }
-    return {
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: typeof msg.content === "string" 
-        ? [{ text: msg.content }]
-        : msg.content.map((c: any) => c.type === "text" ? { text: c.text } : { inlineData: { mimeType: "image/jpeg", data: c.image_url.url.split(",")[1] } }),
-    };
-  });
-
-  // Merge consecutive same-role messages (Gemini requirement)
-  const mergedMessages: any[] = [];
-  for (const msg of geminiMessages) {
-    if (mergedMessages.length > 0 && mergedMessages[mergedMessages.length - 1].role === msg.role) {
-      mergedMessages[mergedMessages.length - 1].parts.push(...msg.parts);
-    } else {
-      mergedMessages.push(msg);
-    }
-  }
-
-  const body: any = {
-    contents: mergedMessages,
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 8192,
-    },
-  };
-
-  // Convert tools to Gemini format
-  if (options.tools?.length) {
-    body.tools = [{
-      functionDeclarations: options.tools.map((t) => ({
-        name: t.function.name,
-        description: t.function.description,
-        parameters: t.function.parameters,
-      })),
-    }];
-  }
-
-  const endpoint = options.stream 
-    ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}`
-    : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  // Transform Gemini response to OpenAI SSE format for streaming compatibility
-  if (options.stream && response.ok) {
-    return transformGeminiStreamToOpenAI(response);
-  }
-
-  return response;
-}
-
-// Transform Gemini streaming response to OpenAI SSE format
-function transformGeminiStreamToOpenAI(response: Response): Response {
-  const reader = response.body!.getReader();
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      let buffer = "";
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          controller.close();
-          break;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        
-        // Gemini streams JSON array chunks
-        try {
-          // Try to parse accumulated buffer as JSON array
-          const jsonMatch = buffer.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            const chunks = JSON.parse(jsonMatch[0]);
-            for (const chunk of chunks) {
-              const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              const toolCalls = chunk.candidates?.[0]?.content?.parts?.[0]?.functionCall;
-              
-              const openAIChunk: any = {
-                choices: [{
-                  delta: {},
-                  index: 0,
-                }],
-              };
-
-              if (text) {
-                openAIChunk.choices[0].delta.content = text;
-              }
-
-              if (toolCalls) {
-                openAIChunk.choices[0].delta.tool_calls = [{
-                  id: `call_${Date.now()}`,
-                  type: "function",
-                  function: {
-                    name: toolCalls.name,
-                    arguments: JSON.stringify(toolCalls.args),
-                  },
-                }];
-              }
-
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAIChunk)}\n\n`));
-            }
-            buffer = "";
-          }
-        } catch {
-          // Keep accumulating if not valid JSON yet
-        }
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: { "Content-Type": "text/event-stream" },
-  });
-}
-
-// OpenAI API call
-async function callOpenAI(
-  apiKey: string,
-  model: string,
-  messages: any[],
-  options: { tools?: any[]; stream?: boolean }
-): Promise<Response> {
-  const body: any = {
-    model,
-    messages,
-    stream: options.stream ?? true,
-  };
-
-  if (options.tools?.length) {
-    body.tools = options.tools;
-  }
-
-  return fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-}
-
-// Anthropic API call
-async function callAnthropicAI(
-  apiKey: string,
-  model: string,
-  messages: any[],
-  options: { tools?: any[]; stream?: boolean }
-): Promise<Response> {
-  // Extract system message
-  const systemMessage = messages.find((m) => m.role === "system")?.content || "";
-  const chatMessages = messages.filter((m) => m.role !== "system");
-
-  // Convert to Anthropic format
-  const anthropicMessages = chatMessages.map((msg) => ({
-    role: msg.role,
-    content: typeof msg.content === "string" 
-      ? msg.content 
-      : msg.content.map((c: any) => 
-          c.type === "text" 
-            ? { type: "text", text: c.text }
-            : { type: "image", source: { type: "base64", media_type: "image/jpeg", data: c.image_url.url.split(",")[1] } }
-        ),
-  }));
-
-  const body: any = {
-    model,
-    max_tokens: 8192,
-    messages: anthropicMessages,
-  };
-
-  if (systemMessage) {
-    body.system = systemMessage;
-  }
-
-  if (options.tools?.length) {
-    body.tools = options.tools.map((t) => ({
-      name: t.function.name,
-      description: t.function.description,
-      input_schema: t.function.parameters,
-    }));
-  }
-
-  if (options.stream) {
-    body.stream = true;
-  }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  // Transform Anthropic streaming to OpenAI format
-  if (options.stream && response.ok) {
-    return transformAnthropicStreamToOpenAI(response);
-  }
-
-  return response;
-}
-
-// Transform Anthropic streaming response to OpenAI SSE format
-function transformAnthropicStreamToOpenAI(response: Response): Response {
-  const reader = response.body!.getReader();
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      let buffer = "";
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          controller.close();
-          break;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              
-              if (data.type === "content_block_delta") {
-                const openAIChunk: any = {
-                  choices: [{
-                    delta: { content: data.delta?.text || "" },
-                    index: 0,
-                  }],
-                };
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAIChunk)}\n\n`));
-              } else if (data.type === "tool_use") {
-                const openAIChunk = {
-                  choices: [{
-                    delta: {
-                      tool_calls: [{
-                        id: data.id,
-                        type: "function",
-                        function: {
-                          name: data.name,
-                          arguments: JSON.stringify(data.input),
-                        },
-                      }],
-                    },
-                    index: 0,
-                  }],
-                };
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAIChunk)}\n\n`));
-              }
-            } catch {
-              // Skip invalid JSON
-            }
-          }
-        }
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: { "Content-Type": "text/event-stream" },
-  });
-}
 
 // ===== ORCHESTRATION MODE PROMPT =====
 const ORCHESTRATION_PROMPT = `Tu es Chef, l'assistant culinaire central de cette application. Tu orchestres toutes les interactions.
@@ -998,9 +581,8 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Missing required environment variables");
     }
 
@@ -1037,9 +619,13 @@ serve(async (req) => {
     console.log("Home assistant - mode:", mode, "messages:", messages.length, "user:", userId, "continuation:", isContinuation);
     if (activeRecipe) console.log("Active recipe:", activeRecipe.title);
 
-    // Get user AI settings
-    const aiSettings = await getUserAISettings(supabaseClient, userId);
-    console.log("AI provider:", aiSettings.provider, "model:", aiSettings.preferred_model || "default");
+    // Resolve AI config with agent_configs support
+    const aiConfig = await resolveAIConfig(supabaseClient, userId, {
+      agentType: "chat",
+      defaultModel: "google/gemini-3-flash-preview",
+      requiredCapabilities: ["tools"],
+    });
+    console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
 
     // Build system prompt
     let systemPrompt = getSystemPromptForMode(mode);
@@ -1092,8 +678,8 @@ NE MENTIONNE PAS le changement de mode, réponds naturellement.`,
     // Get tools for current mode
     const tools = getToolsForMode(mode);
 
-    // Call AI with user's preferred provider
-    const response = await callAI(aiSettings, [{ role: "system", content: systemPrompt }, ...messages], {
+    // Call AI with resolved config (supports agent_configs)
+    const response = await callAIStreaming(aiConfig, [{ role: "system", content: systemPrompt }, ...messages], {
       tools: tools.length > 0 ? tools : undefined,
       stream: true,
     });
