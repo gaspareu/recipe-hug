@@ -35,16 +35,22 @@ export async function decryptProviderKeys(
   keys: Record<string, string>
 ): Promise<Record<string, string>> {
   const secret = Deno.env.get("AI_KEYS_ENCRYPTION_SECRET");
-  if (!secret) return keys;
+  if (!secret) {
+    console.warn("[decrypt] No AI_KEYS_ENCRYPTION_SECRET set, returning raw keys");
+    return keys;
+  }
 
   const result: Record<string, string> = {};
   for (const [provider, key] of Object.entries(keys)) {
     if (key && typeof key === "string") {
       try {
-        result[provider] = await decryptValue(key, secret);
-      } catch {
+        const decrypted = await decryptValue(key, secret);
+        result[provider] = decrypted;
+        console.log(`[decrypt] ${provider}: OK (decrypted, length=${decrypted.length}, prefix=${decrypted.substring(0, 6)}...)`);
+      } catch (err) {
         // Fallback to plaintext (not yet encrypted)
         result[provider] = key;
+        console.warn(`[decrypt] ${provider}: FALLBACK to plaintext (decrypt failed: ${err instanceof Error ? err.message : "unknown"}), length=${key.length}, prefix=${key.substring(0, 6)}...`);
       }
     }
   }
