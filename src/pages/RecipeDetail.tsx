@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, RotateCcw, ChefHat, Pencil, Save, History, Plus, Mic, MicOff, ArrowUp, X, ImagePlus } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, RotateCcw, ChefHat, Pencil, Save, History, Plus, Mic, MicOff, ArrowUp, X, ImagePlus, Camera, FileText, Image, ChevronRight, Check } from 'lucide-react';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
@@ -16,13 +16,14 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { RecipeStatusSelect } from '@/components/recipes/RecipeStatusSelect';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { useRecipe, useToggleFavorite, useUpdateRecipe, useCreateRecipe } from '@/hooks/useRecipes';
 import { useGenerateRecipeImage } from '@/hooks/useGenerateRecipeImage';
-import { useCookingAssistant, ChatMessage, AssistantMode, ExtractedRecipeData } from '@/hooks/useCookingAssistant';
+import { useRecipeChat } from '@/hooks/useRecipeChat';
 import { useCreateVersion } from '@/hooks/useRecipeVersions';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { useAuth } from '@/hooks/useAuth';
@@ -393,7 +394,7 @@ export default function RecipeDetail() {
                         steps: data.steps,
                       });
                       toast.success('Recette mise à jour', {
-                        description: 'Les modifications ont été appliquées. Vous pouvez restaurer la version précédente depuis l\'historique.'
+                        description: 'Les modifications ont été appliquées.'
                       });
                       refetch();
                     }}
@@ -473,38 +474,32 @@ function AssistantSheetContent({
   completedSteps: Set<number>;
   totalSteps: number;
   onClose: () => void;
-  onRecipeUpdate: (data: ExtractedRecipeData) => Promise<void>;
-  onRecipeCreate: (data: ExtractedRecipeData) => Promise<void>;
+  onRecipeUpdate: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[] }) => Promise<void>;
+  onRecipeCreate: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[]; relationToOriginal?: string }) => Promise<void>;
   recipeId: string;
 }) {
   const { style: swipeStyle, ...swipeHandlers } = useSwipeClose({ onClose, direction: 'right', threshold: 80 });
-  const [activeMode, setActiveMode] = useState<AssistantMode | 'history'>('cooking');
+  const [activeTab, setActiveTab] = useState<'chat' | 'history'>('chat');
 
   return (
     <div className="flex flex-col h-full" style={swipeStyle} {...swipeHandlers}>
       <SheetHeader className="p-4 pb-2 border-b space-y-3">
         <SheetTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
-            <span>{activeMode === 'cooking' ? '👨‍🍳' : activeMode === 'editing' ? '✏️' : '📜'}</span>
-            {activeMode === 'history' ? 'Historique' : 'Assistant'}
+            👨‍🍳 Assistant
           </span>
-          {activeMode === 'cooking' && (
+          {activeTab === 'chat' && (
             <span className="text-sm font-normal text-muted-foreground px-0 pr-[17px]">
               Étape {Math.min(completedSteps.size + 1, totalSteps)}/{totalSteps}
             </span>
           )}
         </SheetTitle>
         
-        {/* Mode toggle */}
-        <Tabs value={activeMode} onValueChange={(v) => setActiveMode(v as AssistantMode | 'history')} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="cooking" className="flex items-center gap-1.5">
-              <ChefHat className="h-3.5 w-3.5" />
-              <span className="text-xs">Cuisiner</span>
-            </TabsTrigger>
-            <TabsTrigger value="editing" className="flex items-center gap-1.5">
-              <Pencil className="h-3.5 w-3.5" />
-              <span className="text-xs">Modifier</span>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'chat' | 'history')} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="chat" className="flex items-center gap-1.5">
+              <MessageCircle className="h-3.5 w-3.5" />
+              <span className="text-xs">Chat</span>
             </TabsTrigger>
             <TabsTrigger value="history" className="flex items-center gap-1.5">
               <History className="h-3.5 w-3.5" />
@@ -514,14 +509,12 @@ function AssistantSheetContent({
         </Tabs>
       </SheetHeader>
       
-      {activeMode === 'history' ? (
+      {activeTab === 'history' ? (
         <RecipeVersionHistory recipeId={recipeId} onRestore={onClose} />
       ) : (
-        <ChatInterface 
+        <RecipeChatInterface 
           recipe={recipe} 
           completedSteps={completedSteps} 
-          mode={activeMode}
-          onModeChange={setActiveMode}
           onRecipeUpdate={onRecipeUpdate}
           onRecipeCreate={onRecipeCreate}
         />
@@ -530,44 +523,49 @@ function AssistantSheetContent({
   );
 }
 
-// Chat Interface Component
-function ChatInterface({
+// Unified Chat Interface Component using useRecipeChat
+function RecipeChatInterface({
   recipe,
   completedSteps,
-  mode,
-  onModeChange,
   onRecipeUpdate,
   onRecipeCreate
 }: {
   recipe: NonNullable<ReturnType<typeof useRecipe>['data']>;
   completedSteps: Set<number>;
-  mode: AssistantMode;
-  onModeChange: (mode: AssistantMode) => void;
-  onRecipeUpdate: (data: ExtractedRecipeData) => Promise<void>;
-  onRecipeCreate: (data: ExtractedRecipeData) => Promise<void>;
+  onRecipeUpdate: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[] }) => Promise<void>;
+  onRecipeCreate: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[]; relationToOriginal?: string }) => Promise<void>;
 }) {
   const {
     messages,
     isStreaming,
+    mode,
+    pendingRecipe,
     sendMessage,
     resetChat,
-    mode: hookMode,
-    changeMode,
-    pendingRecipe,
-    clearPendingRecipe
-  } = useCookingAssistant(recipe, completedSteps, mode);
-  
+    savePendingRecipe,
+    cancelPendingRecipe,
+    getModeInfo,
+  } = useRecipeChat({
+    recipe,
+    completedSteps,
+    onRecipeUpdate: async (data) => {
+      await onRecipeUpdate(data);
+    },
+    onRecipeCreate: async (data) => {
+      await onRecipeCreate(data);
+    },
+  });
+
   const [input, setInput] = useState('');
-  const [isApplying, setIsApplying] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMessageRef = useRef<string>('');
 
-  // Voice mode with callback for transcribed text
+  // Voice mode
   const handleVoiceTranscript = useCallback((text: string) => {
-    if (text.trim()) {
-      sendMessage(text);
-    }
+    if (text.trim()) sendMessage(text);
   }, [sendMessage]);
 
   const {
@@ -582,86 +580,97 @@ function ChatInterface({
     partialTranscript,
   } = useVoiceMode(handleVoiceTranscript);
 
-  // Sync mode changes from parent
-  useEffect(() => {
-    if (mode !== hookMode) {
-      changeMode(mode);
-    }
-  }, [mode, hookMode, changeMode]);
-
   // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) {
       const scrollContainer = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
-      }
+      if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
     }
   }, [messages]);
 
-  // Speak new assistant messages when voice is enabled
+  // Speak new assistant messages
   useEffect(() => {
     if (!voiceEnabled) return;
-    
     const lastMessage = messages[messages.length - 1];
-    if (
-      lastMessage && 
-      lastMessage.role === 'assistant' && 
-      lastMessage.content &&
-      !isStreaming &&
-      lastMessage.content !== lastMessageRef.current
-    ) {
+    if (lastMessage && lastMessage.role === 'assistant' && lastMessage.content && !isStreaming && lastMessage.content !== lastMessageRef.current) {
       lastMessageRef.current = lastMessage.content;
       speak(lastMessage.content);
     }
   }, [messages, isStreaming, voiceEnabled, speak]);
 
   const handleSubmit = () => {
-    if (input.trim() && !isStreaming) {
-      sendMessage(input);
-      setInput('');
-      // Reset textarea height
-      if (inputRef.current) {
-        inputRef.current.style.height = 'auto';
-      }
-    }
+    if ((!input.trim() && !selectedImage) || isStreaming) return;
+    sendMessage(input, selectedImage || undefined);
+    setInput('');
+    setSelectedImage(null);
+    if (inputRef.current) inputRef.current.style.height = 'auto';
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Seules les images sont acceptées'); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error('Image trop volumineuse (max 5 Mo)'); return; }
+    const reader = new FileReader();
+    reader.onload = event => setSelectedImage(event.target?.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+  };
+
+  // Dynamic suggestions based on mode
+  const getQuickSuggestions = () => {
+    switch (mode) {
+      case 'creating': return ['Plutôt simple et rapide', 'Une version végétarienne', "C'est parfait, enregistre !"];
+      case 'cooking': return ['Étape suivante', 'Je peux substituer un ingrédient ?', "C'est quoi la bonne texture ?"];
+      case 'editing': return ['Version végétarienne', 'Moins calorique', 'Enregistre les modifications'];
+      case 'memory': return ['Mes allergies', 'Mon équipement', 'Mes préférences'];
+      default: return ["C'est parti !", 'Modifie cette recette', 'Des conseils ?'];
     }
   };
 
-  const handleApplyChanges = async () => {
-    if (!pendingRecipe) return;
-    
-    setIsApplying(true);
-    try {
-      if (pendingRecipe.isNewRecipe) {
-        await onRecipeCreate(pendingRecipe);
-      } else {
-        await onRecipeUpdate(pendingRecipe);
-      }
-      clearPendingRecipe();
-    } finally {
-      setIsApplying(false);
-    }
-  };
-
-  const cookingSuggestions = ["C'est parti !", "Explique-moi la première étape", "Des conseils pour cette recette ?"];
-  const editingSuggestions = ["Version végétarienne", "Réduire les calories", "Sans gluten", "Plus simple"];
-  
-  const quickSuggestions = mode === 'cooking' ? cookingSuggestions : editingSuggestions;
-  const showSuggestions = messages.length <= 1;
+  const quickSuggestions = getQuickSuggestions();
+  const hasConversation = messages.length > 1;
+  const modeInfo = getModeInfo();
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
+      {/* Mode badge */}
+      {modeInfo && (
+        <div className="px-4 pt-2">
+          <Badge variant="outline" className={`${modeInfo.color} text-xs font-normal`}>
+            <span className="mr-1">{modeInfo.icon}</span>
+            {modeInfo.label}
+          </Badge>
+        </div>
+      )}
+
       <ScrollArea className="flex-1 px-4" ref={scrollRef}>
         <div className="py-4 space-y-6">
-          {messages.map(message => <MessageBubble key={message.id} message={message} />)}
-          
+          {messages.map(message => {
+            let displayContent = message.content;
+            if (message.role === 'assistant' && displayContent) {
+              displayContent = displayContent.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
+            }
+            return (
+              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] ${message.role === 'user' ? 'bg-muted rounded-3xl px-4 py-3' : ''}`}>
+                  {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
+                  {message.role === 'assistant' ? (
+                    <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground">
+                      <ReactMarkdown>{displayContent}</ReactMarkdown>
+                    </div>
+                  ) : message.content && message.content !== '📷 Image envoyée' && (
+                    <p className="text-sm whitespace-pre-wrap text-foreground">{message.content}</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
           {isStreaming && messages[messages.length - 1]?.content === '' && (
             <div className="flex justify-start">
               <div className="flex items-center gap-1">
@@ -672,7 +681,6 @@ function ChatInterface({
             </div>
           )}
 
-          {/* Partial transcript while listening */}
           {isListening && partialTranscript && (
             <div className="flex justify-end">
               <div className="bg-muted/50 rounded-3xl px-4 py-3 max-w-[85%]">
@@ -683,24 +691,18 @@ function ChatInterface({
         </div>
       </ScrollArea>
 
-      {/* Apply changes button when pending recipe exists */}
+      {/* Pending recipe action bar */}
       {pendingRecipe && (
         <div className="flex flex-col gap-3 p-3 mx-4 bg-primary/5 border border-primary/20 rounded-2xl">
           <p className="text-sm text-foreground text-center break-words">
-            {pendingRecipe.isNewRecipe ? `Créer "${pendingRecipe.title}" ?` : `Mettre à jour "${pendingRecipe.title}" ?`}
+            {pendingRecipe.isUpdate ? `Mettre à jour "${pendingRecipe.title}" ?` : `Enregistrer "${pendingRecipe.title}" ?`}
           </p>
           <div className="flex justify-end items-center gap-2">
-            <Button size="sm" onClick={handleApplyChanges} disabled={isApplying} className="gap-1">
-              {isApplying ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : pendingRecipe.isNewRecipe ? (
-                <Plus className="h-4 w-4" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {pendingRecipe.isNewRecipe ? 'Créer' : 'Mettre à jour'}
+            <Button size="sm" onClick={savePendingRecipe} className="gap-1">
+              <Check className="h-4 w-4" />
+              {pendingRecipe.isUpdate ? 'Mettre à jour' : 'Créer'}
             </Button>
-            <Button size="icon" variant="ghost" onClick={clearPendingRecipe} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+            <Button size="icon" variant="ghost" onClick={cancelPendingRecipe} className="h-8 w-8 text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -709,28 +711,15 @@ function ChatInterface({
 
       {/* Bottom area */}
       <div className="p-4 space-y-4">
-        {/* Voice controls */}
-        <VoiceControls
-          voiceEnabled={voiceEnabled}
-          isSpeaking={isSpeaking}
-          isListening={isListening}
-          onToggleVoice={toggleVoice}
-          onStartListening={startListening}
-          onStopListening={stopListening}
-          onStopSpeaking={stopSpeaking}
-          partialTranscript={partialTranscript}
-          compact
-        />
-
         {/* Quick suggestions */}
-        {showSuggestions && (
+        {!pendingRecipe && (
           <div className="flex flex-wrap gap-2 justify-center">
-            {quickSuggestions.map(suggestion => (
-              <Button 
-                key={suggestion} 
-                variant="outline" 
-                size="sm" 
-                onClick={() => sendMessage(suggestion)} 
+            {quickSuggestions.map((suggestion, i) => (
+              <Button
+                key={i}
+                variant={hasConversation ? 'ghost' : 'outline'}
+                size="sm"
+                onClick={() => sendMessage(suggestion)}
                 disabled={isStreaming}
                 className="text-sm rounded-2xl px-4 py-2 h-auto whitespace-normal text-center border-border/50 hover:bg-muted"
               >
@@ -740,63 +729,99 @@ function ChatInterface({
           </div>
         )}
 
-        {/* Input container - ChatGPT style like Home page */}
+        {/* Input container - ChatGPT style */}
         <div className="relative bg-muted rounded-[24px] border border-border/50 px-3 py-3">
-          {/* Main input row with flex alignment */}
+          {/* Image preview */}
+          {selectedImage && (
+            <div className="pb-2">
+              <div className="relative inline-block">
+                <img src={selectedImage} alt="Aperçu" className="h-20 w-20 object-cover rounded-xl" />
+                <button onClick={() => setSelectedImage(null)} className="absolute -top-2 -right-2 h-6 w-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center shadow-md hover:bg-destructive/90">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-end gap-2">
-            {/* Reset button */}
-            <button 
-              onClick={resetChat} 
-              disabled={isStreaming || messages.length <= 1}
-              className="flex-shrink-0 h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Nouvelle conversation"
-            >
-              <RotateCcw className="h-4 w-4 text-foreground" />
-            </button>
-            
-            {/* Textarea - expands vertically */}
+            {/* Add button with popover menu */}
+            <TooltipProvider>
+              <Popover>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <PopoverTrigger asChild>
+                      <button className="flex-shrink-0 h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-accent transition-colors" disabled={isStreaming || isListening}>
+                        <Plus className="h-5 w-5 text-foreground" />
+                      </button>
+                    </PopoverTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="top"><p>Ajouter</p></TooltipContent>
+                </Tooltip>
+                <PopoverContent className="w-56 p-1" align="start" side="top">
+                  <div className="flex flex-col">
+                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground">
+                      <FileText className="h-4 w-4" /><span>Ajouter des fichiers</span>
+                    </button>
+                    <button onClick={() => {
+                      if (fileInputRef.current) {
+                        fileInputRef.current.setAttribute('capture', 'environment');
+                        fileInputRef.current.click();
+                        fileInputRef.current.removeAttribute('capture');
+                      }
+                    }} className="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground">
+                      <Camera className="h-4 w-4" /><span>Prendre une photo</span>
+                    </button>
+                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground">
+                      <Image className="h-4 w-4" /><span>Ajouter une image</span>
+                    </button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </TooltipProvider>
+
+            {/* Textarea */}
             <div className="flex-1 flex items-center min-h-[36px]">
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value);
-                  // Auto-resize textarea
                   const target = e.target;
                   target.style.height = 'auto';
                   target.style.height = Math.min(target.scrollHeight, 200) + 'px';
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder={isListening ? "Parlez..." : (mode === 'cooking' ? "Posez une question..." : "Décrivez vos modifications...")}
+                placeholder={isListening ? 'Parlez...' : 'Poser une question...'}
                 className="w-full min-h-[24px] max-h-[200px] resize-none bg-transparent border-0 focus:outline-none focus:ring-0 py-0 px-0 text-base leading-9 placeholder:text-muted-foreground self-center text-foreground"
                 rows={1}
                 disabled={isStreaming || isListening}
               />
             </div>
-            
+
+            {/* Hidden file input */}
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+
             {/* Right side buttons */}
             <div className="flex items-center gap-1">
-              {/* Microphone button - visible when input is empty */}
-              {!input.trim() && (
+              {!input.trim() && !selectedImage ? (
                 <button
-                  onClick={isListening ? stopListening : startListening}
-                  className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${
-                    isListening 
-                      ? 'bg-destructive text-destructive-foreground' 
-                      : 'hover:bg-accent'
-                  }`}
-                  title={isListening ? 'Arrêter' : 'Écouter'}
+                  onClick={() => {
+                    if (!voiceEnabled) { toggleVoice(); setTimeout(() => startListening(), 100); }
+                    else if (isListening) stopListening();
+                    else startListening();
+                  }}
+                  disabled={isStreaming}
+                  className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${isListening ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-foreground'}`}
+                  title={isListening ? "Arrêter l'écoute" : 'Dicter'}
                 >
-                  {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5 text-foreground" />}
+                  {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                 </button>
-              )}
-              
-              {/* Send button - visible when there's input */}
-              {input.trim() && (
+              ) : (
                 <button
                   onClick={handleSubmit}
                   disabled={isStreaming}
-                  className="flex-shrink-0 h-9 w-9 bg-foreground text-background rounded-full flex items-center justify-center hover:bg-foreground/90 transition-colors disabled:opacity-50"
+                  className="flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors bg-foreground text-background hover:bg-foreground/90"
+                  title="Envoyer"
                 >
                   <ArrowUp className="h-5 w-5" />
                 </button>
@@ -804,25 +829,14 @@ function ChatInterface({
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
 
-function MessageBubble({
-  message
-}: {
-  message: ChatMessage;
-}) {
-  const isUser = message.role === 'user';
-  return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[85%] ${isUser ? 'bg-muted rounded-3xl px-4 py-3' : ''}`}>
-        {isUser ? (
-          <p className="text-sm whitespace-pre-wrap text-foreground">{message.content}</p>
-        ) : (
-          <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground">
-            <ReactMarkdown>{message.content}</ReactMarkdown>
+        {/* Speaking indicator */}
+        {isSpeaking && (
+          <div className="flex items-center justify-center gap-2">
+            <button onClick={stopSpeaking} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+              Chef parle... (cliquez pour arrêter)
+            </button>
           </div>
         )}
       </div>

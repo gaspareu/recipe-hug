@@ -55,6 +55,7 @@ const ActiveRecipeSchema = z.object({
   season: z.string().optional().nullable(),
   ingredients: z.array(IngredientSchema).optional(),
   steps: z.array(StepSchema).optional(),
+  completedSteps: z.array(z.number()).optional(),
 }).optional().nullable();
 
 const RequestSchema = z.object({
@@ -508,13 +509,18 @@ function formatRecipeContext(recipe: any, mode: string): string {
   if (recipe.steps?.length > 0) {
     context += `\nÉtapes :\n`;
     const sortedSteps = [...recipe.steps].sort((a: any, b: any) => a.order - b.order);
+    const completedSet = new Set(recipe.completedSteps || []);
     for (const step of sortedSteps) {
       if (mode === "cooking") {
-        const status = step.completed ? "✓" : "○";
+        const isDone = step.completed || completedSet.has(step.order);
+        const status = isDone ? "✓" : "○";
         context += `${status} ${step.order}. ${step.text}\n`;
       } else {
         context += `${step.order}. ${step.text}\n`;
       }
+    }
+    if (mode === "cooking" && completedSet.size > 0) {
+      context += `\nProgression : ${completedSet.size}/${sortedSteps.length} étapes complétées\n`;
     }
   }
 
