@@ -173,22 +173,22 @@ export function useAISettings() {
     queryFn: async (): Promise<AISettings | null> => {
       if (!user?.id) return null;
 
+      // Only select non-sensitive columns — never fetch api_key or provider_api_keys to the client
       const { data, error } = await supabase
         .from('user_ai_settings')
-        .select('*')
+        .select('id, user_id, provider, preferred_model, agent_configs, created_at, updated_at')
         .eq('user_id', user.id)
         .maybeSingle();
 
       if (error) throw error;
       if (!data) return null;
       
-      // Note: provider_api_keys contains encrypted blobs from DB
-      // They are only used for presence checks (truthy), never displayed
       return {
         ...data,
         provider: data.provider as AIProvider,
         agent_configs: data.agent_configs as Partial<Record<AgentType, AgentConfig>> | null,
-        provider_api_keys: (data.provider_api_keys as ProviderApiKeys) || {},
+        provider_api_keys: {}, // Never fetched from DB; presence derived from maskedKeys
+        api_key: null,
       } as AISettings;
     },
     enabled: !!user?.id,
@@ -253,10 +253,10 @@ export function useAISettings() {
     },
   });
 
-  // Helper to check if a provider has a configured API key (checks encrypted blob presence)
+  // Helper to check if a provider has a configured API key (derived from server-side masked keys)
   const hasApiKeyForProvider = (provider: AIProvider): boolean => {
     if (provider === 'lovable') return true;
-    return !!settings?.provider_api_keys?.[provider];
+    return !!maskedKeys?.[provider]?.has_key;
   };
 
   // Helper to get masked key for display
