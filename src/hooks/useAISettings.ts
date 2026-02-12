@@ -66,25 +66,33 @@ export interface ModelInfo {
 export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
   lovable: [
     { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (défaut)', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'google/gemini-3-pro-preview', label: 'Gemini 3 Pro', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (Nano Banana)', capabilities: ['image_generation'] },
+    { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', capabilities: ['text', 'streaming'] },
+    { value: 'google/gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image', capabilities: ['image_generation'] },
+    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image', capabilities: ['image_generation'] },
+    { value: 'openai/gpt-5', label: 'GPT-5', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'openai/gpt-5-mini', label: 'GPT-5 Mini', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'openai/gpt-5-nano', label: 'GPT-5 Nano', capabilities: ['text', 'streaming'] },
+    { value: 'openai/gpt-5.2', label: 'GPT-5.2', capabilities: ['text', 'streaming', 'vision', 'tools'] },
   ],
   gemini: [
     { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'gemini-2.5-flash-lite-preview-06-17', label: 'Gemini 2.5 Flash Lite', capabilities: ['text', 'streaming'] },
     { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', capabilities: ['text', 'streaming', 'tools'] },
+    { value: 'gemini-2.0-flash-exp-image-generation', label: 'Gemini 2.0 Flash Image', capabilities: ['image_generation'] },
   ],
   openai: [
     { value: 'gpt-4o', label: 'GPT-4o', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', capabilities: ['text', 'streaming', 'tools'] },
-    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'o3-mini', label: 'o3-mini', capabilities: ['text', 'streaming', 'tools'] },
   ],
   anthropic: [
     { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', capabilities: ['text', 'streaming', 'tools'] },
-    { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', capabilities: ['text', 'streaming', 'vision', 'tools'] },
   ],
 };
 
@@ -146,7 +154,7 @@ export const PROVIDER_INFO: Record<AIProvider, { name: string; description: stri
   },
   openai: {
     name: 'OpenAI',
-    description: 'API OpenAI (GPT-4)',
+    description: 'API OpenAI (GPT-4o, o3)',
     keyUrl: 'https://platform.openai.com/api-keys',
   },
   anthropic: {
