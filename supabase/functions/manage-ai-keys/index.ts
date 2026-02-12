@@ -144,9 +144,9 @@ serve(async (req) => {
           if (ENCRYPTION_SECRET) {
             try {
               plain = await decryptValue(rawKey, ENCRYPTION_SECRET);
-              console.log(`[manage-ai-keys GET] ${p}: decrypted OK, length=${plain.length}, prefix=${plain.substring(0, 8)}...`);
+              console.log(`[manage-ai-keys GET] ${p}: decrypted OK`);
             } catch (err) {
-              console.warn(`[manage-ai-keys GET] ${p}: decrypt FAILED (${err instanceof Error ? err.message : "unknown"}), using as plaintext, length=${rawKey.length}, prefix=${rawKey.substring(0, 8)}...`);
+              console.warn(`[manage-ai-keys GET] ${p}: decrypt FAILED, using as plaintext`);
               // Already plaintext
             }
           } else {

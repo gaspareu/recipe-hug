@@ -46,11 +46,11 @@ export async function decryptProviderKeys(
       try {
         const decrypted = await decryptValue(key, secret);
         result[provider] = decrypted;
-        console.log(`[decrypt] ${provider}: OK (decrypted, length=${decrypted.length}, prefix=${decrypted.substring(0, 6)}...)`);
+        console.log(`[decrypt] ${provider}: OK (decrypted)`);
       } catch (err) {
         // Fallback to plaintext (not yet encrypted)
         result[provider] = key;
-        console.warn(`[decrypt] ${provider}: FALLBACK to plaintext (decrypt failed: ${err instanceof Error ? err.message : "unknown"}), length=${key.length}, prefix=${key.substring(0, 6)}...`);
+        console.warn(`[decrypt] ${provider}: FALLBACK to plaintext (decrypt failed)`);
       }
     }
   }
