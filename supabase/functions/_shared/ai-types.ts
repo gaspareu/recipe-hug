@@ -39,31 +39,54 @@ export const DEFAULT_MODELS: Record<AIProvider, string> = {
 
 // Capability lists for model validation
 export const TOOL_CAPABLE_MODELS = [
+  // Lovable gateway
   "google/gemini-3-flash-preview",
+  "google/gemini-3-pro-preview",
   "google/gemini-2.5-flash",
   "google/gemini-2.5-pro",
-  "google/gemini-3-pro-preview",
   "openai/gpt-5",
   "openai/gpt-5-mini",
   "openai/gpt-5-nano",
+  "openai/gpt-5.2",
+  // Direct Gemini
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
+  "gemini-2.0-flash",
+  // Direct OpenAI
   "gpt-4o",
   "gpt-4o-mini",
-  "claude-3-5-sonnet-20241022",
-  "claude-3-5-haiku-20241022",
+  "o3-mini",
+  // Direct Anthropic
   "claude-sonnet-4-20250514",
+  "claude-3-7-sonnet-20250219",
+  "claude-3-5-haiku-20241022",
 ];
 
 export const VISION_MODELS = [
-  ...TOOL_CAPABLE_MODELS,
-  "gemini-2.5-pro-preview-05-06",
-  "gemini-2.5-flash-preview-05-20",
+  // Lovable gateway
+  "google/gemini-3-flash-preview",
+  "google/gemini-3-pro-preview",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-pro",
+  "openai/gpt-5",
+  "openai/gpt-5-mini",
+  "openai/gpt-5.2",
+  // Direct Gemini
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
+  // Direct OpenAI
+  "gpt-4o",
+  "gpt-4o-mini",
+  // Direct Anthropic
+  "claude-sonnet-4-20250514",
+  "claude-3-7-sonnet-20250219",
 ];
 
 export const IMAGE_GEN_MODELS = [
-  "google/gemini-2.5-flash-image",
   "google/gemini-3-pro-image-preview",
-  "dall-e-3",
+  "google/gemini-2.5-flash-image",
   "gemini-2.0-flash-exp-image-generation",
+  "dall-e-3",
 ];
 
 export type Capability = "tools" | "vision" | "image_generation";
