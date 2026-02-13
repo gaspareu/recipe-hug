@@ -706,6 +706,55 @@ export function useHomeChat() {
         }
       }
 
+      // FALLBACK: Execute accumulated tool call if finish_reason was missing
+      if (toolCallName && toolCallArguments) {
+        try {
+          const args = JSON.parse(toolCallArguments);
+          const result = await handleToolCall({
+            type: toolCallName,
+            data: args,
+          });
+
+          if (toolCallName === 'search_recipes' && result) {
+            const searchResultsList = result as SearchResult[];
+            if (searchResultsList.length === 0) {
+              assistantContent += "\n\nJe n'ai trouvé aucune recette correspondante dans ton livre. Tu veux que je t'en crée une nouvelle ?";
+            } else {
+              assistantContent += "\n\n**Résultats trouvés :**\n";
+              searchResultsList.forEach((r, i) => {
+                const statusLabel = {
+                  draft: '📝 brouillon',
+                  tested: '🧪 testée',
+                  validated: '✅ validée',
+                  archived: '📦 archivée',
+                }[r.status] || r.status;
+                assistantContent += `${i + 1}. **${r.title}** - ${statusLabel}${r.is_favorite ? ' ⭐' : ''}\n`;
+              });
+              assistantContent += "\nDis-moi laquelle tu veux ouvrir, cuisiner ou modifier !";
+            }
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMessageId
+                ? { ...m, content: assistantContent }
+                : m
+            ));
+          }
+
+          if (result && typeof result === 'object' && 'modeSwitch' in result) {
+            const modeSwitchResult = result as { modeSwitch: ChatMode; recipe?: ActiveRecipeData; initialContext?: string };
+            pendingModeSwitchRef.current = {
+              newMode: modeSwitchResult.modeSwitch,
+              recipe: modeSwitchResult.recipe || null,
+              initialContext: modeSwitchResult.initialContext || content,
+            };
+          }
+
+          toolCallName = '';
+          toolCallArguments = '';
+        } catch (e) {
+          console.error('Failed to execute accumulated tool call:', e, toolCallArguments);
+        }
+      }
+
       // FALLBACK: Parse and execute actions from text content if model didn't use tool_calls
       // This handles cases where the model outputs JSON actions in text instead of using tools
       const actionRegex = /\{\s*"action"\s*:\s*"([^"]+)"\s*,\s*"parameters"\s*:\s*(\{[^}]*\})\s*\}/g;
