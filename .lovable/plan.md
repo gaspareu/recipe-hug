@@ -1,59 +1,119 @@
 
 
-## Unifier le chat de la page recette avec le chat principal
+## Unifier le code des deux chats
 
-### Objectif
-Remplacer le chat actuel de la page recette (basé sur `useCookingAssistant` + `cooking-assistant`) par une version du chat principal (`useHomeChat` + `home-assistant`) enrichie du contexte de la recette en cours (ingredients, etapes, progression).
+### Constat
+Les deux interfaces de chat (page d'accueil et page recette) partagent environ 80% de code identique, tant au niveau des hooks que de l'interface. Ce plan vise a extraire les parties communes dans des modules reutilisables.
 
-### Approche
+### Strategie
 
-Plutot que de dupliquer `useHomeChat`, on va creer un hook `useRecipeChat` qui reutilise la meme architecture et le meme endpoint (`home-assistant`) mais demarre directement dans un mode contextuel (cooking ou editing) avec la recette pre-chargee.
+Extraire un hook de base et un composant d'interface commun, puis faire en sorte que `useHomeChat` et `useRecipeChat` ne soient plus que de fins wrappers de configuration.
 
-### Changements
+---
 
-#### 1. Nouveau hook : `src/hooks/useRecipeChat.ts`
-- Fork leger de `useHomeChat` adapte au contexte recette
-- Recoit la recette en parametre et la passe comme `activeRecipe` dans chaque appel
-- Inclut les `completedSteps` dans le contexte envoye au backend
-- Demarre en mode `cooking` par defaut (au lieu de `orchestration`)
-- Le message de bienvenue mentionne la recette
-- Supporte les memes modes : orchestration, cooking, editing, creating, memory
-- Gere les memes tool calls que `useHomeChat` (search, save, extract, navigate, etc.)
-- Ajoute le contexte de progression (etapes cochees) dans le payload envoye a `home-assistant`
+### 1. Hook partage : `src/hooks/useChatEngine.ts`
 
-#### 2. Mise a jour du backend : `supabase/functions/home-assistant/index.ts`
-- Ajouter un champ optionnel `completedSteps` dans `ActiveRecipeSchema` pour transmettre la progression
-- Enrichir `formatRecipeContext()` pour afficher le statut de completion des etapes (comme le fait deja `cooking-assistant`)
-- Le reste de la logique (prompts, tools, modes) est deja en place
+Extraire toute la logique commune de streaming et de gestion d'etat dans un hook generique :
 
-#### 3. Refonte de `AssistantSheetContent` dans `src/pages/RecipeDetail.tsx`
-- Remplacer `useCookingAssistant` par `useRecipeChat`
-- Conserver les onglets Cuisiner / Modifier / Historique mais les connecter au mode du hook unifie
-- Reprendre l'UI du chat Home : barre de saisie arrondie, bouton +, upload image, micro/envoi dynamique, suggestions contextuelles
-- Conserver la gestion des `pendingRecipe` (apply/create) qui existe deja
-- Ajouter le badge de mode comme sur la page Home
+- **Streaming SSE** : la boucle de lecture `fetch` + `ReadableStream` + parsing des `data:` lines
+- **Accumulation des tool calls** et execution (y compris le fallback quand `finish_reason` est absent)
+- **Parsing des actions texte** (regex fallback pour les JSON inline)
+- **Mode switch** : logique `pendingModeSwitchRef` + `continueWithNewAgent`
+- **Gestion des messages** : `setMessages`, ajout user/assistant, nettoyage sur erreur
+- **Etat partage** : `messages`, `isStreaming`, `mode`, `pendingRecipe`, `searchResults`
 
-#### 4. Suppression de l'ancien code
-- Supprimer `src/hooks/useCookingAssistant.ts` (plus utilise)
-- La edge function `cooking-assistant` peut etre conservee temporairement mais ne sera plus appelee
+Le hook recoit en configuration :
+- `initialMessages` : message(s) de bienvenue
+- `initialMode` : `orchestration` ou `cooking`
+- `activeRecipe` initial (null ou la recette)
+- `handleToolCall` : fonction de dispatch des tool calls (injectee par le wrapper)
+- `buildRequestBody` : fonction pour construire le body de la requete (permet d'ajouter `completedSteps` cote recette)
+
+Les wrappers deviennent tres simples :
+- `useHomeChat` : configure le mode `orchestration`, `activeRecipe: null`, et le `handleToolCall` qui gere `open_recipe` + `navigate` + sauvegarde directe en base
+- `useRecipeChat` : configure le mode `cooking`, injecte la recette, ajoute `completedSteps` dans le body, et redirige `save_recipe` / `extract_modified_recipe` vers les callbacks parent
+
+---
+
+### 2. Composant partage : `src/components/chat/ChatInterface.tsx`
+
+Extraire l'interface de chat commune dans un composant reutilisable :
+
+- **Rendu des messages** : bulles user (`bg-muted rounded-3xl`) et assistant (prose + ReactMarkdown), filtrage des JSON d'action
+- **Indicateur de streaming** : les 3 points animes
+- **Transcript partiel** (voix)
+- **Barre de saisie** : le bloc `bg-muted rounded-[24px]` avec bouton +, popover fichiers/camera/image, textarea auto-resize, bouton micro/envoi dynamique
+- **Barre de suggestions** : les chips contextuelles par mode
+- **Barre pending recipe** : confirmation creer/mettre a jour avec les boutons Check/X
+- **Preview image** selectionnee
+- **Gestion image** : selection fichier, validation type/taille, preview, suppression
+- **Voice** : integration `useVoiceMode`, auto-speak des reponses assistant
+
+Props du composant :
+- `messages`, `isStreaming`, `mode`, `pendingRecipe` (etat du hook)
+- `sendMessage`, `savePendingRecipe`, `cancelPendingRecipe` (actions)
+- `getModeInfo` (helper)
+- `suggestions` : liste de suggestions contextuelles (string[])
+- `placeholder` : texte du champ de saisie
+- `showWelcomeScreen` : boolean (uniquement pour Home)
+- `welcomeContent` : JSX optionnel pour l'ecran d'accueil
+- `headerContent` : JSX optionnel (badge de mode, boutons de navigation -- injectes par le parent)
+- `className` : pour ajuster le layout (plein ecran vs sheet)
+
+---
+
+### 3. Simplification des pages
+
+**`Home.tsx`** (~100 lignes au lieu de ~430) :
+- Appelle `useHomeChat()` 
+- Rend le header (boutons +, mode badge, navigation)
+- Rend `<ChatInterface>` avec `showWelcomeScreen={true}` et les suggestions d'orchestration
+
+**`RecipeDetail.tsx` / `RecipeChatInterface`** (~40 lignes au lieu de ~200) :
+- Appelle `useRecipeChat()`
+- Rend `<ChatInterface>` dans le Sheet, sans ecran d'accueil, avec les suggestions cuisine
+
+---
+
+### 4. Fichiers a supprimer / nettoyer
+
+- Pas de nouveau fichier a supprimer
+- Le code duplique entre les deux pages et les deux hooks est consolide
+
+### Resultat
+
+```text
+Avant :
+  useHomeChat.ts      896 lignes
+  useRecipeChat.ts    483 lignes
+  Home.tsx (chat UI)  ~250 lignes
+  RecipeDetail.tsx (chat UI) ~200 lignes
+  Total : ~1830 lignes
+
+Apres :
+  useChatEngine.ts    ~450 lignes (logique commune)
+  useHomeChat.ts      ~120 lignes (wrapper)
+  useRecipeChat.ts    ~80 lignes (wrapper)
+  ChatInterface.tsx   ~200 lignes (UI commune)
+  Home.tsx (chat)     ~100 lignes
+  RecipeDetail.tsx (chat) ~40 lignes
+  Total : ~990 lignes (-46%)
+```
 
 ### Details techniques
 
-```text
-Flux actuel (recette) :
-  RecipeDetail → useCookingAssistant → cooking-assistant (edge)
+Le hook `useChatEngine` expose une API identique a l'actuelle, de sorte que les wrappers n'ont qu'a passer la configuration et re-exporter les valeurs :
 
-Nouveau flux :
-  RecipeDetail → useRecipeChat → home-assistant (edge)
-                                  (avec completedSteps + recette pre-chargee)
+```text
+useChatEngine({
+  initialMessages,
+  initialMode,
+  initialActiveRecipe,
+  onToolCall,          -- dispatch specifique (Home vs Recipe)
+  buildRequestBody,    -- ajout completedSteps etc.
+})
+  --> { messages, isStreaming, mode, pendingRecipe, sendMessage, resetChat, ... }
 ```
 
-Le hook `useRecipeChat` differe de `useHomeChat` par :
-- `activeRecipe` est initialise avec la recette courante (pas null)
-- Le mode initial est `cooking` (pas `orchestration`)  
-- Le payload inclut `completedSteps: number[]` pour la progression
-- Les tool calls `save_recipe` / `extract_modified_recipe` / `create_new_recipe` declenchent les callbacks `onRecipeUpdate` / `onRecipeCreate` du parent
-- Le `resetChat` garde le contexte recette (ne revient pas a orchestration vide)
-
-Le composant `ChatInterface` dans RecipeDetail sera largement aligne sur le rendu de Home.tsx : meme barre d'input, memes bulles, memes suggestions dynamiques, support image et voix.
+La fonction `onToolCall` est le seul point de divergence significatif entre Home et Recipe : Home gere `open_recipe`, `navigate`, et la sauvegarde directe en base ; Recipe redirige vers les callbacks parent et garde le contexte recette sur `back_to_orchestration`.
 
