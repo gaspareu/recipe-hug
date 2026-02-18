@@ -85,10 +85,15 @@ export function useChatEngine(config: ChatEngineConfig) {
     welcomeMessage,
     initialMode,
     initialActiveRecipe,
-    onToolCall,
-    buildRequest,
-    buildContinuationRequest,
   } = config;
+
+  // Use refs for callbacks to avoid stale closures in streaming
+  const onToolCallRef = useRef(config.onToolCall);
+  onToolCallRef.current = config.onToolCall;
+  const buildRequestRef = useRef(config.buildRequest);
+  buildRequestRef.current = config.buildRequest;
+  const buildContinuationRequestRef = useRef(config.buildContinuationRequest);
+  buildContinuationRequestRef.current = config.buildContinuationRequest;
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() },
@@ -105,9 +110,11 @@ export function useChatEngine(config: ChatEngineConfig) {
     initialContext: string;
   } | null>(null);
 
-  // Expose setters for tool call handlers
-  const stateSetters = useRef({ setMode, setActiveRecipe, setPendingRecipe, setSearchResults, setMessages });
-  stateSetters.current = { setMode, setActiveRecipe, setPendingRecipe, setSearchResults, setMessages };
+  // Keep mutable refs for state that needs to be read during streaming
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const activeRecipeRef = useRef(activeRecipe);
+  activeRecipeRef.current = activeRecipe;
 
   // --- SSE streaming parser (shared) ---
   const parseSSEStream = useCallback(async (
@@ -190,7 +197,7 @@ export function useChatEngine(config: ChatEngineConfig) {
   ) => {
     try {
       const args = JSON.parse(argsStr);
-      const result = await onToolCall({ type: name, data: args });
+      const result = await onToolCallRef.current({ type: name, data: args });
 
       // Handle search results
       if (name === 'search_recipes' && result) {
@@ -229,7 +236,7 @@ export function useChatEngine(config: ChatEngineConfig) {
     } catch (e) {
       console.error('Failed to parse/execute tool call:', e, argsStr);
     }
-  }, [onToolCall]);
+  }, []);
 
   const parseTextActions = useCallback((content: string, assistantMessageId: string, userContent: string): string => {
     const actionRegex = /\{\s*"action"\s*:\s*"([^"]+)"\s*,\s*"parameters"\s*:\s*(\{[^}]*\})\s*\}/g;
@@ -248,7 +255,7 @@ export function useChatEngine(config: ChatEngineConfig) {
         };
         const toolType = actionMap[actionType];
         if (toolType) {
-          onToolCall({ type: toolType, data: { ...parameters } }).then(result => {
+          onToolCallRef.current({ type: toolType, data: { ...parameters } }).then(result => {
             if (result && typeof result === 'object' && 'modeSwitch' in result) {
               const ms = result as ModeSwitchResult;
               pendingModeSwitchRef.current = {
@@ -269,7 +276,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: cleaned } : m));
     }
     return cleaned;
-  }, [onToolCall]);
+  }, []);
 
   // Continue conversation with new agent after mode switch
   const continueWithNewAgent = useCallback(async (
@@ -282,7 +289,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
-      const { endpoint, body } = await buildContinuationRequest({ newMode, recipe, initialContext });
+      const { endpoint, body } = await buildContinuationRequestRef.current({ newMode, recipe, initialContext });
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -328,7 +335,7 @@ export function useChatEngine(config: ChatEngineConfig) {
     } catch (error) {
       console.error('Error continuing with new agent:', error);
     }
-  }, [buildContinuationRequest]);
+  }, []);
 
   // Send a message
   const sendMessage = useCallback(async (content: string, imageDataUrl?: string) => {
@@ -362,7 +369,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Vous devez être connecté');
 
-      const { endpoint, body } = await buildRequest({ apiMessages, mode, activeRecipe });
+      const { endpoint, body } = await buildRequestRef.current({ apiMessages, mode, activeRecipe });
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -397,7 +404,7 @@ export function useChatEngine(config: ChatEngineConfig) {
     } finally {
       setIsStreaming(false);
     }
-  }, [messages, isStreaming, mode, activeRecipe, buildRequest, parseSSEStream, continueWithNewAgent]);
+  }, [messages, isStreaming, mode, activeRecipe, parseSSEStream, continueWithNewAgent]);
 
   const resetChat = useCallback(() => {
     setMessages([{ id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() }]);
