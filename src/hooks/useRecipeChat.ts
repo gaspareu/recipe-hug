@@ -33,7 +33,8 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
     switch (action.type) {
       case 'search_recipes': {
-        const query = (action.data.query as string || '').toLowerCase();
+        const rawQuery = (action.data.query as string || '').toLowerCase().trim();
+        const query = rawQuery === 'all' ? '' : rawQuery;
         const statusFilter = action.data.status_filter as string;
         const favoritesOnly = action.data.favorites_only as boolean;
         return recipes.filter(r => {
