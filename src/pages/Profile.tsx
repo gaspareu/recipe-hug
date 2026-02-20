@@ -167,11 +167,14 @@ export default function Profile() {
         </div>
 
         {/* Personal Information */}
-        <CollapsibleSection
-          title="Informations personnelles"
-          description="Personnalisez votre profil"
-          icon={<User className="h-5 w-5" />}
-        >
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="text-muted-foreground"><User className="h-5 w-5" /></span>
+            <div>
+              <h3 className="font-semibold leading-none tracking-tight">Informations personnelles</h3>
+              <p className="text-sm text-muted-foreground mt-1">Personnalisez votre profil</p>
+            </div>
+          </div>
           <div className="space-y-6">
             {/* Avatar */}
             <div className="flex flex-col items-center gap-4">
@@ -234,16 +237,19 @@ export default function Profile() {
               </Button>
             </form>
           </div>
-        </CollapsibleSection>
+        </div>
 
         {/* Theme Selector */}
-        <CollapsibleSection
-          title="Apparence"
-          description="Choisissez le thème de l'application"
-          icon={<Sun className="h-5 w-5" />}
-        >
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-muted-foreground"><Sun className="h-5 w-5" /></span>
+            <div>
+              <h3 className="font-semibold leading-none tracking-tight">Apparence</h3>
+              <p className="text-sm text-muted-foreground mt-1">Choisissez le thème de l'application</p>
+            </div>
+          </div>
           <ThemeSelectorContent />
-        </CollapsibleSection>
+        </div>
 
         {/* Culinary Preferences */}
         <CollapsibleSection
