@@ -156,6 +156,7 @@ export function CulinaryPreferencesContent() {
       disliked_flavors: [],
       liked_ingredients: [],
       disliked_ingredients: [],
+      special_ingredients: [],
     };
     
     const equipment = preferences?.kitchen_equipment || {
@@ -182,6 +183,7 @@ export function CulinaryPreferencesContent() {
         disliked_flavors: dedupeArray(taste.disliked_flavors),
         liked_ingredients: dedupeArray(taste.liked_ingredients),
         disliked_ingredients: dedupeArray(taste.disliked_ingredients),
+        special_ingredients: dedupeArray(taste.special_ingredients || []),
       },
       kitchen_equipment: {
         available: dedupeArray(equipment.available),
@@ -382,10 +384,18 @@ export function CulinaryPreferencesContent() {
               placeholder="Ex: coriandre, olives..."
             />
           </div>
+          <div className="space-y-2">
+            <Label>Aliments particuliers à utiliser 🌟</Label>
+            <p className="text-xs text-muted-foreground">Ingrédients spéciaux à intégrer dans vos recettes quand c'est pertinent</p>
+            <TagInput
+              tags={prefs.taste_preferences.special_ingredients}
+              onAdd={(v) => addToArray('taste_preferences', 'special_ingredients', v)}
+              onRemove={(v) => removeFromArray('taste_preferences', 'special_ingredients', v)}
+              placeholder="Ex: pâte d'agrumes, citrons confits, kombu..."
+            />
+          </div>
         </CollapsibleContent>
       </Collapsible>
-
-      {/* Équipement */}
       <Collapsible open={openSections.equipment} onOpenChange={() => toggleSection('equipment')}>
         <CollapsibleTrigger asChild>
           <Button variant="ghost" className="w-full justify-between p-3 h-auto">

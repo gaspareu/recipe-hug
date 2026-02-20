@@ -157,6 +157,7 @@ export function CulinaryPreferencesEditor() {
       disliked_flavors: [],
       liked_ingredients: [],
       disliked_ingredients: [],
+      special_ingredients: [],
     };
     
     const equipment = preferences?.kitchen_equipment || {
@@ -183,6 +184,7 @@ export function CulinaryPreferencesEditor() {
         disliked_flavors: dedupeArray(taste.disliked_flavors),
         liked_ingredients: dedupeArray(taste.liked_ingredients),
         disliked_ingredients: dedupeArray(taste.disliked_ingredients),
+        special_ingredients: dedupeArray(taste.special_ingredients || []),
       },
       kitchen_equipment: {
         available: dedupeArray(equipment.available),
