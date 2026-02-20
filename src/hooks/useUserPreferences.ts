@@ -7,6 +7,7 @@ export interface TastePreferences {
   disliked_flavors: string[];
   liked_ingredients: string[];
   disliked_ingredients: string[];
+  special_ingredients: string[];
 }
 
 export interface KitchenEquipment {
@@ -44,6 +45,7 @@ const DEFAULT_PREFERENCES: Omit<UserCulinaryPreferences, 'id' | 'user_id' | 'cre
     disliked_flavors: [],
     liked_ingredients: [],
     disliked_ingredients: [],
+    special_ingredients: [],
   },
   kitchen_equipment: {
     available: [],
@@ -151,6 +153,9 @@ export function formatPreferencesForContext(prefs: UserCulinaryPreferences | nul
   }
   if (taste.disliked_ingredients.length > 0) {
     tasteLines.push(`Ingrédients évités : ${taste.disliked_ingredients.join(', ')}`);
+  }
+  if (taste.special_ingredients?.length > 0) {
+    tasteLines.push(`🌟 Aliments particuliers à utiliser si pertinent : ${taste.special_ingredients.join(', ')}`);
   }
   if (tasteLines.length > 0) {
     sections.push(`Goûts :\n${tasteLines.join('\n')}`);
