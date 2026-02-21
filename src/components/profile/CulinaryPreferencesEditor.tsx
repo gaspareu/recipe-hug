@@ -401,6 +401,16 @@ export function CulinaryPreferencesEditor() {
                 placeholder="Ex: coriandre, olives..."
               />
             </div>
+            <div className="space-y-2">
+              <Label>Aliments particuliers à utiliser 🌟</Label>
+              <p className="text-xs text-muted-foreground">Ingrédients spéciaux à intégrer dans vos recettes quand c'est pertinent</p>
+              <TagInput
+                tags={prefs.taste_preferences.special_ingredients}
+                onAdd={(v) => addToArray('taste_preferences', 'special_ingredients', v)}
+                onRemove={(v) => removeFromArray('taste_preferences', 'special_ingredients', v)}
+                placeholder="Ex: pâte d'agrumes, citrons confits, kombu..."
+              />
+            </div>
           </CollapsibleContent>
         </Collapsible>
 
