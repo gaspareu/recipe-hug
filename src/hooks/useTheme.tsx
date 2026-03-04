@@ -59,7 +59,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
         if (error) throw error;
 
-        const userTheme = (data?.theme as Theme) || 'system';
+        const userTheme = ((data as any)?.theme as Theme) || 'system';
         setThemeState(userTheme);
         applyTheme(userTheme);
       } catch (error) {

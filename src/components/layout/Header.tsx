@@ -25,7 +25,7 @@ export function Header() {
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => {
-          if (data) setProfile(data);
+          if (data) setProfile(data as any);
         });
     }
   }, [user]);
