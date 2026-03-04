@@ -14,7 +14,6 @@ export type AgentType =
   | 'edit_recipe'    // cooking-assistant (edit mode)
   | 'generate_image' // generate-recipe-image - Image generation
   | 'parse_image'    // parse-recipe-image - Image analysis
-  | 'timeline'       // analyze-recipe-timeline - Gantt chart
   | 'webhook';       // webhook-recipe - External import
 
 // Per-agent configuration

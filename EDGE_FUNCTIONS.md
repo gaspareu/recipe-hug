@@ -75,11 +75,6 @@ Agent Config (agent_configs[agentType]) → Global User Settings → Default Lov
 - **Rôle** : Analyse une recette et génère un résumé, des tags nutritionnels, un score calorique et la saison.
 - **Agent Type** : `analyze`
 
-### `analyze-recipe-timeline`
-- **Rôle** : Analyse les étapes d'une recette pour créer un diagramme de Gantt (durée, parallélisme, tâches passives/actives). Utilise le tool calling.
-- **Agent Type** : `timeline`
-- **Capabilities** : tools
-
 ### `extract-user-preferences`
 - **Rôle** : Analyse une conversation pour extraire automatiquement les préférences culinaires (goûts, allergies, équipement). Utilise le tool calling.
 - **Agent Type** : `chat`
