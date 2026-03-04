@@ -34,9 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         if (event === 'SIGNED_OUT') {
-          // Clear any stale session data
           setSession(null);
           setUser(null);
+        }
+
+        // Claim pending shares after sign in or sign up
+        if (event === 'SIGNED_IN' && session) {
+          claimPendingShares(session.access_token);
         }
       }
     );
