@@ -103,7 +103,7 @@ export const AGENT_REQUIRED_CAPABILITIES: Record<AgentType, ModelCapability[]> =
   edit_recipe: ['text', 'streaming', 'tools'],
   generate_image: ['image_generation'],
   parse_image: ['vision'],
-  timeline: ['text', 'tools'],
+  
   webhook: ['text'],
 };
 
