@@ -5,7 +5,7 @@ import { ShareRecipeDialog } from '@/components/recipes/ShareRecipeDialog';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
-import { RecipeGanttChart } from '@/components/recipes/RecipeGanttChart';
+
 import { RecipeVersionHistory } from '@/components/recipes/RecipeVersionHistory';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
