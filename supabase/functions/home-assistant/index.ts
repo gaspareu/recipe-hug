@@ -554,20 +554,44 @@ function getToolsForMode(mode: string) {
   }
 }
 
+const SUGGESTIONS_INSTRUCTION = `
+
+## SUGGESTIONS CONTEXTUELLES
+À la FIN de CHAQUE réponse, ajoute exactement 3 suggestions contextuelles que l'utilisateur pourrait vouloir dire ensuite.
+Format OBLIGATOIRE (sur une seule ligne, à la toute fin de ta réponse) :
+[suggestions]["Suggestion 1","Suggestion 2","Suggestion 3"][/suggestions]
+
+Les suggestions doivent :
+- Être courtes (max 6 mots)
+- Être pertinentes par rapport à ta dernière réponse
+- Proposer des actions concrètes ou des questions logiques
+- Varier entre questions, actions et précisions
+
+Exemples :
+- Après avoir proposé une recette : [suggestions]["Ça me plaît, enregistre !","Version sans gluten","Pour 6 personnes"][/suggestions]
+- Après une recherche : [suggestions]["Cuisiner la première","Voir le détail","Chercher autre chose"][/suggestions]
+- Après un conseil de cuisson : [suggestions]["Étape suivante","Combien de temps ?","Un conseil pour la texture"][/suggestions]`;
+
 // Get system prompt based on mode
 function getSystemPromptForMode(mode: string): string {
+  let prompt: string;
   switch (mode) {
     case "orchestration":
-      return ORCHESTRATION_PROMPT;
+      prompt = ORCHESTRATION_PROMPT;
+      break;
     case "creating":
-      return CREATING_PROMPT;
+      prompt = CREATING_PROMPT;
+      break;
     case "cooking":
-      return COOKING_PROMPT;
+      prompt = COOKING_PROMPT;
+      break;
     case "editing":
-      return EDITING_PROMPT;
+      prompt = EDITING_PROMPT;
+      break;
     default:
-      return ORCHESTRATION_PROMPT;
+      prompt = ORCHESTRATION_PROMPT;
   }
+  return prompt + SUGGESTIONS_INSTRUCTION;
 }
 
 serve(async (req) => {

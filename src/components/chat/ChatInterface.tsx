@@ -108,6 +108,19 @@ export function ChatInterface({
 
   const hasConversation = messages.length > 1;
   const modeInfo = getModeInfo();
+
+  // Extract dynamic suggestions from last assistant message
+  const suggestionsRegex = /\[suggestions\]\s*(\[.*?\])\s*\[\/suggestions\]/s;
+  const lastAssistantMessage = [...messages].reverse().find(m => m.role === 'assistant' && m.content);
+  let dynamicSuggestions: string[] = [];
+  if (lastAssistantMessage?.content) {
+    const match = lastAssistantMessage.content.match(suggestionsRegex);
+    if (match) {
+      try { dynamicSuggestions = JSON.parse(match[1]); } catch {}
+    }
+  }
+  const activeSuggestions = dynamicSuggestions.length > 0 ? dynamicSuggestions : suggestions;
+
   const displayMessages = skipFirstMessage ? messages.slice(1) : messages;
 
   return (
