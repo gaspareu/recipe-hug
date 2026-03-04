@@ -1,6 +1,6 @@
 # Edge Functions — Documentation
 
-> Référentiel des 14 fonctions backend. Toutes les fonctions IA utilisent le pattern unifié `resolveAIConfig` + modules partagés `_shared/`.
+> Référentiel des 13 fonctions backend. Toutes les fonctions IA utilisent le pattern unifié `resolveAIConfig` + modules partagés `_shared/`.
 
 ---
 
