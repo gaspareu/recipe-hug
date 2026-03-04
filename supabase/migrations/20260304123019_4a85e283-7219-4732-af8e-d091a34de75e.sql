@@ -1,0 +1,1 @@
+ALTER TABLE public.recipes DROP COLUMN timeline_data;
