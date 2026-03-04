@@ -132,7 +132,7 @@ function formatPreferencesForPrompt(prefs: any): string {
   if (tasteParts.length > 0) sections.push(`GOÛTS\n${tasteParts.join("\n")}`);
   const diet = prefs.dietary_constraints || {};
   const dietParts: string[] = [];
-  if (diet.allergies?.length > 0) dietParts.push(`⚠️ Allergies : ${diet.allergies.join(", ")}`);
+  if (diet.allergies?.length > 0) dietParts.push(`Allergies : ${diet.allergies.join(", ")}`);
   if (diet.diets?.length > 0) dietParts.push(`Régimes : ${diet.diets.join(", ")}`);
   if (diet.restrictions?.length > 0) dietParts.push(`Restrictions : ${diet.restrictions.join(", ")}`);
   if (dietParts.length > 0) sections.push(`🚫 CONTRAINTES ALIMENTAIRES\n${dietParts.join("\n")}`);
