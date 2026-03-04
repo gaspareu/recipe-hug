@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, ImagePlus, History } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, ImagePlus, History, Share2 } from 'lucide-react';
+import { ShareRecipeDialog } from '@/components/recipes/ShareRecipeDialog';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
