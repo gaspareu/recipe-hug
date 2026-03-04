@@ -257,7 +257,7 @@ export default function RecipeDetail() {
           </CardContent>
         </Card>
 
-        {steps.length > 0 && <RecipeGanttChart recipeId={recipe.id} steps={steps} timelineData={(recipe as any).timeline_data as TimelineData | null} onTimelineUpdate={refetch} />}
+        
         {totalSteps > 0 && <CookingAssistantButton currentStep={completedSteps.size} totalSteps={totalSteps} onPress={() => setChatOpen(!chatOpen)} isComplete={isComplete} />}
       </div>
     </MainLayout>
