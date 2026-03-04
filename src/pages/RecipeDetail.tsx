@@ -164,9 +164,11 @@ export default function RecipeDetail() {
                 <ShareRecipeDialog recipeId={recipe.id} />
               </TooltipTrigger><TooltipContent><p>Partager</p></TooltipContent></Tooltip>
             </TooltipProvider>
-            <Button variant="outline" size="sm" asChild className="bg-background/60 backdrop-blur-sm hover:bg-background/80 border-background/20">
-              <Link to={`/recipes/${recipe.id}/edit`}><Edit className="h-4 w-4 mr-2" />Éditer</Link>
-            </Button>
+            <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" asChild className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
+                <Link to={`/recipes/${recipe.id}/edit`}><Edit className="h-4 w-4" /></Link>
+              </Button>
+            </TooltipTrigger><TooltipContent><p>Éditer</p></TooltipContent></Tooltip>
           </div>
         </div>
 
