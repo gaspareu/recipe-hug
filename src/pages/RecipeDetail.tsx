@@ -151,19 +151,15 @@ export default function RecipeDetail() {
               <Tooltip><TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" onClick={() => {
                   const ingredients = recipe.ingredients as Array<{ name: string }>;
+                  handleAnalyze();
                   generateImage.mutate({ recipeId: recipe.id, title: recipe.title, ingredients }, {
                     onSuccess: () => toast.success('Image générée !'),
                     onError: (error) => toast.error(error.message || "Impossible de générer l'image"),
                   });
-                }} disabled={generateImage.isPending} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
-                  {generateImage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                }} disabled={generateImage.isPending || isAnalyzing} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
+                  {(generateImage.isPending || isAnalyzing) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 </Button>
-              </TooltipTrigger><TooltipContent><p>Régénérer l'image</p></TooltipContent></Tooltip>
-              <Tooltip><TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handleAnalyze} disabled={isAnalyzing} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
-                  {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                </Button>
-              </TooltipTrigger><TooltipContent><p>Analyser</p></TooltipContent></Tooltip>
+              </TooltipTrigger><TooltipContent><p>Analyser & générer image</p></TooltipContent></Tooltip>
               <Tooltip><TooltipTrigger asChild>
                 <ShareRecipeDialog recipeId={recipe.id} />
               </TooltipTrigger><TooltipContent><p>Partager</p></TooltipContent></Tooltip>
