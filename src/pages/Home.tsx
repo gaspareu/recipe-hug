@@ -29,10 +29,10 @@ export default function Home() {
 
   const getSuggestions = () => {
     switch (mode) {
-      case 'creating': return ['Plutôt simple et rapide', 'Une version végétarienne', "C'est parfait, enregistre !"];
-      case 'cooking': return ['Étape suivante', 'Je peux substituer un ingrédient ?', "C'est quoi la bonne texture ?"];
-      case 'editing': return ['Version végétarienne', 'Moins calorique', 'Enregistre les modifications'];
-      default: return ['Chercher une recette de poulet', 'Crée-moi une recette de tarte', 'Voir toutes mes recettes', "Qu'est-ce que je peux faire avec des œufs ?"];
+      case 'creating': return ['Plutôt simple et rapide', 'Une version végétarienne', 'Enregistrer cette recette'];
+      case 'cooking': return ['Étape suivante', 'Substituer un ingrédient', 'Quelle texture viser'];
+      case 'editing': return ['Version végétarienne', 'Moins calorique', 'Enregistrer les modifications'];
+      default: return ['Chercher une recette de poulet', 'Créer une recette de tarte', 'Voir toutes mes recettes', 'Cuisiner avec des oeufs'];
     }
   };
 

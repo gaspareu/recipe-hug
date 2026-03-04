@@ -541,20 +541,20 @@ function getToolsForMode(mode: string) {
 const SUGGESTIONS_INSTRUCTION = `
 
 ## SUGGESTIONS CONTEXTUELLES
-À la FIN de CHAQUE réponse, ajoute exactement 3 suggestions contextuelles que l'utilisateur pourrait vouloir dire ensuite.
-Format OBLIGATOIRE (sur une seule ligne, à la toute fin de ta réponse) :
+A la FIN de CHAQUE reponse, ajoute exactement 3 suggestions contextuelles.
+Format OBLIGATOIRE (une seule ligne, toute fin de reponse) :
 [suggestions]["Suggestion 1","Suggestion 2","Suggestion 3"][/suggestions]
 
-Les suggestions doivent :
-- Être courtes (max 6 mots)
-- Être pertinentes par rapport à ta dernière réponse
-- Proposer des actions concrètes ou des questions logiques
-- Varier entre questions, actions et précisions
+Regles :
+- Max 5 mots par suggestion, ton direct et neutre
+- Pertinentes par rapport a ta derniere reponse
+- Pas d'emojis, pas de points d'exclamation
+- Formulations sobres et fonctionnelles
 
 Exemples :
-- Après avoir proposé une recette : [suggestions]["Ça me plaît, enregistre !","Version sans gluten","Pour 6 personnes"][/suggestions]
-- Après une recherche : [suggestions]["Cuisiner la première","Voir le détail","Chercher autre chose"][/suggestions]
-- Après un conseil de cuisson : [suggestions]["Étape suivante","Combien de temps ?","Un conseil pour la texture"][/suggestions]`;
+- Apres une recette proposee : [suggestions]["Enregistrer cette recette","Version sans gluten","Adapter pour 6"][/suggestions]
+- Apres une recherche : [suggestions]["Cuisiner la premiere","Voir le detail","Autre recherche"][/suggestions]
+- Apres un conseil : [suggestions]["Etape suivante","Temps de cuisson","Conseil texture"][/suggestions]`;
 
 // Get system prompt based on mode
 function getSystemPromptForMode(mode: string): string {
