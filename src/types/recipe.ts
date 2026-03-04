@@ -12,19 +12,6 @@ export interface Step {
   parallel_with?: number[];
 }
 
-export interface TimelineStep {
-  order: number;
-  duration_minutes: number;
-  parallel_with: number[];
-  start_offset: number;
-  is_passive?: boolean;
-}
-
-export interface TimelineData {
-  analyzed_at: string;
-  total_time: number;
-  steps: TimelineStep[];
-}
 
 export type RecipeStatus = 'draft' | 'tested' | 'validated' | 'archived';
 

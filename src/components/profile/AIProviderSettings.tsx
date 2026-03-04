@@ -704,7 +704,7 @@ export function AIProviderSettings() {
     'edit_recipe', 
     'generate_image', 
     'parse_image', 
-    'timeline', 
+     
     'webhook'
   ];
 

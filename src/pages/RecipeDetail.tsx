@@ -5,7 +5,7 @@ import { ShareRecipeDialog } from '@/components/recipes/ShareRecipeDialog';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
-import { RecipeGanttChart } from '@/components/recipes/RecipeGanttChart';
+
 import { RecipeVersionHistory } from '@/components/recipes/RecipeVersionHistory';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +27,7 @@ import { useSwipeClose } from '@/hooks/useSwipeClose';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import type { RecipeStatus, Step, Ingredient, TimelineData } from '@/types/recipe';
+import type { RecipeStatus, Step, Ingredient } from '@/types/recipe';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -257,7 +257,7 @@ export default function RecipeDetail() {
           </CardContent>
         </Card>
 
-        {steps.length > 0 && <RecipeGanttChart recipeId={recipe.id} steps={steps} timelineData={(recipe as any).timeline_data as TimelineData | null} onTimelineUpdate={refetch} />}
+        
         {totalSteps > 0 && <CookingAssistantButton currentStep={completedSteps.size} totalSteps={totalSteps} onPress={() => setChatOpen(!chatOpen)} isComplete={isComplete} />}
       </div>
     </MainLayout>
