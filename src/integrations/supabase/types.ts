@@ -74,6 +74,42 @@ export type Database = {
         }
         Relationships: []
       }
+      recipe_shares: {
+        Row: {
+          claimed_at: string | null
+          created_at: string
+          id: string
+          identifier_type: string
+          recipe_snapshot: Json
+          recipient_id: string | null
+          recipient_identifier: string
+          sender_id: string
+          status: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          identifier_type: string
+          recipe_snapshot: Json
+          recipient_id?: string | null
+          recipient_identifier: string
+          sender_id: string
+          status?: string
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          identifier_type?: string
+          recipe_snapshot?: Json
+          recipient_id?: string | null
+          recipient_identifier?: string
+          sender_id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       recipe_versions: {
         Row: {
           change_description: string | null
