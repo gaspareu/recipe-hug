@@ -140,7 +140,7 @@ function formatPreferencesForPrompt(prefs: any): string {
   const equipParts: string[] = [];
   if (equipment.available?.length > 0) equipParts.push(`Disponible : ${equipment.available.join(", ")}`);
   if (equipment.unavailable?.length > 0) equipParts.push(`Non disponible : ${equipment.unavailable.join(", ")}`);
-  if (equipParts.length > 0) sections.push(`🍳 ÉQUIPEMENT\n${equipParts.join("\n")}`);
+  if (equipParts.length > 0) sections.push(`ÉQUIPEMENT\n${equipParts.join("\n")}`);
   const style = prefs.culinary_style || {};
   const styleParts: string[] = [];
   if (style.favorite_cuisines?.length > 0) styleParts.push(`Cuisines favorites : ${style.favorite_cuisines.join(", ")}`);
