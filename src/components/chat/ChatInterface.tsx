@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TextShimmer } from '@/components/ui/text-shimmer';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { toast } from 'sonner';
 import type { ChatMessage, ChatMode, PendingRecipe } from '@/hooks/useChatEngine';
@@ -153,11 +154,9 @@ export function ChatInterface({
 
             {isStreaming && messages[messages.length - 1]?.content === '' && (
               <div className="flex justify-start">
-                <div className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
+                <TextShimmer className="font-mono text-sm" duration={1}>
+                  Réflexion en cours...
+                </TextShimmer>
               </div>
             )}
 
