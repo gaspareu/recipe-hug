@@ -192,20 +192,22 @@ export function ChatInterface({
       {/* Bottom area */}
       <div className="shrink-0 p-4 space-y-4">
         {/* Quick suggestions */}
-        {!pendingRecipe && (
-          <div className="flex flex-wrap gap-2 justify-center">
-            {suggestions.map((suggestion, i) => (
-              <Button
-                key={i}
-                variant={hasConversation && mode !== 'orchestration' ? 'ghost' : 'outline'}
-                size="sm"
-                onClick={() => sendMessage(suggestion)}
-                disabled={isStreaming}
-                className="text-sm rounded-2xl px-4 py-2 h-auto whitespace-normal text-center border-border/50 hover:bg-muted"
-              >
-                {suggestion}
-              </Button>
-            ))}
+        {!pendingRecipe && suggestions.length > 0 && (
+          <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
+            <div className="flex gap-2 w-max">
+              {suggestions.map((suggestion, i) => (
+                <Button
+                  key={i}
+                  variant={hasConversation && mode !== 'orchestration' ? 'ghost' : 'outline'}
+                  size="sm"
+                  onClick={() => sendMessage(suggestion)}
+                  disabled={isStreaming}
+                  className="text-sm rounded-2xl px-4 py-2 h-auto whitespace-nowrap border-border/50 hover:bg-muted shrink-0"
+                >
+                  {suggestion}
+                </Button>
+              ))}
+            </div>
           </div>
         )}
 
