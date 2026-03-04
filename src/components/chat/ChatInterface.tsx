@@ -205,10 +205,10 @@ export function ChatInterface({
       {/* Bottom area */}
       <div className="shrink-0 p-4 space-y-4">
         {/* Quick suggestions */}
-        {!pendingRecipe && suggestions.length > 0 && (
+        {!pendingRecipe && activeSuggestions.length > 0 && (
           <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
             <div className="flex gap-2 w-max">
-              {suggestions.map((suggestion, i) => (
+              {activeSuggestions.map((suggestion, i) => (
                 <Button
                   key={i}
                   variant={hasConversation && mode !== 'orchestration' ? 'ghost' : 'outline'}
