@@ -178,7 +178,6 @@ export type Database = {
           source_type: string
           status: string
           steps: Json
-          timeline_data: Json | null
           title: string
           updated_at: string | null
           user_id: string
@@ -197,7 +196,6 @@ export type Database = {
           source_type?: string
           status?: string
           steps?: Json
-          timeline_data?: Json | null
           title: string
           updated_at?: string | null
           user_id: string
@@ -216,7 +214,6 @@ export type Database = {
           source_type?: string
           status?: string
           steps?: Json
-          timeline_data?: Json | null
           title?: string
           updated_at?: string | null
           user_id?: string
