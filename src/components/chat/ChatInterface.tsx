@@ -108,6 +108,19 @@ export function ChatInterface({
 
   const hasConversation = messages.length > 1;
   const modeInfo = getModeInfo();
+
+  // Extract dynamic suggestions from last assistant message
+  const suggestionsRegex = /\[suggestions\]\s*(\[.*?\])\s*\[\/suggestions\]/s;
+  const lastAssistantMessage = [...messages].reverse().find(m => m.role === 'assistant' && m.content);
+  let dynamicSuggestions: string[] = [];
+  if (lastAssistantMessage?.content) {
+    const match = lastAssistantMessage.content.match(suggestionsRegex);
+    if (match) {
+      try { dynamicSuggestions = JSON.parse(match[1]); } catch {}
+    }
+  }
+  const activeSuggestions = dynamicSuggestions.length > 0 ? dynamicSuggestions : suggestions;
+
   const displayMessages = skipFirstMessage ? messages.slice(1) : messages;
 
   return (
@@ -135,6 +148,7 @@ export function ChatInterface({
               let displayContent = message.content;
               if (message.role === 'assistant' && displayContent) {
                 displayContent = displayContent.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
+                displayContent = displayContent.replace(/\[suggestions\]\s*\[.*?\]\s*\[\/suggestions\]/s, '').trim();
               }
               return (
                 <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -192,10 +206,10 @@ export function ChatInterface({
       {/* Bottom area */}
       <div className="shrink-0 p-4 space-y-4">
         {/* Quick suggestions */}
-        {!pendingRecipe && suggestions.length > 0 && (
+        {!pendingRecipe && activeSuggestions.length > 0 && (
           <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
             <div className="flex gap-2 w-max">
-              {suggestions.map((suggestion, i) => (
+              {activeSuggestions.map((suggestion, i) => (
                 <Button
                   key={i}
                   variant={hasConversation && mode !== 'orchestration' ? 'ghost' : 'outline'}
