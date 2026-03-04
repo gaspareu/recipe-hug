@@ -17,7 +17,7 @@ const RequestSchema = z.object({
 });
 
 // ===== MEMORY MODE PROMPT =====
-const MEMORY_PROMPT = `Tu es Chef, l'assistant mémoire de Grimoire. Tu gères les connaissances culinaires de l'utilisateur.
+const MEMORY_PROMPT = `Tu es l'assistant mémoire de Grimoire. Tu gères les connaissances culinaires de l'utilisateur.
 
 ## TON RÔLE
 Tu aides l'utilisateur à :
@@ -27,10 +27,10 @@ Tu aides l'utilisateur à :
 - Corriger des informations
 
 ## TON STYLE
-- Chaleureux et bienveillant
+- Direct et clair
 - Tu tutoies l'utilisateur
-- Réponses concises mais claires
-- Tu utilises des emojis pour structurer l'affichage
+- Pas d'emojis
+- Réponses structurées et lisibles
 
 ## STRUCTURE DES PRÉFÉRENCES
 
@@ -57,7 +57,7 @@ Tu aides l'utilisateur à :
 ## COMPORTEMENT
 
 ### Affichage des préférences
-Quand l'utilisateur demande ce que tu sais de lui, utilise get_preferences puis formate joliment.
+Quand l'utilisateur demande ce que tu sais de lui, utilise get_preferences puis formate clairement par catégorie.
 
 ### Modifications
 Quand l'utilisateur veut modifier ses préférences :
@@ -72,7 +72,7 @@ Appeler IMMÉDIATEMENT quand l'utilisateur confirme une modification :
 - "ok", "oui", "parfait", "c'est bon", "ajoute", "retire", "enlève"
 - Toute confirmation claire
 
-Ton : chaleureux, enthousiaste, expert culinaire français.`;
+Style : direct, efficace, pas d'emojis. Tu tutoies.`;
 
 const GET_PREFERENCES_TOOL = {
   type: "function",
@@ -129,24 +129,24 @@ function formatPreferencesForPrompt(prefs: any): string {
   if (taste.disliked_flavors?.length > 0) tasteParts.push(`Saveurs évitées : ${taste.disliked_flavors.join(", ")}`);
   if (taste.liked_ingredients?.length > 0) tasteParts.push(`Ingrédients favoris : ${taste.liked_ingredients.join(", ")}`);
   if (taste.disliked_ingredients?.length > 0) tasteParts.push(`Ingrédients évités : ${taste.disliked_ingredients.join(", ")}`);
-  if (tasteParts.length > 0) sections.push(`🧂 GOÛTS\n${tasteParts.join("\n")}`);
+  if (tasteParts.length > 0) sections.push(`GOÛTS\n${tasteParts.join("\n")}`);
   const diet = prefs.dietary_constraints || {};
   const dietParts: string[] = [];
-  if (diet.allergies?.length > 0) dietParts.push(`⚠️ Allergies : ${diet.allergies.join(", ")}`);
+  if (diet.allergies?.length > 0) dietParts.push(`Allergies : ${diet.allergies.join(", ")}`);
   if (diet.diets?.length > 0) dietParts.push(`Régimes : ${diet.diets.join(", ")}`);
   if (diet.restrictions?.length > 0) dietParts.push(`Restrictions : ${diet.restrictions.join(", ")}`);
-  if (dietParts.length > 0) sections.push(`🚫 CONTRAINTES ALIMENTAIRES\n${dietParts.join("\n")}`);
+  if (dietParts.length > 0) sections.push(`CONTRAINTES ALIMENTAIRES\n${dietParts.join("\n")}`);
   const equipment = prefs.kitchen_equipment || {};
   const equipParts: string[] = [];
   if (equipment.available?.length > 0) equipParts.push(`Disponible : ${equipment.available.join(", ")}`);
   if (equipment.unavailable?.length > 0) equipParts.push(`Non disponible : ${equipment.unavailable.join(", ")}`);
-  if (equipParts.length > 0) sections.push(`🍳 ÉQUIPEMENT\n${equipParts.join("\n")}`);
+  if (equipParts.length > 0) sections.push(`ÉQUIPEMENT\n${equipParts.join("\n")}`);
   const style = prefs.culinary_style || {};
   const styleParts: string[] = [];
   if (style.favorite_cuisines?.length > 0) styleParts.push(`Cuisines favorites : ${style.favorite_cuisines.join(", ")}`);
   if (style.favorite_techniques?.length > 0) styleParts.push(`Techniques : ${style.favorite_techniques.join(", ")}`);
   if (style.preferred_difficulty) styleParts.push(`Difficulté préférée : ${style.preferred_difficulty}`);
-  if (styleParts.length > 0) sections.push(`👨‍🍳 STYLE CULINAIRE\n${styleParts.join("\n")}`);
+  if (styleParts.length > 0) sections.push(`STYLE CULINAIRE\n${styleParts.join("\n")}`);
   if (sections.length === 0) return "Tu n'as pas encore de préférences enregistrées.";
   return sections.join("\n\n");
 }
