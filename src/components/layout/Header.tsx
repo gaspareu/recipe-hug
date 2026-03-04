@@ -20,7 +20,7 @@ export function Header() {
   useEffect(() => {
     if (user) {
       supabase
-        .from('profiles')
+        .from('profiles_safe' as any)
         .select('display_name, avatar_url')
         .eq('id', user.id)
         .maybeSingle()

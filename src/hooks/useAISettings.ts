@@ -173,8 +173,9 @@ export function useAISettings() {
       if (!user?.id) return null;
 
       // Only select non-sensitive columns — never fetch api_key or provider_api_keys to the client
+      // Use the safe view that excludes sensitive columns (api_key, provider_api_keys)
       const { data, error } = await supabase
-        .from('user_ai_settings')
+        .from('user_ai_settings_safe' as any)
         .select('id, user_id, provider, preferred_model, agent_configs, created_at, updated_at')
         .eq('user_id', user.id)
         .maybeSingle();

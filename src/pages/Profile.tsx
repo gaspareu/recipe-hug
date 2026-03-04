@@ -37,7 +37,7 @@ export default function Profile() {
     
     try {
       const { data, error } = await supabase
-        .from('profiles')
+        .from('profiles_safe' as any)
         .select('display_name, avatar_url')
         .eq('id', user.id)
         .maybeSingle();

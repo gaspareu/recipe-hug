@@ -52,7 +52,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
       try {
         const { data, error } = await supabase
-          .from('profiles')
+          .from('profiles_safe' as any)
           .select('theme')
           .eq('id', user.id)
           .maybeSingle();
