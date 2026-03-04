@@ -35,15 +35,14 @@ Agent Config (agent_configs[agentType]) → Global User Settings → Default Lov
 | 3 | `memory-assistant` | Streaming | `chat` | streaming, tools | `resolveAIConfig` + `callAIStreaming` |
 | 4 | `generate-recipe` | Non-streaming | `generate` | — | `resolveAIConfig` + `callAINonStreaming` |
 | 5 | `analyze-recipe` | Non-streaming | `analyze` | — | `resolveAIConfig` + `callAINonStreaming` |
-| 6 | `analyze-recipe-timeline` | Non-streaming | `timeline` | tools | `resolveAIConfig` + `buildToolCallRequest` |
-| 7 | `extract-user-preferences` | Non-streaming | `chat` | tools | `resolveAIConfig` + `buildToolCallRequest` |
-| 8 | `parse-recipe-image` | Non-streaming | `parse_image` | vision | `resolveAIConfig` + `buildVisionRequest` |
-| 9 | `generate-recipe-image` | Non-streaming | `generate_image` | image_generation | `resolveAIConfig` + custom |
-| 10 | `webhook-recipe` | Webhook | `webhook` + `generate_image` | — | `resolveAIConfig` + `buildSimpleRequest` |
-| 11 | `manage-ai-keys` | Utilitaire | — | — | Sans IA |
-| 12 | `validate-ai-key` | Utilitaire | — | — | Sans IA |
-| 13 | `elevenlabs-tts` | Utilitaire | — | — | Sans IA |
-| 14 | `elevenlabs-scribe-token` | Utilitaire | — | — | Sans IA |
+| 6 | `extract-user-preferences` | Non-streaming | `chat` | tools | `resolveAIConfig` + `buildToolCallRequest` |
+| 7 | `parse-recipe-image` | Non-streaming | `parse_image` | vision | `resolveAIConfig` + `buildVisionRequest` |
+| 8 | `generate-recipe-image` | Non-streaming | `generate_image` | image_generation | `resolveAIConfig` + custom |
+| 9 | `webhook-recipe` | Webhook | `webhook` + `generate_image` | — | `resolveAIConfig` + `buildSimpleRequest` |
+| 10 | `manage-ai-keys` | Utilitaire | — | — | Sans IA |
+| 11 | `validate-ai-key` | Utilitaire | — | — | Sans IA |
+| 12 | `elevenlabs-tts` | Utilitaire | — | — | Sans IA |
+| 13 | `elevenlabs-scribe-token` | Utilitaire | — | — | Sans IA |
 
 ---
 
