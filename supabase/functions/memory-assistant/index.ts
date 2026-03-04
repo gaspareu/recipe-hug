@@ -146,7 +146,7 @@ function formatPreferencesForPrompt(prefs: any): string {
   if (style.favorite_cuisines?.length > 0) styleParts.push(`Cuisines favorites : ${style.favorite_cuisines.join(", ")}`);
   if (style.favorite_techniques?.length > 0) styleParts.push(`Techniques : ${style.favorite_techniques.join(", ")}`);
   if (style.preferred_difficulty) styleParts.push(`Difficulté préférée : ${style.preferred_difficulty}`);
-  if (styleParts.length > 0) sections.push(`👨‍🍳 STYLE CULINAIRE\n${styleParts.join("\n")}`);
+  if (styleParts.length > 0) sections.push(`STYLE CULINAIRE\n${styleParts.join("\n")}`);
   if (sections.length === 0) return "Tu n'as pas encore de préférences enregistrées.";
   return sections.join("\n\n");
 }

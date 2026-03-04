@@ -455,7 +455,7 @@ function formatPreferencesContext(prefs: any): string {
 
   const diet = prefs.dietary_constraints || {};
   if (diet.allergies?.length > 0) {
-    sections.push(`⚠️ ALLERGIES : ${diet.allergies.join(", ")}`);
+    sections.push(`ALLERGIES : ${diet.allergies.join(", ")}`);
   }
   if (diet.diets?.length > 0) {
     sections.push(`Régime : ${diet.diets.join(", ")}`);
