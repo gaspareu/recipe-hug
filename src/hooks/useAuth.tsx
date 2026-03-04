@@ -34,9 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         if (event === 'SIGNED_OUT') {
-          // Clear any stale session data
           setSession(null);
           setUser(null);
+        }
+
+        // Claim pending shares after sign in or sign up
+        if (event === 'SIGNED_IN' && session) {
+          claimPendingShares(session.access_token);
         }
       }
     );
@@ -96,6 +100,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+  };
+
+  const claimPendingShares = async (accessToken: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('claim-shares', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!error && data?.claimed > 0) {
+        const { toast } = await import('sonner');
+        toast.success(`${data.claimed} recette(s) partagée(s) ajoutée(s) à votre compte !`);
+      }
+    } catch (err) {
+      console.error('Error claiming shares:', err);
+    }
   };
 
   const resetPassword = async (email: string) => {

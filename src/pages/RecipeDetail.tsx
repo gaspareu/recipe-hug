@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, ImagePlus, History } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, ImagePlus, History, Share2 } from 'lucide-react';
+import { ShareRecipeDialog } from '@/components/recipes/ShareRecipeDialog';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
@@ -163,6 +164,9 @@ export default function RecipeDetail() {
                   {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 </Button>
               </TooltipTrigger><TooltipContent><p>Analyser</p></TooltipContent></Tooltip>
+              <Tooltip><TooltipTrigger asChild>
+                <ShareRecipeDialog recipeId={recipe.id} />
+              </TooltipTrigger><TooltipContent><p>Partager</p></TooltipContent></Tooltip>
             </TooltipProvider>
             <Button variant="outline" size="sm" asChild className="bg-background/60 backdrop-blur-sm hover:bg-background/80 border-background/20">
               <Link to={`/recipes/${recipe.id}/edit`}><Edit className="h-4 w-4 mr-2" />Éditer</Link>
