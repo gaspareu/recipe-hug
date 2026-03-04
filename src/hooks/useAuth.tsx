@@ -102,6 +102,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const claimPendingShares = async (accessToken: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('claim-shares', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!error && data?.claimed > 0) {
+        const { toast } = await import('sonner');
+        toast.success(`${data.claimed} recette(s) partagée(s) ajoutée(s) à votre compte !`);
+      }
+    } catch (err) {
+      console.error('Error claiming shares:', err);
+    }
+  };
+
   const resetPassword = async (email: string) => {
     const redirectUrl = `${window.location.origin}/auth`;
     
