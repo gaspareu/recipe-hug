@@ -115,7 +115,7 @@ export const AGENT_LABELS: Record<AgentType, { name: string; icon: string; descr
   edit_recipe: { name: 'Modification', icon: '✏️', description: 'Adaptation et variantes' },
   generate_image: { name: 'Génération d\'images', icon: '📸', description: 'Photos de plats' },
   parse_image: { name: 'Analyse d\'images', icon: '🔍', description: 'Extraction depuis photos' },
-  timeline: { name: 'Analyse timeline', icon: '📊', description: 'Diagramme de Gantt' },
+  
   webhook: { name: 'Import webhook', icon: '🔗', description: 'Import externe' },
 };
 
