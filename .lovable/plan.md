@@ -1,42 +1,39 @@
 
-## Retravailler la page Profil
 
-### Objectif
-Reduire le nombre de sections repliables en affichant directement les informations personnelles et l'apparence, sans les cacher dans des accordeons. Seules les sections avancees restent en collapsible.
+## Probleme
 
-### Structure proposee
+L'agent mémoire (`memory-assistant`) ne connait pas le champ `special_ingredients` de `taste_preferences`. Trois lacunes :
 
-```text
-+-------------------------------+
-| <- Mon Profil                 |
-+-------------------------------+
-|  [Avatar]  Camera             |
-|  Email (disabled)             |
-|  Nom d'affichage  [input]     |
-|  [Enregistrer]                |
-+-------------------------------+
-|  Apparence                    |
-|  [Clair] [Sombre] [Systeme]   |
-+-------------------------------+
-| v Preferences culinaires      |  <- collapsible
-+-------------------------------+
-| v Configuration IA            |  <- collapsible
-+-------------------------------+
-| v Integrations                |  <- collapsible
-+-------------------------------+
+1. **Prompt systeme** : la section "Structure des preferences" ne mentionne pas `special_ingredients`
+2. **Formatage** : `formatPreferencesForPrompt()` n'affiche pas les aliments particuliers
+3. **Outil update** : le schema de l'outil `update_preferences` ne documente pas ce champ, donc l'IA ne sait pas qu'il existe
+
+## Corrections dans `supabase/functions/memory-assistant/index.ts`
+
+### 1. Prompt — ajouter `special_ingredients` dans la section Gouts
+
+Sous `disliked_ingredients`, ajouter :
+```
+- special_ingredients : aliments particuliers a utiliser si pertinent (kombu, citrons confits, pate d'agrumes...)
 ```
 
-### Changements dans `Profile.tsx`
+### 2. `formatPreferencesForPrompt` — afficher les aliments particuliers
 
-1. **Informations personnelles** : retirer le `CollapsibleSection` et afficher directement le contenu (avatar, email, nom, bouton sauvegarder) dans une card statique (`rounded-lg border bg-card shadow-sm p-6`).
+Apres la ligne `disliked_ingredients`, ajouter :
+```typescript
+if (taste.special_ingredients?.length > 0)
+  tasteParts.push(`Aliments particuliers : ${taste.special_ingredients.join(", ")}`);
+```
 
-2. **Apparence** : retirer le `CollapsibleSection` et afficher directement le `ThemeSelectorContent` dans une card statique avec un titre "Apparence" et le toggle group visible.
+### 3. Outil `update_preferences` — documenter le champ
 
-3. **Preferences culinaires, Configuration IA, Integrations** : restent en `CollapsibleSection` fermes par defaut (inchange).
+Ajouter dans la description de `field` ou dans la description generale de l'outil une mention que `special_ingredients` est un champ valide de `taste_preferences`.
 
-### Details techniques
+### 4. Re-deployer la fonction
 
-- Seul le fichier `src/pages/Profile.tsx` est modifie
-- Les deux premieres sections utilisent une `div` avec les memes classes que la card du `CollapsibleSection` (`rounded-lg border bg-card text-card-foreground shadow-sm`) mais sans le mecanisme collapsible
-- Aucun nouveau composant necessaire
-- Le `CollapsibleSection` reste utilise pour les 3 sections avancees
+Deployer `memory-assistant` pour appliquer les changements.
+
+---
+
+Aucune modification de base de donnees ou de RLS n'est necessaire : `special_ingredients` est stocke dans la colonne JSONB `taste_preferences` de `user_culinary_preferences`, qui a deja les bonnes policies.
+
