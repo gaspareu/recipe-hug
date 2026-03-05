@@ -27,6 +27,20 @@ export default function Auth() {
   const [signupDisplayName, setSignupDisplayName] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [showResetForm, setShowResetForm] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
+    });
+    if (result?.error) {
+      toast.error('Erreur de connexion Google', {
+        description: result.error.message || 'Une erreur est survenue',
+      });
+    }
+    setGoogleLoading(false);
+  };
 
   // Redirect if already logged in
   useEffect(() => {
