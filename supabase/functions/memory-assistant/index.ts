@@ -39,6 +39,7 @@ Tu aides l'utilisateur à :
 - disliked_flavors : saveurs évitées
 - liked_ingredients : ingrédients favoris
 - disliked_ingredients : ingrédients évités
+- special_ingredients : aliments particuliers à utiliser si pertinent (kombu, citrons confits, pâte d'agrumes...)
 
 ### 2. Équipement (kitchen_equipment)
 - available : équipement disponible (four, mixeur, robot, wok, plancha, thermomix...)
