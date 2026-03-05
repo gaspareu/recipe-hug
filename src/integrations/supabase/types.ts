@@ -318,6 +318,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_ai_settings_safe: {
+        Row: {
+          agent_configs: Json | null
+          created_at: string | null
+          id: string | null
+          preferred_model: string | null
+          provider: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          agent_configs?: Json | null
+          created_at?: string | null
+          id?: string | null
+          preferred_model?: string | null
+          provider?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          agent_configs?: Json | null
+          created_at?: string | null
+          id?: string | null
+          preferred_model?: string | null
+          provider?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       generate_webhook_token: { Args: { user_uuid: string }; Returns: string }
