@@ -39,6 +39,7 @@ Tu aides l'utilisateur à :
 - disliked_flavors : saveurs évitées
 - liked_ingredients : ingrédients favoris
 - disliked_ingredients : ingrédients évités
+- special_ingredients : aliments particuliers à utiliser si pertinent (kombu, citrons confits, pâte d'agrumes...)
 
 ### 2. Équipement (kitchen_equipment)
 - available : équipement disponible (four, mixeur, robot, wok, plancha, thermomix...)
@@ -98,7 +99,7 @@ const UPDATE_PREFERENCES_TOOL = {
             properties: {
               operation: { type: "string", enum: ["add", "remove", "set"] },
               category: { type: "string", enum: ["taste_preferences", "kitchen_equipment", "culinary_style", "dietary_constraints"] },
-              field: { type: "string" },
+              field: { type: "string", description: "Le champ à modifier. Pour taste_preferences : liked_flavors, disliked_flavors, liked_ingredients, disliked_ingredients, special_ingredients. Pour kitchen_equipment : available, unavailable. Pour culinary_style : favorite_cuisines, favorite_techniques, preferred_difficulty. Pour dietary_constraints : allergies, diets, restrictions." },
               values: { type: "array", items: { type: "string" } },
               value: { type: "string" },
             },
@@ -129,6 +130,7 @@ function formatPreferencesForPrompt(prefs: any): string {
   if (taste.disliked_flavors?.length > 0) tasteParts.push(`Saveurs évitées : ${taste.disliked_flavors.join(", ")}`);
   if (taste.liked_ingredients?.length > 0) tasteParts.push(`Ingrédients favoris : ${taste.liked_ingredients.join(", ")}`);
   if (taste.disliked_ingredients?.length > 0) tasteParts.push(`Ingrédients évités : ${taste.disliked_ingredients.join(", ")}`);
+  if (taste.special_ingredients?.length > 0) tasteParts.push(`Aliments particuliers : ${taste.special_ingredients.join(", ")}`);
   if (tasteParts.length > 0) sections.push(`GOÛTS\n${tasteParts.join("\n")}`);
   const diet = prefs.dietary_constraints || {};
   const dietParts: string[] = [];
