@@ -61,7 +61,7 @@ export function useHomeChat() {
         if (recipe) {
           engine.setActiveRecipe(recipe);
           engine.setMode('cooking');
-          toast.success(`Mode cuisine activé pour "${recipe.title}"`);
+          // Mode switch silencieux
           return { modeSwitch: 'cooking', recipe, initialContext: action.data.initial_context };
         }
         return null;
