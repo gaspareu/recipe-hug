@@ -95,6 +95,7 @@ function mergePreferences(existing: any, extracted: any): any {
       disliked_flavors: mergeArrays(existing.taste_preferences?.disliked_flavors || [], extracted.taste_preferences?.disliked_flavors || []),
       liked_ingredients: mergeArrays(existing.taste_preferences?.liked_ingredients || [], extracted.taste_preferences?.liked_ingredients || []),
       disliked_ingredients: mergeArrays(existing.taste_preferences?.disliked_ingredients || [], extracted.taste_preferences?.disliked_ingredients || []),
+      special_ingredients: mergeArrays(existing.taste_preferences?.special_ingredients || [], extracted.taste_preferences?.special_ingredients || []),
     },
     kitchen_equipment: {
       available: mergeArrays(existing.kitchen_equipment?.available || [], extracted.kitchen_equipment?.available || []),
