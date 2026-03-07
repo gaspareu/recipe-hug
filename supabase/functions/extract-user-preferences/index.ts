@@ -230,7 +230,7 @@ serve(async (req) => {
     console.log("Extracted preferences:", extractedPrefs);
 
     const defaultPrefs = {
-      taste_preferences: { liked_flavors: [], disliked_flavors: [], liked_ingredients: [], disliked_ingredients: [] },
+      taste_preferences: { liked_flavors: [], disliked_flavors: [], liked_ingredients: [], disliked_ingredients: [], special_ingredients: [] },
       kitchen_equipment: { available: [], unavailable: [] },
       culinary_style: { favorite_cuisines: [], favorite_techniques: [], preferred_difficulty: null },
       dietary_constraints: { allergies: [], diets: [], restrictions: [] },
