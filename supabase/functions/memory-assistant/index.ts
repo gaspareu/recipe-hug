@@ -205,6 +205,7 @@ serve(async (req) => {
     if (isContinuation) {
       systemPrompt += `\n\n## MODE CONTINUATION
 Tu viens d'être activé pour gérer la mémoire culinaire de l'utilisateur.
+Les préférences actuelles sont déjà dans ton contexte ci-dessus. N'APPELLE PAS get_preferences, utilise directement les données fournies.
 COMMENCE IMMÉDIATEMENT par afficher ses préférences actuelles de manière claire et structurée.
 NE MENTIONNE PAS le changement de mode.`;
     }
