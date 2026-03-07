@@ -60,9 +60,9 @@ export function ChatInterface({
   }, [sendMessage]);
 
   const {
-    voiceEnabled, isSpeaking, isListening,
+    voiceEnabled, isSpeaking, isListening, isConnecting,
     toggleVoice, speak, stopSpeaking, startListening, stopListening,
-    partialTranscript,
+    enableAndListen, partialTranscript,
   } = useVoiceMode(handleVoiceTranscript);
 
   // Auto-scroll
