@@ -176,6 +176,14 @@ export default {
 				'100%': {
 					backgroundPosition: '200% 0'
 				}
+			},
+			'sound-wave': {
+				'0%, 100%': {
+					height: '20%'
+				},
+				'50%': {
+					height: '100%'
+				}
 			}
   		},
 		animation: {
@@ -185,7 +193,8 @@ export default {
 			'scale-bounce': 'scale-bounce 0.3s ease-out',
 			'heart-pulse': 'heart-pulse 0.4s ease-out',
 			'favorite-pop': 'favorite-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-			'shimmer': 'shimmer 2s infinite linear'
+			'shimmer': 'shimmer 2s infinite linear',
+			'sound-wave': 'sound-wave 0.8s ease-in-out infinite'
 		}
   	}
   },

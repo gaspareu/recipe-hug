@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TextShimmer } from '@/components/ui/text-shimmer';
+import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { toast } from 'sonner';
 import type { ChatMessage, ChatMode, PendingRecipe } from '@/hooks/useChatEngine';
@@ -316,7 +317,7 @@ export function ChatInterface({
                   {isConnecting ? (
                     <Mic className="h-5 w-5 text-muted-foreground" />
                   ) : isListening ? (
-                    <MicOff className="h-5 w-5" />
+                    <SoundWaveIndicator />
                   ) : (
                     <Mic className="h-5 w-5" />
                   )}
