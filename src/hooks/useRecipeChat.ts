@@ -53,7 +53,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
       case 'start_editing': {
         engine.setMode('editing');
-        toast.success('Mode modification activé');
+        // Mode switch silencieux
         return { modeSwitch: 'editing', recipe: activeRecipeRef.current, initialContext: action.data.modification_request };
       }
 
