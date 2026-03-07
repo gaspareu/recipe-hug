@@ -65,7 +65,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
       case 'back_to_orchestration': {
         engine.setMode('cooking');
-        toast.info('Retour au mode cuisine');
+        // Retour silencieux
         return null;
       }
 
