@@ -99,7 +99,7 @@ const UPDATE_PREFERENCES_TOOL = {
             properties: {
               operation: { type: "string", enum: ["add", "remove", "set"] },
               category: { type: "string", enum: ["taste_preferences", "kitchen_equipment", "culinary_style", "dietary_constraints"] },
-              field: { type: "string" },
+              field: { type: "string", description: "Le champ à modifier (ex: liked_flavors, disliked_ingredients, special_ingredients, available, favorite_cuisines, allergies, diets, etc.)" },
               values: { type: "array", items: { type: "string" } },
               value: { type: "string" },
             },
