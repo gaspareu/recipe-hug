@@ -72,7 +72,7 @@ export function useHomeChat() {
         if (recipe) {
           engine.setActiveRecipe(recipe);
           engine.setMode('editing');
-          toast.success(`Mode modification activé pour "${recipe.title}"`);
+          // Mode switch silencieux
           return { modeSwitch: 'editing', recipe, initialContext: action.data.modification_request };
         }
         return null;
