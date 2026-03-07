@@ -43,6 +43,7 @@ const EXTRACT_PREFERENCES_TOOL = {
             disliked_flavors: { type: "array", items: { type: "string" }, description: "Saveurs détestées" },
             liked_ingredients: { type: "array", items: { type: "string" }, description: "Ingrédients aimés" },
             disliked_ingredients: { type: "array", items: { type: "string" }, description: "Ingrédients détestés" },
+            special_ingredients: { type: "array", items: { type: "string" }, description: "Aliments particuliers à utiliser si pertinent (kombu, citrons confits...)" },
           },
         },
         kitchen_equipment: {
