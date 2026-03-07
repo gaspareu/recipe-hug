@@ -6,9 +6,12 @@ import { supabase } from '@/integrations/supabase/client';
 const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
 const SCRIBE_TOKEN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-scribe-token`;
 
+const SCRIBE_TIMEOUT_MS = 10_000;
+
 export function useVoiceMode(onTranscript?: (text: string) => void) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioQueueRef = useRef<string[]>([]);
@@ -18,9 +21,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
   const scribe = useScribe({
     modelId: 'scribe_v2_realtime',
     commitStrategy: CommitStrategy.VAD,
-    onPartialTranscript: (data) => {
-      // Optional: could show partial transcript
-    },
+    onPartialTranscript: () => {},
     onCommittedTranscript: (data) => {
       if (data.text && onTranscript) {
         onTranscript(data.text);
@@ -43,7 +44,6 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
     const text = audioQueueRef.current.shift()!;
 
     try {
-      // Get user session token
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('Authentication required');
@@ -59,13 +59,20 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       });
 
       if (!response.ok) {
+        // Differentiated error feedback
+        if (response.status === 401) {
+          toast.error('Erreur d\'authentification pour la synthèse vocale');
+        } else if (response.status === 429) {
+          toast.error('Quota vocal dépassé, réessayez plus tard');
+        } else {
+          toast.error('Erreur de synthèse vocale');
+        }
         throw new Error(`TTS failed: ${response.status}`);
       }
 
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
 
-      // Stop any current audio
       if (audioRef.current) {
         audioRef.current.pause();
         URL.revokeObjectURL(audioRef.current.src);
@@ -76,7 +83,6 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
 
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
-        // Use setTimeout to break the synchronous call chain
         setTimeout(() => {
           if (audioQueueRef.current.length > 0) {
             playNextInQueueRef.current?.();
@@ -113,7 +119,6 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
     }
   }, []);
 
-  // Ref to store the latest playNextInQueue function
   const playNextInQueueRef = useRef(playNextInQueue);
   playNextInQueueRef.current = playNextInQueue;
 
@@ -121,19 +126,16 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
   const speak = useCallback(async (text: string) => {
     if (!voiceEnabled || !text.trim()) return;
 
-    // Clean text for speech (remove markdown, emojis, etc.)
     const cleanText = text
-      .replace(/[#*_`~]/g, '') // Remove markdown
-      .replace(/\n+/g, '. ') // Convert newlines to pauses
-      .replace(/[👨‍🍳✨🎉🍽️🥗🍝🥘]/g, '') // Remove emojis
+      .replace(/[#*_`~]/g, '')
+      .replace(/\n+/g, '. ')
+      .replace(/[👨‍🍳✨🎉🍽️🥗🍝🥘]/g, '')
       .trim();
 
     if (!cleanText) return;
 
-    // Add to queue
     audioQueueRef.current.push(cleanText);
     
-    // Start playing if not already
     if (!isPlayingRef.current) {
       playNextInQueue();
     }
@@ -150,27 +152,32 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
     setIsSpeaking(false);
   }, []);
 
-
-  // Start listening (STT)
-  const startListening = useCallback(async () => {
+  // Core listening logic — getUserMedia MUST be the first async call
+  const doStartListening = useCallback(async () => {
+    setIsConnecting(true);
     try {
-      // Request microphone permission
+      // 1. getUserMedia FIRST — must be in direct user gesture chain
       await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Get user session token
+      // 2. Get session
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('Authentication required');
       }
       
-      // Get scribe token
+      // 3. Get scribe token with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), SCRIBE_TIMEOUT_MS);
+
       const response = await fetch(SCRIBE_TOKEN_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error('Failed to get scribe token');
@@ -182,6 +189,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
         throw new Error('No token received');
       }
 
+      // 4. Connect scribe
       await scribe.connect({
         token: data.token,
         microphone: {
@@ -191,9 +199,17 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       });
 
       setIsListening(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to start listening:', error);
-      toast.error('Impossible d\'accéder au microphone');
+      if (error.name === 'AbortError') {
+        toast.error('Connexion au service vocal expirée');
+      } else if (error.name === 'NotAllowedError') {
+        toast.error('Accès au microphone refusé');
+      } else {
+        toast.error('Impossible d\'accéder au microphone');
+      }
+    } finally {
+      setIsConnecting(false);
     }
   }, [scribe]);
 
@@ -214,15 +230,25 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
     toast.success(newState ? 'Mode vocal activé' : 'Mode vocal désactivé');
   }, [voiceEnabled, stopSpeaking, stopListening]);
 
+  // Enable voice AND start listening in one synchronous user gesture
+  const enableAndListen = useCallback(() => {
+    setVoiceEnabled(true);
+    toast.success('Mode vocal activé');
+    // Call doStartListening directly — no setTimeout, preserves user gesture
+    doStartListening();
+  }, [doStartListening]);
+
   return {
     voiceEnabled,
     isSpeaking,
     isListening,
+    isConnecting,
     toggleVoice,
     speak,
     stopSpeaking,
-    startListening,
+    startListening: doStartListening,
     stopListening,
+    enableAndListen,
     partialTranscript: scribe.partialTranscript,
   };
 }
