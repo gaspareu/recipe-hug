@@ -59,7 +59,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
       case 'start_recipe_creation': {
         engine.setMode('creating');
-        toast.success('Mode création activé');
+        // Mode switch silencieux
         return { modeSwitch: 'creating', initialContext: action.data.initial_idea };
       }
 
