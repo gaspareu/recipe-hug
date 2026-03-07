@@ -71,7 +71,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
       case 'start_memory': {
         engine.setMode('memory');
-        toast.success('Mode mémoire activé');
+        // Mode switch silencieux
         return { modeSwitch: 'memory', initialContext: 'Affiche mes préférences actuelles' };
       }
 
