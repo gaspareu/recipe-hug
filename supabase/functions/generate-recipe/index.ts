@@ -9,7 +9,7 @@ const RequestSchema = z.object({
   prompt: z.string().min(1, "Prompt is required").max(2000, "Prompt too long"),
 });
 
-const systemPrompt = `Tu es un assistant culinaire expert. Tu crées des recettes détaillées et accessibles.
+const BASE_SYSTEM_PROMPT = `Tu es un assistant culinaire expert. Tu crées des recettes détaillées et accessibles.
 
 ## TON STYLE
 - Recettes claires avec des explications pratiques
@@ -33,6 +33,28 @@ Réponds UNIQUEMENT avec un JSON valide, sans texte avant/après :
 Catégories : légumes, fruits, viandes, poissons, produits laitiers, épices, autres
 
 Génère une recette détaillée selon la demande de l'utilisateur.`;
+
+function formatPreferencesForGeneration(prefs: any): string {
+  if (!prefs) return "";
+  const parts: string[] = [];
+  const taste = prefs.taste_preferences || {};
+  if (taste.liked_flavors?.length > 0) parts.push(`Saveurs aimées : ${taste.liked_flavors.join(", ")}`);
+  if (taste.disliked_flavors?.length > 0) parts.push(`Saveurs évitées : ${taste.disliked_flavors.join(", ")}`);
+  if (taste.liked_ingredients?.length > 0) parts.push(`Ingrédients favoris : ${taste.liked_ingredients.join(", ")}`);
+  if (taste.disliked_ingredients?.length > 0) parts.push(`INGRÉDIENTS ÉVITÉS (ne pas utiliser) : ${taste.disliked_ingredients.join(", ")}`);
+  if (taste.special_ingredients?.length > 0) parts.push(`Aliments particuliers (à utiliser si pertinent) : ${taste.special_ingredients.join(", ")}`);
+  const diet = prefs.dietary_constraints || {};
+  if (diet.allergies?.length > 0) parts.push(`ALLERGIES (ne jamais utiliser) : ${diet.allergies.join(", ")}`);
+  if (diet.diets?.length > 0) parts.push(`Régime : ${diet.diets.join(", ")}`);
+  if (diet.restrictions?.length > 0) parts.push(`Restrictions : ${diet.restrictions.join(", ")}`);
+  const style = prefs.culinary_style || {};
+  if (style.favorite_cuisines?.length > 0) parts.push(`Cuisines favorites : ${style.favorite_cuisines.join(", ")}`);
+  if (style.preferred_difficulty) parts.push(`Difficulté préférée : ${style.preferred_difficulty}`);
+  const equipment = prefs.kitchen_equipment || {};
+  if (equipment.unavailable?.length > 0) parts.push(`Équipement non disponible : ${equipment.unavailable.join(", ")}`);
+  if (parts.length === 0) return "";
+  return `\n\n--- PROFIL UTILISATEUR ---\n${parts.join("\n")}\n--- FIN PROFIL ---`;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -70,6 +92,15 @@ serve(async (req) => {
 
     const { prompt } = parseResult.data;
     console.log("Generating recipe for user:", userId, "prompt:", prompt);
+
+    // Load user preferences
+    const { data: prefs } = await supabaseClient
+      .from("user_culinary_preferences")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+
+    const systemPrompt = BASE_SYSTEM_PROMPT + formatPreferencesForGeneration(prefs);
 
     const aiConfig = await resolveAIConfig(supabaseClient, userId, {
       agentType: "generate",
