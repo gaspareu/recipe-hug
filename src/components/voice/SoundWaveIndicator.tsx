@@ -11,7 +11,7 @@ export function SoundWaveIndicator({ className, barCount = 4 }: SoundWaveIndicat
       {Array.from({ length: barCount }).map((_, i) => (
         <span
           key={i}
-          className="w-[3px] rounded-full bg-primary-foreground animate-sound-wave"
+          className="w-[3px] rounded-full bg-current animate-sound-wave"
           style={{
             animationDelay: `${i * 0.15}s`,
             height: '60%',
