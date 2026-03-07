@@ -305,15 +305,21 @@ export function ChatInterface({
               {!input.trim() && !selectedImage ? (
                 <button
                   onClick={() => {
-                    if (!voiceEnabled) { toggleVoice(); setTimeout(() => startListening(), 100); }
+                    if (!voiceEnabled) { enableAndListen(); }
                     else if (isListening) stopListening();
                     else startListening();
                   }}
-                  disabled={isStreaming}
-                  className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${isListening ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-foreground'}`}
-                  title={isListening ? "Arrêter l'écoute" : 'Dicter'}
+                  disabled={isStreaming || isConnecting}
+                  className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${isListening ? 'bg-primary text-primary-foreground' : isConnecting ? 'bg-muted animate-pulse' : 'hover:bg-accent text-foreground'}`}
+                  title={isConnecting ? 'Connexion...' : isListening ? "Arrêter l'écoute" : 'Dicter'}
                 >
-                  {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                  {isConnecting ? (
+                    <Mic className="h-5 w-5 text-muted-foreground" />
+                  ) : isListening ? (
+                    <MicOff className="h-5 w-5" />
+                  ) : (
+                    <Mic className="h-5 w-5" />
+                  )}
                 </button>
               ) : (
                 <button
