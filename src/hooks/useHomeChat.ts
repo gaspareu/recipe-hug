@@ -61,7 +61,7 @@ export function useHomeChat() {
         if (recipe) {
           engine.setActiveRecipe(recipe);
           engine.setMode('cooking');
-          toast.success(`Mode cuisine activé pour "${recipe.title}"`);
+          // Mode switch silencieux
           return { modeSwitch: 'cooking', recipe, initialContext: action.data.initial_context };
         }
         return null;
@@ -72,7 +72,7 @@ export function useHomeChat() {
         if (recipe) {
           engine.setActiveRecipe(recipe);
           engine.setMode('editing');
-          toast.success(`Mode modification activé pour "${recipe.title}"`);
+          // Mode switch silencieux
           return { modeSwitch: 'editing', recipe, initialContext: action.data.modification_request };
         }
         return null;
@@ -81,7 +81,7 @@ export function useHomeChat() {
       case 'start_recipe_creation': {
         engine.setMode('creating');
         engine.setActiveRecipe(null);
-        toast.success('Mode création de recette activé');
+        // Mode switch silencieux
         return { modeSwitch: 'creating', initialContext: action.data.initial_idea };
       }
 
@@ -102,13 +102,13 @@ export function useHomeChat() {
         engine.setMode('orchestration');
         engine.setActiveRecipe(null);
         engine.setPendingRecipe(null);
-        toast.info('Retour au mode principal');
+        // Retour silencieux
         return null;
       }
 
       case 'start_memory': {
         engine.setMode('memory');
-        toast.success('Mode mémoire activé');
+        // Mode switch silencieux
         return { modeSwitch: 'memory', initialContext: 'Affiche mes préférences actuelles' };
       }
 

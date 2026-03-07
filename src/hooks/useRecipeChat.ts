@@ -47,31 +47,31 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
       case 'start_cooking': {
         engine.setMode('cooking');
-        toast.success('Mode cuisine activé');
+        // Mode switch silencieux
         return { modeSwitch: 'cooking', recipe: activeRecipeRef.current, initialContext: action.data.initial_context };
       }
 
       case 'start_editing': {
         engine.setMode('editing');
-        toast.success('Mode modification activé');
+        // Mode switch silencieux
         return { modeSwitch: 'editing', recipe: activeRecipeRef.current, initialContext: action.data.modification_request };
       }
 
       case 'start_recipe_creation': {
         engine.setMode('creating');
-        toast.success('Mode création activé');
+        // Mode switch silencieux
         return { modeSwitch: 'creating', initialContext: action.data.initial_idea };
       }
 
       case 'back_to_orchestration': {
         engine.setMode('cooking');
-        toast.info('Retour au mode cuisine');
+        // Retour silencieux
         return null;
       }
 
       case 'start_memory': {
         engine.setMode('memory');
-        toast.success('Mode mémoire activé');
+        // Mode switch silencieux
         return { modeSwitch: 'memory', initialContext: 'Affiche mes préférences actuelles' };
       }
 
