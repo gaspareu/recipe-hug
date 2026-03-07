@@ -81,7 +81,7 @@ export function useHomeChat() {
       case 'start_recipe_creation': {
         engine.setMode('creating');
         engine.setActiveRecipe(null);
-        toast.success('Mode création de recette activé');
+        // Mode switch silencieux
         return { modeSwitch: 'creating', initialContext: action.data.initial_idea };
       }
 
