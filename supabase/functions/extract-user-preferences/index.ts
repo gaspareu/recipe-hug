@@ -43,6 +43,7 @@ const EXTRACT_PREFERENCES_TOOL = {
             disliked_flavors: { type: "array", items: { type: "string" }, description: "Saveurs détestées" },
             liked_ingredients: { type: "array", items: { type: "string" }, description: "Ingrédients aimés" },
             disliked_ingredients: { type: "array", items: { type: "string" }, description: "Ingrédients détestés" },
+            special_ingredients: { type: "array", items: { type: "string" }, description: "Aliments particuliers à utiliser si pertinent (kombu, citrons confits...)" },
           },
         },
         kitchen_equipment: {
@@ -94,6 +95,7 @@ function mergePreferences(existing: any, extracted: any): any {
       disliked_flavors: mergeArrays(existing.taste_preferences?.disliked_flavors || [], extracted.taste_preferences?.disliked_flavors || []),
       liked_ingredients: mergeArrays(existing.taste_preferences?.liked_ingredients || [], extracted.taste_preferences?.liked_ingredients || []),
       disliked_ingredients: mergeArrays(existing.taste_preferences?.disliked_ingredients || [], extracted.taste_preferences?.disliked_ingredients || []),
+      special_ingredients: mergeArrays(existing.taste_preferences?.special_ingredients || [], extracted.taste_preferences?.special_ingredients || []),
     },
     kitchen_equipment: {
       available: mergeArrays(existing.kitchen_equipment?.available || [], extracted.kitchen_equipment?.available || []),
@@ -228,7 +230,7 @@ serve(async (req) => {
     console.log("Extracted preferences:", extractedPrefs);
 
     const defaultPrefs = {
-      taste_preferences: { liked_flavors: [], disliked_flavors: [], liked_ingredients: [], disliked_ingredients: [] },
+      taste_preferences: { liked_flavors: [], disliked_flavors: [], liked_ingredients: [], disliked_ingredients: [], special_ingredients: [] },
       kitchen_equipment: { available: [], unavailable: [] },
       culinary_style: { favorite_cuisines: [], favorite_techniques: [], preferred_difficulty: null },
       dietary_constraints: { allergies: [], diets: [], restrictions: [] },

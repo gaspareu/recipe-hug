@@ -449,8 +449,20 @@ function formatPreferencesContext(prefs: any): string {
   const sections: string[] = [];
 
   const taste = prefs.taste_preferences || {};
+  if (taste.liked_flavors?.length > 0) {
+    sections.push(`Saveurs aimées : ${taste.liked_flavors.join(", ")}`);
+  }
+  if (taste.disliked_flavors?.length > 0) {
+    sections.push(`Saveurs évitées : ${taste.disliked_flavors.join(", ")}`);
+  }
+  if (taste.liked_ingredients?.length > 0) {
+    sections.push(`Ingrédients favoris : ${taste.liked_ingredients.join(", ")}`);
+  }
   if (taste.disliked_ingredients?.length > 0) {
     sections.push(`Ingrédients évités : ${taste.disliked_ingredients.join(", ")}`);
+  }
+  if (taste.special_ingredients?.length > 0) {
+    sections.push(`Aliments particuliers (à utiliser si pertinent) : ${taste.special_ingredients.join(", ")}`);
   }
 
   const diet = prefs.dietary_constraints || {};
@@ -460,10 +472,27 @@ function formatPreferencesContext(prefs: any): string {
   if (diet.diets?.length > 0) {
     sections.push(`Régime : ${diet.diets.join(", ")}`);
   }
+  if (diet.restrictions?.length > 0) {
+    sections.push(`Restrictions : ${diet.restrictions.join(", ")}`);
+  }
 
   const equipment = prefs.kitchen_equipment || {};
+  if (equipment.available?.length > 0) {
+    sections.push(`Équipement disponible : ${equipment.available.join(", ")}`);
+  }
   if (equipment.unavailable?.length > 0) {
     sections.push(`Équipement non disponible : ${equipment.unavailable.join(", ")}`);
+  }
+
+  const style = prefs.culinary_style || {};
+  if (style.favorite_cuisines?.length > 0) {
+    sections.push(`Cuisines favorites : ${style.favorite_cuisines.join(", ")}`);
+  }
+  if (style.favorite_techniques?.length > 0) {
+    sections.push(`Techniques : ${style.favorite_techniques.join(", ")}`);
+  }
+  if (style.preferred_difficulty) {
+    sections.push(`Difficulté préférée : ${style.preferred_difficulty}`);
   }
 
   if (sections.length === 0) return "";
