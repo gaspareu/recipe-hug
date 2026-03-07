@@ -339,9 +339,9 @@ export function ChatInterface({
         {/* Speaking indicator */}
         {isSpeaking && (
           <div className="flex items-center justify-center gap-2">
-            <button onClick={stopSpeaking} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-              Chef parle... (cliquez pour arrêter)
+            <button onClick={stopSpeaking} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10">
+              <SoundWaveIndicator className="h-4" barCount={5} />
+              <span>Chef parle... (cliquez pour arrêter)</span>
             </button>
           </div>
         )}
