@@ -149,11 +149,17 @@ export function useHomeChat() {
 
   const buildRequest = useCallback(async ({ apiMessages, mode, activeRecipe }: any) => {
     const recipeSummaries = recipes.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
+    if (mode === 'memory') {
+      return {
+        endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/memory-assistant`,
+        body: { messages: apiMessages, currentPreferences: preferences },
+      };
+    }
     return {
       endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`,
       body: { messages: apiMessages, recipes: recipeSummaries, mode, activeRecipe },
     };
-  }, [recipes]);
+  }, [recipes, preferences]);
 
   const buildContinuationRequest = useCallback(async ({ newMode, recipe, initialContext }: any) => {
     const recipeSummaries = recipes.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
