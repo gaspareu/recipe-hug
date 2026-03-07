@@ -303,6 +303,8 @@ export function useChatEngine(config: ChatEngineConfig) {
       const decoder = new TextDecoder();
       let buffer = '';
       let assistantContent = '';
+      let toolCallName = '';
+      let toolCallArguments = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -325,6 +327,20 @@ export function useChatEngine(config: ChatEngineConfig) {
               setMessages(prev => prev.map(m =>
                 m.id === previousAssistantMessageId ? { ...m, content: assistantContent } : m
               ));
+            }
+            // Handle tool_calls in continuation streams
+            if (delta?.tool_calls) {
+              for (const toolCall of delta.tool_calls) {
+                if (toolCall.function?.name) toolCallName = toolCall.function.name;
+                if (toolCall.function?.arguments) toolCallArguments += toolCall.function.arguments;
+              }
+            }
+            const finishReason = parsed.choices?.[0]?.finish_reason;
+            if (finishReason === 'tool_calls' && toolCallName && toolCallArguments) {
+              console.log('Continuation tool call:', toolCallName);
+              await onToolCallRef.current({ type: toolCallName, data: JSON.parse(toolCallArguments) });
+              toolCallName = '';
+              toolCallArguments = '';
             }
           } catch {
             buffer = line + '\n' + buffer;
