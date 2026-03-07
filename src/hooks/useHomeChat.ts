@@ -102,7 +102,7 @@ export function useHomeChat() {
         engine.setMode('orchestration');
         engine.setActiveRecipe(null);
         engine.setPendingRecipe(null);
-        toast.info('Retour au mode principal');
+        // Retour silencieux
         return null;
       }
 
