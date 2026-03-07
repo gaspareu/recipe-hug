@@ -130,6 +130,7 @@ function formatPreferencesForPrompt(prefs: any): string {
   if (taste.disliked_flavors?.length > 0) tasteParts.push(`Saveurs évitées : ${taste.disliked_flavors.join(", ")}`);
   if (taste.liked_ingredients?.length > 0) tasteParts.push(`Ingrédients favoris : ${taste.liked_ingredients.join(", ")}`);
   if (taste.disliked_ingredients?.length > 0) tasteParts.push(`Ingrédients évités : ${taste.disliked_ingredients.join(", ")}`);
+  if (taste.special_ingredients?.length > 0) tasteParts.push(`Aliments particuliers : ${taste.special_ingredients.join(", ")}`);
   if (tasteParts.length > 0) sections.push(`GOÛTS\n${tasteParts.join("\n")}`);
   const diet = prefs.dietary_constraints || {};
   const dietParts: string[] = [];
