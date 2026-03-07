@@ -93,6 +93,15 @@ serve(async (req) => {
     const { prompt } = parseResult.data;
     console.log("Generating recipe for user:", userId, "prompt:", prompt);
 
+    // Load user preferences
+    const { data: prefs } = await supabaseClient
+      .from("user_culinary_preferences")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+
+    const systemPrompt = BASE_SYSTEM_PROMPT + formatPreferencesForGeneration(prefs);
+
     const aiConfig = await resolveAIConfig(supabaseClient, userId, {
       agentType: "generate",
       defaultModel: "google/gemini-3-flash-preview",
