@@ -90,10 +90,8 @@ export default function RecipeDetail() {
         id: recipe.id, ai_summary: data.ai_summary,
         nutrition_tags: data.nutrition_tags, calorie_score: data.calorie_score, season: data.season,
       });
-      toast.success('Analyse terminée');
     } catch (error) {
       console.error('Error analyzing recipe:', error);
-      toast.error("Impossible d'analyser la recette");
     } finally { setIsAnalyzing(false); }
   };
 
