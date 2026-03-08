@@ -91,10 +91,8 @@ export default function Auth() {
       emailSchema.parse(resetEmail);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        toast.error('Erreur de validation', {
-          description: err.errors[0].message,
-        });
         return;
+      }
       }
     }
 
