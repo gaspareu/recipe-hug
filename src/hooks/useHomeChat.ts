@@ -187,7 +187,7 @@ export function useHomeChat() {
     if (!pending) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) { toast.error('Vous devez être connecté'); return; }
+      if (!session?.user) { console.error('Not authenticated'); return; }
 
       if (pending.isUpdate && pending.originalRecipeId) {
         const { error } = await supabase.from('recipes').update({
