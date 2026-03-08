@@ -92,8 +92,8 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
           else if (op.operation === 'remove' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = c.filter((v: string) => !op.values!.includes(v)); }
           else if (op.operation === 'set') { category[op.field] = op.value; }
         }
-        try { await updatePreferences(updatedPrefs); toast.success('Préférences mises à jour !'); return { success: true, updatedPreferences: updatedPrefs }; }
-        catch (error) { console.error('Error updating preferences:', error); toast.error('Erreur lors de la mise à jour'); return { error: 'Update failed' }; }
+        try { await updatePreferences(updatedPrefs); return { success: true, updatedPreferences: updatedPrefs }; }
+        catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }
 
       case 'save_recipe': { engine.setPendingRecipe(action.data as unknown as PendingRecipe); return null; }
