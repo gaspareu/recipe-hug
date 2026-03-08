@@ -220,7 +220,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
   // Enable voice AND start listening in one synchronous user gesture
   const enableAndListen = useCallback(() => {
     setVoiceEnabled(true);
-    toast.success('Mode vocal activé');
+    
     // Call doStartListening directly — no setTimeout, preserves user gesture
     doStartListening();
   }, [doStartListening]);

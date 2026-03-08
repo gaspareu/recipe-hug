@@ -414,7 +414,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       }
     } catch (error) {
       console.error('Chat error:', error);
-      toast.error(error instanceof Error ? error.message : 'Erreur de communication');
+      console.error('Chat error:', error instanceof Error ? error.message : 'Erreur de communication');
       setMessages(prev => prev.filter(m => m.id !== assistantMessageId));
       pendingModeSwitchRef.current = null;
     } finally {
