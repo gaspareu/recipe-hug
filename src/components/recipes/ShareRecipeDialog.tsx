@@ -26,7 +26,6 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
     const schema = tab === 'email' ? emailSchema : phoneSchema;
     const result = schema.safeParse(value);
     if (!result.success) {
-      toast.error(result.error.errors[0].message);
       return;
     }
 
