@@ -204,9 +204,8 @@ export function useHomeChat() {
           source_type: 'ai', status: 'draft',
         }).select('id').single();
         if (error) throw error;
-        toast.success('Recette créée !');
         if (newRecipe?.id) {
-          toast.info('🎨 Génération de l\'image en cours...', { duration: 3000 });
+          triggerBackgroundImageGeneration(newRecipe.id, pending.title, pending.ingredients, session.access_token, refetchRecipes);
           triggerBackgroundImageGeneration(newRecipe.id, pending.title, pending.ingredients, session.access_token, refetchRecipes);
         }
       }
