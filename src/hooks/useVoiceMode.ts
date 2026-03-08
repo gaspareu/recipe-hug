@@ -59,14 +59,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       });
 
       if (!response.ok) {
-        // Differentiated error feedback
-        if (response.status === 401) {
-          toast.error('Erreur d\'authentification pour la synthèse vocale');
-        } else if (response.status === 429) {
-          toast.error('Quota vocal dépassé, réessayez plus tard');
-        } else {
-          toast.error('Erreur de synthèse vocale');
-        }
+        console.warn('TTS error:', response.status);
         throw new Error(`TTS failed: ${response.status}`);
       }
 
