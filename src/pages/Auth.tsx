@@ -150,13 +150,7 @@ export default function Auth() {
         message = 'Erreur de connexion réseau';
       }
       
-      toast.error("Erreur d'inscription", {
-        description: message,
-      });
-    } else {
-      toast.success('Compte créé', {
-        description: 'Vous êtes maintenant connecté',
-      });
+      console.error('Signup error:', message);
     }
   };
 
