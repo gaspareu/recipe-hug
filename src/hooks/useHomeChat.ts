@@ -120,7 +120,7 @@ export function useHomeChat() {
           category: 'taste_preferences' | 'kitchen_equipment' | 'culinary_style' | 'dietary_constraints';
           field: string; values?: string[]; value?: string | null;
         }>;
-        if (!preferences) { toast.error('Impossible de charger les préférences'); return { error: 'No preferences loaded' }; }
+        if (!preferences) { console.error('Impossible de charger les préférences'); return { error: 'No preferences loaded' }; }
         const updatedPrefs = JSON.parse(JSON.stringify(preferences)) as UserCulinaryPreferences;
         for (const op of operations) {
           const category = (updatedPrefs as any)[op.category];
