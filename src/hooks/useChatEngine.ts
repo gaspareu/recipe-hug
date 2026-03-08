@@ -394,7 +394,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       });
 
       if (!response.ok) {
-        if (response.status === 429) { toast.error('Trop de requêtes, réessaie dans un moment'); return; }
+        if (response.status === 429) { console.warn('Rate limited'); return; }
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || "Erreur de communication avec l'assistant");
       }
