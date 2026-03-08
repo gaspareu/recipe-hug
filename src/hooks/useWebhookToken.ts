@@ -47,9 +47,6 @@ export function useWebhookToken() {
       return data;
     } catch (error) {
       console.error('Error generating webhook token:', error);
-      toast.error('Erreur', {
-        description: 'Impossible de générer le token',
-      });
       return null;
     } finally {
       setIsGenerating(false);
