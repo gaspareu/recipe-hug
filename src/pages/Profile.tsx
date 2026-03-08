@@ -51,9 +51,6 @@ export default function Profile() {
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
-      toast.error('Erreur', {
-        description: 'Impossible de charger le profil',
-      });
     } finally {
       setIsLoading(false);
     }
