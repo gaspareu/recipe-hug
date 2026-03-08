@@ -56,13 +56,8 @@ export function useWebhookToken() {
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success('Copié !', {
-        description: 'Token copié dans le presse-papiers',
-      });
     } catch (error) {
-      toast.error('Erreur', {
-        description: 'Impossible de copier',
-      });
+      console.error('Copy failed:', error);
     }
   };
 

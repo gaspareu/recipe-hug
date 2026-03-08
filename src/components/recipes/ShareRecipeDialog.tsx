@@ -45,7 +45,6 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
       setOpen(false);
     } catch (err) {
       console.error('Share error:', err);
-      toast.error('Impossible de partager la recette');
     } finally {
       setLoading(false);
     }

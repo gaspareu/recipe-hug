@@ -122,9 +122,6 @@ Généré le ${new Date().toLocaleDateString('fr-FR')}
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    toast.success("Guide téléchargé", {
-      description: "Ouvrez le fichier pour suivre les instructions"
-    });
   };
 
   return (

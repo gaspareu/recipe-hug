@@ -234,7 +234,6 @@ export function useAISettings() {
     },
     onError: (error) => {
       console.error('Error saving AI settings:', error);
-      toast.error('Erreur lors de la sauvegarde');
     },
   });
 

@@ -219,7 +219,7 @@ export default function RecipeDetail() {
                         ai_summary: data.relationToOriginal ? `Inspiré de "${recipe.title}". ${data.relationToOriginal}` : null,
                         season: null, nutrition_tags: null, calorie_score: null, source_image_url: null,
                       });
-                      toast.success(`"${newRecipe.title}" créée !`);
+                      
                       setChatOpen(false);
                       navigate(`/recipes/${newRecipe.id}`);
                     }}
