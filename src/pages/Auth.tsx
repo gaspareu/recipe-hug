@@ -125,10 +125,8 @@ export default function Auth() {
       passwordSchema.parse(signupPassword);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        toast.error('Erreur de validation', {
-          description: err.errors[0].message,
-        });
         return;
+      }
       }
     }
 
