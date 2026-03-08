@@ -110,13 +110,8 @@ export default function Auth() {
         message = 'Erreur de connexion réseau';
       }
       
-      toast.error('Erreur', {
-        description: message,
-      });
+      console.error('Reset password error:', message);
     } else {
-      toast.success('Email envoyé', {
-        description: 'Consultez votre boîte mail pour réinitialiser votre mot de passe',
-      });
       setShowResetForm(false);
       setResetEmail('');
     }
