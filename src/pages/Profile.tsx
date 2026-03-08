@@ -121,9 +121,6 @@ export default function Profile() {
 
     } catch (error) {
       console.error('Error updating profile:', error);
-      toast.error('Erreur', {
-        description: 'Impossible de mettre à jour le profil',
-      });
     } finally {
       setIsSaving(false);
     }

@@ -107,14 +107,9 @@ export default function RecipeEdit() {
     
     try {
       await deleteRecipe.mutateAsync(id);
-      toast.success('Succès', {
-        description: 'Recette supprimée',
-      });
       navigate('/dashboard');
     } catch (error) {
-      toast.error('Erreur', {
-        description: 'Impossible de supprimer la recette',
-      });
+      console.error('Error deleting recipe:', error);
     }
   };
 
