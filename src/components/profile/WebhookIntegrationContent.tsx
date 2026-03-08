@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWebhookToken } from "@/hooks/useWebhookToken";
-import { toast } from "sonner";
+
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
