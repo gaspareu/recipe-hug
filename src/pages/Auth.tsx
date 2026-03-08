@@ -127,7 +127,6 @@ export default function Auth() {
       if (err instanceof z.ZodError) {
         return;
       }
-      }
     }
 
     setIsSubmitting(true);
