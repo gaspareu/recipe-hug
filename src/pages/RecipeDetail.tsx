@@ -147,8 +147,7 @@ export default function RecipeDetail() {
                   const ingredients = recipe.ingredients as Array<{ name: string }>;
                   handleAnalyze();
                   generateImage.mutate({ recipeId: recipe.id, title: recipe.title, ingredients }, {
-                    onSuccess: () => toast.success('Image générée !'),
-                    onError: (error) => toast.error(error.message || "Impossible de générer l'image"),
+                    onError: (error) => console.error('Image generation error:', error),
                   });
                 }} disabled={generateImage.isPending || isAnalyzing} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
                   {(generateImage.isPending || isAnalyzing) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
