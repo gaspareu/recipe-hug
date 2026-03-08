@@ -100,9 +100,6 @@ export default function Profile() {
 
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      toast.error('Erreur', {
-        description: "Impossible de mettre à jour l'avatar",
-      });
     } finally {
       setIsUploading(false);
     }
