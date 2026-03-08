@@ -35,9 +35,7 @@ export default function Auth() {
       redirect_uri: window.location.origin,
     });
     if (result?.error) {
-      toast.error('Erreur de connexion Google', {
-        description: result.error.message || 'Une erreur est survenue',
-      });
+      console.error('Google sign-in error:', result.error.message);
     }
     setGoogleLoading(false);
   };
