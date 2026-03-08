@@ -96,14 +96,9 @@ export default function RecipeEdit() {
         season: season || null,
       });
       
-      toast.success('Succès', {
-        description: 'Recette mise à jour !',
-      });
       navigate(`/recipes/${id}`);
     } catch (error) {
-      toast.error('Erreur', {
-        description: 'Impossible de mettre à jour la recette',
-      });
+      console.error('Error updating recipe:', error);
     }
   };
 
