@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -337,14 +338,22 @@ export function ChatInterface({
         </div>
 
         {/* Speaking indicator */}
-        {isSpeaking && (
-          <div className="flex items-center justify-center gap-2">
-            <button onClick={stopSpeaking} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10">
-              <SoundWaveIndicator className="h-4" barCount={5} />
-              <span>Chef parle... (cliquez pour arrêter)</span>
-            </button>
-          </div>
-        )}
+        <AnimatePresence>
+          {isSpeaking && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              className="flex items-center justify-center gap-2"
+            >
+              <button onClick={stopSpeaking} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10">
+                <SoundWaveIndicator className="h-4" barCount={5} />
+                <span>Chef parle... (cliquez pour arrêter)</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
