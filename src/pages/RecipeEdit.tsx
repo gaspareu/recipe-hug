@@ -81,9 +81,6 @@ export default function RecipeEdit() {
     e.preventDefault();
     
     if (!id || !title.trim()) {
-      toast.error('Erreur', {
-        description: 'Le titre est obligatoire',
-      });
       return;
     }
 
