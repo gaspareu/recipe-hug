@@ -34,7 +34,6 @@ Corps (JSON):
 
   const downloadShortcutGuide = () => {
     if (!webhookToken) {
-      toast.error("Générez d'abord un token");
       return;
     }
 
