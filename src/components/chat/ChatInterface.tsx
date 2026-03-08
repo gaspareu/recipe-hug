@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
