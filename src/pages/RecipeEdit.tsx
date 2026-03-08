@@ -28,7 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { IngredientEditor } from '@/components/recipes/IngredientEditor';
 import { StepsEditor } from '@/components/recipes/StepsEditor';
 import { useRecipe, useUpdateRecipe, useDeleteRecipe } from '@/hooks/useRecipes';
-import { toast } from 'sonner';
+
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
 const AVAILABLE_TAGS = [
