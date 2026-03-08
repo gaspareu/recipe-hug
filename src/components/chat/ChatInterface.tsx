@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { TextShimmer } from '@/components/ui/text-shimmer';
 import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
-import { toast } from 'sonner';
+
 import type { ChatMessage, ChatMode, PendingRecipe } from '@/hooks/useChatEngine';
 
 interface ChatInterfaceProps {
@@ -96,8 +96,8 @@ export function ChatInterface({
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) { toast.error('Seules les images sont acceptées'); return; }
-    if (file.size > 5 * 1024 * 1024) { toast.error('Image trop volumineuse (max 5 Mo)'); return; }
+    if (!file.type.startsWith('image/')) { return; }
+    if (file.size > 5 * 1024 * 1024) { return; }
     const reader = new FileReader();
     reader.onload = event => setSelectedImage(event.target?.result as string);
     reader.readAsDataURL(file);

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from 'sonner';
+
 import { 
   useUserPreferences, 
   TastePreferences,
@@ -245,12 +245,11 @@ export function CulinaryPreferencesContent() {
     const prefs = getEditablePrefs();
     updatePreferences(prefs, {
       onSuccess: () => {
-        toast.success('Préférences enregistrées !');
         setHasChanges(false);
         setLocalPrefs(null);
       },
       onError: () => {
-        toast.error('Erreur lors de la sauvegarde');
+        console.error('Error saving preferences');
       },
     });
   };

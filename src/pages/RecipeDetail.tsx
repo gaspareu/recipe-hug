@@ -25,7 +25,7 @@ import { useCreateVersion } from '@/hooks/useRecipeVersions';
 import { useAuth } from '@/hooks/useAuth';
 import { useSwipeClose } from '@/hooks/useSwipeClose';
 import { ChatInterface } from '@/components/chat/ChatInterface';
-import { toast } from 'sonner';
+
 import { supabase } from '@/integrations/supabase/client';
 import type { RecipeStatus, Step, Ingredient } from '@/types/recipe';
 
@@ -64,10 +64,8 @@ export default function RecipeDetail() {
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('recipes').getPublicUrl(filePath);
       await updateRecipe.mutateAsync({ id: recipe.id, source_image_url: publicUrl });
-      toast.success('Image mise à jour');
     } catch (error) {
       console.error('Error uploading image:', error);
-      toast.error("Impossible de télécharger l'image");
     }
   };
 
@@ -75,10 +73,8 @@ export default function RecipeDetail() {
     if (!recipe) return;
     try {
       await updateRecipe.mutateAsync({ id: recipe.id, source_image_url: null });
-      toast.success('Image supprimée');
     } catch (error) {
       console.error('Error removing image:', error);
-      toast.error("Impossible de supprimer l'image");
     }
   };
 
@@ -94,10 +90,8 @@ export default function RecipeDetail() {
         id: recipe.id, ai_summary: data.ai_summary,
         nutrition_tags: data.nutrition_tags, calorie_score: data.calorie_score, season: data.season,
       });
-      toast.success('Analyse terminée');
     } catch (error) {
       console.error('Error analyzing recipe:', error);
-      toast.error("Impossible d'analyser la recette");
     } finally { setIsAnalyzing(false); }
   };
 
@@ -153,8 +147,7 @@ export default function RecipeDetail() {
                   const ingredients = recipe.ingredients as Array<{ name: string }>;
                   handleAnalyze();
                   generateImage.mutate({ recipeId: recipe.id, title: recipe.title, ingredients }, {
-                    onSuccess: () => toast.success('Image générée !'),
-                    onError: (error) => toast.error(error.message || "Impossible de générer l'image"),
+                    onError: (error) => console.error('Image generation error:', error),
                   });
                 }} disabled={generateImage.isPending || isAnalyzing} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
                   {(generateImage.isPending || isAnalyzing) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -217,7 +210,6 @@ export default function RecipeDetail() {
                         });
                       }
                       await updateRecipe.mutateAsync({ id: recipe.id, title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps });
-                      toast.success('Recette mise à jour');
                       refetch();
                     }}
                     onRecipeCreate={async (data) => {
@@ -227,7 +219,7 @@ export default function RecipeDetail() {
                         ai_summary: data.relationToOriginal ? `Inspiré de "${recipe.title}". ${data.relationToOriginal}` : null,
                         season: null, nutrition_tags: null, calorie_score: null, source_image_url: null,
                       });
-                      toast.success(`"${newRecipe.title}" créée !`);
+                      
                       setChatOpen(false);
                       navigate(`/recipes/${newRecipe.id}`);
                     }}

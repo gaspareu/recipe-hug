@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWebhookToken } from "@/hooks/useWebhookToken";
-import { toast } from "sonner";
+
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -34,7 +34,6 @@ Corps (JSON):
 
   const downloadShortcutGuide = () => {
     if (!webhookToken) {
-      toast.error("Générez d'abord un token");
       return;
     }
 
@@ -123,9 +122,6 @@ Généré le ${new Date().toLocaleDateString('fr-FR')}
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    toast.success("Guide téléchargé", {
-      description: "Ouvrez le fichier pour suivre les instructions"
-    });
   };
 
   return (

@@ -28,7 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { IngredientEditor } from '@/components/recipes/IngredientEditor';
 import { StepsEditor } from '@/components/recipes/StepsEditor';
 import { useRecipe, useUpdateRecipe, useDeleteRecipe } from '@/hooks/useRecipes';
-import { toast } from 'sonner';
+
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
 const AVAILABLE_TAGS = [
@@ -81,9 +81,6 @@ export default function RecipeEdit() {
     e.preventDefault();
     
     if (!id || !title.trim()) {
-      toast.error('Erreur', {
-        description: 'Le titre est obligatoire',
-      });
       return;
     }
 
@@ -99,14 +96,9 @@ export default function RecipeEdit() {
         season: season || null,
       });
       
-      toast.success('Succès', {
-        description: 'Recette mise à jour !',
-      });
       navigate(`/recipes/${id}`);
     } catch (error) {
-      toast.error('Erreur', {
-        description: 'Impossible de mettre à jour la recette',
-      });
+      console.error('Error updating recipe:', error);
     }
   };
 
@@ -115,14 +107,9 @@ export default function RecipeEdit() {
     
     try {
       await deleteRecipe.mutateAsync(id);
-      toast.success('Succès', {
-        description: 'Recette supprimée',
-      });
       navigate('/dashboard');
     } catch (error) {
-      toast.error('Erreur', {
-        description: 'Impossible de supprimer la recette',
-      });
+      console.error('Error deleting recipe:', error);
     }
   };
 

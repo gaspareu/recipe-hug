@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useScribe, CommitStrategy } from '@elevenlabs/react';
-import { toast } from 'sonner';
+
 import { supabase } from '@/integrations/supabase/client';
 
 const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
@@ -59,14 +59,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       });
 
       if (!response.ok) {
-        // Differentiated error feedback
-        if (response.status === 401) {
-          toast.error('Erreur d\'authentification pour la synthèse vocale');
-        } else if (response.status === 429) {
-          toast.error('Quota vocal dépassé, réessayez plus tard');
-        } else {
-          toast.error('Erreur de synthèse vocale');
-        }
+        console.warn('TTS error:', response.status);
         throw new Error(`TTS failed: ${response.status}`);
       }
 
@@ -201,13 +194,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       setIsListening(true);
     } catch (error: any) {
       console.error('Failed to start listening:', error);
-      if (error.name === 'AbortError') {
-        toast.error('Connexion au service vocal expirée');
-      } else if (error.name === 'NotAllowedError') {
-        toast.error('Accès au microphone refusé');
-      } else {
-        toast.error('Impossible d\'accéder au microphone');
-      }
+      console.warn('Microphone error:', error.name);
     } finally {
       setIsConnecting(false);
     }
@@ -227,13 +214,13 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       stopListening();
     }
 
-    toast.success(newState ? 'Mode vocal activé' : 'Mode vocal désactivé');
+    
   }, [voiceEnabled, stopSpeaking, stopListening]);
 
   // Enable voice AND start listening in one synchronous user gesture
   const enableAndListen = useCallback(() => {
     setVoiceEnabled(true);
-    toast.success('Mode vocal activé');
+    
     // Call doStartListening directly — no setTimeout, preserves user gesture
     doStartListening();
   }, [doStartListening]);

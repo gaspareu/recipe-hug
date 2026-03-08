@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { toast } from 'sonner';
+
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { CollapsibleSection } from '@/components/profile/CollapsibleSection';
@@ -51,9 +51,6 @@ export default function Profile() {
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
-      toast.error('Erreur', {
-        description: 'Impossible de charger le profil',
-      });
     } finally {
       setIsLoading(false);
     }
@@ -65,17 +62,11 @@ export default function Profile() {
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      toast.error('Erreur', {
-        description: 'Veuillez sélectionner une image',
-      });
       return;
     }
 
     // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
-      toast.error('Erreur', {
-        description: "L'image ne doit pas dépasser 2 Mo",
-      });
       return;
     }
 
@@ -107,14 +98,8 @@ export default function Profile() {
 
       if (updateError) throw updateError;
 
-      toast.success('Succès', {
-        description: 'Avatar mis à jour !',
-      });
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      toast.error('Erreur', {
-        description: "Impossible de mettre à jour l'avatar",
-      });
     } finally {
       setIsUploading(false);
     }
@@ -134,14 +119,8 @@ export default function Profile() {
 
       if (error) throw error;
 
-      toast.success('Succès', {
-        description: 'Profil mis à jour !',
-      });
     } catch (error) {
       console.error('Error updating profile:', error);
-      toast.error('Erreur', {
-        description: 'Impossible de mettre à jour le profil',
-      });
     } finally {
       setIsSaving(false);
     }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { toast } from 'sonner';
+
 import { Eye, EyeOff, Check, Loader2, Sparkles, AlertCircle, ChevronDown, Settings2, Key, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -665,7 +665,7 @@ export function AIProviderSettings() {
       if (!allValid) {
         setIsSaving(false);
         setSavePhase('idle');
-        toast.error('Certaines clés API sont invalides. Corrigez-les avant d\'enregistrer.');
+        console.error('Invalid API keys detected');
         return;
       }
     }

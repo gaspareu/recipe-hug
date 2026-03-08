@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from 'sonner';
+
 import { Loader2, ChefHat } from 'lucide-react';
 import { lovable } from '@/integrations/lovable/index';
 import { Separator } from '@/components/ui/separator';
@@ -35,9 +35,7 @@ export default function Auth() {
       redirect_uri: window.location.origin,
     });
     if (result?.error) {
-      toast.error('Erreur de connexion Google', {
-        description: result.error.message || 'Une erreur est survenue',
-      });
+      console.error('Google sign-in error:', result.error.message);
     }
     setGoogleLoading(false);
   };
@@ -57,9 +55,6 @@ export default function Auth() {
       passwordSchema.parse(loginPassword);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        toast.error('Erreur de validation', {
-          description: err.errors[0].message,
-        });
         return;
       }
     }
@@ -84,9 +79,7 @@ export default function Auth() {
         message = 'Aucun compte trouvé avec cet email';
       }
       
-      toast.error('Erreur de connexion', {
-        description: message,
-      });
+      console.error('Login error:', message);
     }
   };
 
@@ -97,9 +90,6 @@ export default function Auth() {
       emailSchema.parse(resetEmail);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        toast.error('Erreur de validation', {
-          description: err.errors[0].message,
-        });
         return;
       }
     }
@@ -118,13 +108,8 @@ export default function Auth() {
         message = 'Erreur de connexion réseau';
       }
       
-      toast.error('Erreur', {
-        description: message,
-      });
+      console.error('Reset password error:', message);
     } else {
-      toast.success('Email envoyé', {
-        description: 'Consultez votre boîte mail pour réinitialiser votre mot de passe',
-      });
       setShowResetForm(false);
       setResetEmail('');
     }
@@ -138,9 +123,6 @@ export default function Auth() {
       passwordSchema.parse(signupPassword);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        toast.error('Erreur de validation', {
-          description: err.errors[0].message,
-        });
         return;
       }
     }
@@ -165,13 +147,7 @@ export default function Auth() {
         message = 'Erreur de connexion réseau';
       }
       
-      toast.error("Erreur d'inscription", {
-        description: message,
-      });
-    } else {
-      toast.success('Compte créé', {
-        description: 'Vous êtes maintenant connecté',
-      });
+      console.error('Signup error:', message);
     }
   };
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { toast } from 'sonner';
+
 
 export function useWebhookToken() {
   const { user } = useAuth();
@@ -43,16 +43,10 @@ export function useWebhookToken() {
       if (error) throw error;
 
       setWebhookToken(data);
-      toast.success('Token généré', {
-        description: 'Votre nouveau token webhook est prêt',
-      });
 
       return data;
     } catch (error) {
       console.error('Error generating webhook token:', error);
-      toast.error('Erreur', {
-        description: 'Impossible de générer le token',
-      });
       return null;
     } finally {
       setIsGenerating(false);
@@ -62,13 +56,8 @@ export function useWebhookToken() {
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success('Copié !', {
-        description: 'Token copié dans le presse-papiers',
-      });
     } catch (error) {
-      toast.error('Erreur', {
-        description: 'Impossible de copier',
-      });
+      console.error('Copy failed:', error);
     }
   };
 

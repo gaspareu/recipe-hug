@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { toast } from 'sonner';
+
 import type { Json } from '@/integrations/supabase/types';
 
 export type AIProvider = 'lovable' | 'gemini' | 'openai' | 'anthropic';
@@ -230,11 +230,10 @@ export function useAISettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-settings', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['ai-masked-keys', user?.id] });
-      toast.success('Configuration IA sauvegardée');
+      
     },
     onError: (error) => {
       console.error('Error saving AI settings:', error);
-      toast.error('Erreur lors de la sauvegarde');
     },
   });
 

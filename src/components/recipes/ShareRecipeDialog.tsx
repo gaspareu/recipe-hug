@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+
 import { z } from 'zod';
 
 const emailSchema = z.string().trim().email("Adresse email invalide").max(255);
@@ -26,7 +26,6 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
     const schema = tab === 'email' ? emailSchema : phoneSchema;
     const result = schema.safeParse(value);
     if (!result.success) {
-      toast.error(result.error.errors[0].message);
       return;
     }
 
@@ -42,16 +41,10 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
 
       if (error) throw error;
 
-      if (data.status === 'claimed') {
-        toast.success('Recette envoyée avec succès !');
-      } else {
-        toast.success('Partage enregistré. La recette sera ajoutée quand le destinataire créera son compte.');
-      }
       setValue('');
       setOpen(false);
     } catch (err) {
       console.error('Share error:', err);
-      toast.error('Impossible de partager la recette');
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { toast } from 'sonner';
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ChatMessage {
@@ -394,7 +394,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       });
 
       if (!response.ok) {
-        if (response.status === 429) { toast.error('Trop de requêtes, réessaie dans un moment'); return; }
+        if (response.status === 429) { console.warn('Rate limited'); return; }
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || "Erreur de communication avec l'assistant");
       }
@@ -414,7 +414,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       }
     } catch (error) {
       console.error('Chat error:', error);
-      toast.error(error instanceof Error ? error.message : 'Erreur de communication');
+      console.error('Chat error:', error instanceof Error ? error.message : 'Erreur de communication');
       setMessages(prev => prev.filter(m => m.id !== assistantMessageId));
       pendingModeSwitchRef.current = null;
     } finally {

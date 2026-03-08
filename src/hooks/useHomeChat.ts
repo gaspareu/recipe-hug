@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+
 import { useRecipes } from './useRecipes';
 import { useUserPreferences, UserCulinaryPreferences } from './useUserPreferences';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,7 +23,7 @@ async function triggerBackgroundImageGeneration(
       { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ recipeId, title, ingredients }) },
     );
-    if (response.ok) { toast.success('🖼️ Image générée !'); await refetchRecipes(); }
+    if (response.ok) { await refetchRecipes(); }
   } catch (error) { console.warn('Image generation error:', error); }
 }
 
@@ -120,7 +120,7 @@ export function useHomeChat() {
           category: 'taste_preferences' | 'kitchen_equipment' | 'culinary_style' | 'dietary_constraints';
           field: string; values?: string[]; value?: string | null;
         }>;
-        if (!preferences) { toast.error('Impossible de charger les préférences'); return { error: 'No preferences loaded' }; }
+        if (!preferences) { console.error('Impossible de charger les préférences'); return { error: 'No preferences loaded' }; }
         const updatedPrefs = JSON.parse(JSON.stringify(preferences)) as UserCulinaryPreferences;
         for (const op of operations) {
           const category = (updatedPrefs as any)[op.category];
@@ -129,8 +129,8 @@ export function useHomeChat() {
           else if (op.operation === 'remove' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = c.filter((v: string) => !op.values!.includes(v)); }
           else if (op.operation === 'set') { category[op.field] = op.value; }
         }
-        try { await updatePreferences(updatedPrefs); toast.success('Préférences mises à jour !'); return { success: true, updatedPreferences: updatedPrefs }; }
-        catch (error) { console.error('Error updating preferences:', error); toast.error('Erreur lors de la mise à jour'); return { error: 'Update failed' }; }
+        try { await updatePreferences(updatedPrefs); return { success: true, updatedPreferences: updatedPrefs }; }
+        catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }
 
       case 'save_recipe': { engine.setPendingRecipe(action.data as unknown as PendingRecipe); return null; }
@@ -187,7 +187,7 @@ export function useHomeChat() {
     if (!pending) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) { toast.error('Vous devez être connecté'); return; }
+      if (!session?.user) { console.error('Not authenticated'); return; }
 
       if (pending.isUpdate && pending.originalRecipeId) {
         const { error } = await supabase.from('recipes').update({
@@ -196,7 +196,7 @@ export function useHomeChat() {
           updated_at: new Date().toISOString(),
         }).eq('id', pending.originalRecipeId);
         if (error) throw error;
-        toast.success('Recette mise à jour !');
+        
       } else {
         const { data: newRecipe, error } = await supabase.from('recipes').insert({
           user_id: session.user.id, title: pending.title, servings: pending.servings,
@@ -204,9 +204,8 @@ export function useHomeChat() {
           source_type: 'ai', status: 'draft',
         }).select('id').single();
         if (error) throw error;
-        toast.success('Recette créée !');
         if (newRecipe?.id) {
-          toast.info('🎨 Génération de l\'image en cours...', { duration: 3000 });
+          triggerBackgroundImageGeneration(newRecipe.id, pending.title, pending.ingredients, session.access_token, refetchRecipes);
           triggerBackgroundImageGeneration(newRecipe.id, pending.title, pending.ingredients, session.access_token, refetchRecipes);
         }
       }
@@ -222,7 +221,7 @@ export function useHomeChat() {
           : `✅ J'ai enregistré ta nouvelle recette "${pending.title}" ! Une image est en cours de génération. Tu veux la cuisiner ou faire autre chose ?`,
         timestamp: new Date(),
       }]);
-    } catch (error) { console.error('Error saving recipe:', error); toast.error('Erreur lors de l\'enregistrement'); }
+    } catch (error) { console.error('Error saving recipe:', error); }
   }, [engine.pendingRecipe, refetchRecipes]);
 
   const cancelPendingRecipe = useCallback(() => {

@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { toast } from 'sonner';
+
 import { useRecipes } from './useRecipes';
 import { useUserPreferences, UserCulinaryPreferences } from './useUserPreferences';
 import { useChatEngine, ChatMode, ActiveRecipeData, PendingRecipe, ToolCallAction } from './useChatEngine';
@@ -83,7 +83,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
           category: 'taste_preferences' | 'kitchen_equipment' | 'culinary_style' | 'dietary_constraints';
           field: string; values?: string[]; value?: string | null;
         }>;
-        if (!preferences) { toast.error('Impossible de charger les préférences'); return { error: 'No preferences loaded' }; }
+        if (!preferences) { console.error('Impossible de charger les préférences'); return { error: 'No preferences loaded' }; }
         const updatedPrefs = JSON.parse(JSON.stringify(preferences)) as UserCulinaryPreferences;
         for (const op of operations) {
           const category = (updatedPrefs as any)[op.category];
@@ -92,8 +92,8 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
           else if (op.operation === 'remove' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = c.filter((v: string) => !op.values!.includes(v)); }
           else if (op.operation === 'set') { category[op.field] = op.value; }
         }
-        try { await updatePreferences(updatedPrefs); toast.success('Préférences mises à jour !'); return { success: true, updatedPreferences: updatedPrefs }; }
-        catch (error) { console.error('Error updating preferences:', error); toast.error('Erreur lors de la mise à jour'); return { error: 'Update failed' }; }
+        try { await updatePreferences(updatedPrefs); return { success: true, updatedPreferences: updatedPrefs }; }
+        catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }
 
       case 'save_recipe': { engine.setPendingRecipe(action.data as unknown as PendingRecipe); return null; }
@@ -155,7 +155,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
         content: pending.isUpdate ? `✅ Recette \"${pending.title}\" mise à jour !` : `✅ Nouvelle recette \"${pending.title}\" créée !`,
         timestamp: new Date(),
       }]);
-    } catch (error) { console.error('Error saving recipe:', error); toast.error("Erreur lors de l'enregistrement"); }
+    } catch (error) { console.error('Error saving recipe:', error); }
   }, [engine.pendingRecipe, onRecipeUpdate, onRecipeCreate]);
 
   const cancelPendingRecipe = useCallback(() => {
