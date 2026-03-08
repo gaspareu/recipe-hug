@@ -23,7 +23,7 @@ async function triggerBackgroundImageGeneration(
       { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ recipeId, title, ingredients }) },
     );
-    if (response.ok) { toast.success('🖼️ Image générée !'); await refetchRecipes(); }
+    if (response.ok) { await refetchRecipes(); }
   } catch (error) { console.warn('Image generation error:', error); }
 }
 
