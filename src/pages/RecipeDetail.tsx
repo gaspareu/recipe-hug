@@ -64,10 +64,8 @@ export default function RecipeDetail() {
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('recipes').getPublicUrl(filePath);
       await updateRecipe.mutateAsync({ id: recipe.id, source_image_url: publicUrl });
-      toast.success('Image mise à jour');
     } catch (error) {
       console.error('Error uploading image:', error);
-      toast.error("Impossible de télécharger l'image");
     }
   };
 
