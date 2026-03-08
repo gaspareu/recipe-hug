@@ -194,13 +194,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       setIsListening(true);
     } catch (error: any) {
       console.error('Failed to start listening:', error);
-      if (error.name === 'AbortError') {
-        toast.error('Connexion au service vocal expirée');
-      } else if (error.name === 'NotAllowedError') {
-        toast.error('Accès au microphone refusé');
-      } else {
-        toast.error('Impossible d\'accéder au microphone');
-      }
+      console.warn('Microphone error:', error.name);
     } finally {
       setIsConnecting(false);
     }
