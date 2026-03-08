@@ -214,7 +214,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       stopListening();
     }
 
-    toast.success(newState ? 'Mode vocal activé' : 'Mode vocal désactivé');
+    
   }, [voiceEnabled, stopSpeaking, stopListening]);
 
   // Enable voice AND start listening in one synchronous user gesture
