@@ -210,7 +210,6 @@ export default function RecipeDetail() {
                         });
                       }
                       await updateRecipe.mutateAsync({ id: recipe.id, title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps });
-                      toast.success('Recette mise à jour');
                       refetch();
                     }}
                     onRecipeCreate={async (data) => {
