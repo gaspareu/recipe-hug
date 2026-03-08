@@ -155,7 +155,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
         content: pending.isUpdate ? `✅ Recette \"${pending.title}\" mise à jour !` : `✅ Nouvelle recette \"${pending.title}\" créée !`,
         timestamp: new Date(),
       }]);
-    } catch (error) { console.error('Error saving recipe:', error); toast.error("Erreur lors de l'enregistrement"); }
+    } catch (error) { console.error('Error saving recipe:', error); }
   }, [engine.pendingRecipe, onRecipeUpdate, onRecipeCreate]);
 
   const cancelPendingRecipe = useCallback(() => {

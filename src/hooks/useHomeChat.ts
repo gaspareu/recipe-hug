@@ -221,7 +221,7 @@ export function useHomeChat() {
           : `✅ J'ai enregistré ta nouvelle recette "${pending.title}" ! Une image est en cours de génération. Tu veux la cuisiner ou faire autre chose ?`,
         timestamp: new Date(),
       }]);
-    } catch (error) { console.error('Error saving recipe:', error); toast.error('Erreur lors de l\'enregistrement'); }
+    } catch (error) { console.error('Error saving recipe:', error); }
   }, [engine.pendingRecipe, refetchRecipes]);
 
   const cancelPendingRecipe = useCallback(() => {
