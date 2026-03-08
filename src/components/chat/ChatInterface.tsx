@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { TextShimmer } from '@/components/ui/text-shimmer';
 import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
-import { toast } from 'sonner';
+
 import type { ChatMessage, ChatMode, PendingRecipe } from '@/hooks/useChatEngine';
 
 interface ChatInterfaceProps {
