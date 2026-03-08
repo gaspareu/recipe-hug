@@ -41,11 +41,6 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
 
       if (error) throw error;
 
-      if (data.status === 'claimed') {
-        toast.success('Recette envoyée avec succès !');
-      } else {
-        toast.success('Partage enregistré. La recette sera ajoutée quand le destinataire créera son compte.');
-      }
       setValue('');
       setOpen(false);
     } catch (err) {
