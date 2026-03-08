@@ -665,7 +665,7 @@ export function AIProviderSettings() {
       if (!allValid) {
         setIsSaving(false);
         setSavePhase('idle');
-        toast.error('Certaines clés API sont invalides. Corrigez-les avant d\'enregistrer.');
+        console.error('Invalid API keys detected');
         return;
       }
     }
