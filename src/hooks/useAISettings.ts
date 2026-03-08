@@ -230,7 +230,7 @@ export function useAISettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-settings', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['ai-masked-keys', user?.id] });
-      toast.success('Configuration IA sauvegardée');
+      
     },
     onError: (error) => {
       console.error('Error saving AI settings:', error);
