@@ -80,9 +80,7 @@ export default function Auth() {
         message = 'Aucun compte trouvé avec cet email';
       }
       
-      toast.error('Erreur de connexion', {
-        description: message,
-      });
+      console.error('Login error:', message);
     }
   };
 
