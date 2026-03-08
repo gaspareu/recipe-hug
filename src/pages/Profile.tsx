@@ -98,9 +98,6 @@ export default function Profile() {
 
       if (updateError) throw updateError;
 
-      toast.success('Succès', {
-        description: 'Avatar mis à jour !',
-      });
     } catch (error) {
       console.error('Error uploading avatar:', error);
       toast.error('Erreur', {
