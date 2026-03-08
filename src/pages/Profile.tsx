@@ -119,9 +119,6 @@ export default function Profile() {
 
       if (error) throw error;
 
-      toast.success('Succès', {
-        description: 'Profil mis à jour !',
-      });
     } catch (error) {
       console.error('Error updating profile:', error);
       toast.error('Erreur', {
