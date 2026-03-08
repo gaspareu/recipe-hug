@@ -25,7 +25,7 @@ import { useCreateVersion } from '@/hooks/useRecipeVersions';
 import { useAuth } from '@/hooks/useAuth';
 import { useSwipeClose } from '@/hooks/useSwipeClose';
 import { ChatInterface } from '@/components/chat/ChatInterface';
-import { toast } from 'sonner';
+
 import { supabase } from '@/integrations/supabase/client';
 import type { RecipeStatus, Step, Ingredient } from '@/types/recipe';
 
