@@ -43,9 +43,6 @@ export function useWebhookToken() {
       if (error) throw error;
 
       setWebhookToken(data);
-      toast.success('Token généré', {
-        description: 'Votre nouveau token webhook est prêt',
-      });
 
       return data;
     } catch (error) {
