@@ -67,9 +67,6 @@ export default function Profile() {
 
     // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
-      toast.error('Erreur', {
-        description: "L'image ne doit pas dépasser 2 Mo",
-      });
       return;
     }
 
