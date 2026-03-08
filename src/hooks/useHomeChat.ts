@@ -196,7 +196,7 @@ export function useHomeChat() {
           updated_at: new Date().toISOString(),
         }).eq('id', pending.originalRecipeId);
         if (error) throw error;
-        toast.success('Recette mise à jour !');
+        
       } else {
         const { data: newRecipe, error } = await supabase.from('recipes').insert({
           user_id: session.user.id, title: pending.title, servings: pending.servings,
