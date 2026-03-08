@@ -73,10 +73,8 @@ export default function RecipeDetail() {
     if (!recipe) return;
     try {
       await updateRecipe.mutateAsync({ id: recipe.id, source_image_url: null });
-      toast.success('Image supprimée');
     } catch (error) {
       console.error('Error removing image:', error);
-      toast.error("Impossible de supprimer l'image");
     }
   };
 
