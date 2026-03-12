@@ -204,6 +204,9 @@ Assistant: "Coq au Vin : mêmes techniques de base, cuisses de poulet, cuisson 1
 User: "Oui !"
 [→ APPEL create_new_recipe]
 
+## RÈGLE PROFIL
+Ne mentionne JAMAIS les éléments du profil utilisateur dans tes réponses sauf si l'utilisateur le demande. Respecte les contraintes silencieusement.
+
 Style : direct, efficace, pas d'emojis. Tu tutoies.`;
 
 // ===== ORCHESTRATION TOOLS =====
