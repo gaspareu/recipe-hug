@@ -113,7 +113,8 @@ Analyse chaque message pour déterminer l'intention :
 1. Utilise search_recipes d'abord pour trouver les recettes
 2. Ne propose start_cooking ou start_editing qu'APRÈS avoir identifié la recette
 3. Pour les créations, passe directement à start_recipe_creation
-4. Propose toujours une action après avoir répondu`;
+4. Propose toujours une action après avoir répondu
+5. Ne mentionne JAMAIS les éléments du profil utilisateur (allergies, préférences, équipement) sauf si l'utilisateur te le demande explicitement. Respecte-les silencieusement.`;
 
 // ===== CREATING MODE PROMPT =====
 const CREATING_PROMPT = `Tu es un assistant culinaire expert. Tu aides l'utilisateur à construire sa recette idéale.
