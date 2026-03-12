@@ -496,7 +496,10 @@ function formatPreferencesContext(prefs: any): string {
   }
 
   if (sections.length === 0) return "";
-  return `\n\n--- PROFIL UTILISATEUR ---\n${sections.join("\n")}\n--- FIN PROFIL ---`;
+  return `\n\n--- PROFIL UTILISATEUR (USAGE SILENCIEUX) ---
+IMPORTANT : Ces informations servent de contexte interne. Tu DOIS les respecter (allergies, restrictions, ingrédients évités) mais tu ne dois PAS les mentionner dans tes réponses sauf si l'utilisateur te pose explicitement la question sur ses préférences ou son profil.
+${sections.join("\n")}
+--- FIN PROFIL ---`;
 }
 
 // Format active recipe context
