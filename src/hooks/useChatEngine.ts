@@ -14,8 +14,6 @@ export type MessageContent =
   | string
   | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>;
 
-export type ChatMode = 'orchestration' | 'creating' | 'cooking' | 'editing' | 'memory';
-
 export interface ToolCallAction {
   type: string;
   data: Record<string, unknown>;
@@ -48,32 +46,16 @@ export interface ActiveRecipeData {
   completedSteps?: number[];
 }
 
-export interface ModeSwitchResult {
-  modeSwitch: ChatMode;
-  recipe?: ActiveRecipeData;
-  initialContext?: string;
-}
-
 export interface ChatEngineConfig {
   welcomeMessage: string;
-  initialMode: ChatMode;
   initialActiveRecipe: ActiveRecipeData | null;
-  /** Handle a tool call; return ModeSwitchResult to trigger agent continuation */
+  /** Handle a tool call */
   onToolCall: (action: ToolCallAction) => Promise<any>;
-  /** Build request body for the main send. Returns { endpoint, body } */
+  /** Build request body for the send */
   buildRequest: (params: {
     apiMessages: Array<{ role: string; content: MessageContent }>;
-    mode: ChatMode;
     activeRecipe: ActiveRecipeData | null;
   }) => Promise<{ endpoint: string; body: Record<string, any> }>;
-  /** Build request body for agent continuation after mode switch */
-  buildContinuationRequest: (params: {
-    newMode: ChatMode;
-    recipe: ActiveRecipeData | null;
-    initialContext: string;
-  }) => Promise<{ endpoint: string; body: Record<string, any> }>;
-  /** Called when mode changes */
-  onModeChange?: (mode: ChatMode) => void;
   /** Called when activeRecipe changes */
   onActiveRecipeChange?: (recipe: ActiveRecipeData | null) => void;
   /** Called when pendingRecipe changes */
@@ -81,42 +63,27 @@ export interface ChatEngineConfig {
 }
 
 export function useChatEngine(config: ChatEngineConfig) {
-  const {
-    welcomeMessage,
-    initialMode,
-    initialActiveRecipe,
-  } = config;
+  const { welcomeMessage, initialActiveRecipe } = config;
 
   // Use refs for callbacks to avoid stale closures in streaming
   const onToolCallRef = useRef(config.onToolCall);
   onToolCallRef.current = config.onToolCall;
   const buildRequestRef = useRef(config.buildRequest);
   buildRequestRef.current = config.buildRequest;
-  const buildContinuationRequestRef = useRef(config.buildContinuationRequest);
-  buildContinuationRequestRef.current = config.buildContinuationRequest;
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() },
   ]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [mode, setMode] = useState<ChatMode>(initialMode);
   const [activeRecipe, setActiveRecipe] = useState<ActiveRecipeData | null>(initialActiveRecipe);
   const [pendingRecipe, setPendingRecipe] = useState<PendingRecipe | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
-  const pendingModeSwitchRef = useRef<{
-    newMode: ChatMode;
-    recipe: ActiveRecipeData | null;
-    initialContext: string;
-  } | null>(null);
-
   // Keep mutable refs for state that needs to be read during streaming
-  const modeRef = useRef(mode);
-  modeRef.current = mode;
   const activeRecipeRef = useRef(activeRecipe);
   activeRecipeRef.current = activeRecipe;
 
-  // --- SSE streaming parser (shared) ---
+  // --- SSE streaming parser ---
   const parseSSEStream = useCallback(async (
     reader: ReadableStreamDefaultReader<Uint8Array>,
     assistantMessageId: string,
@@ -166,7 +133,7 @@ export function useChatEngine(config: ChatEngineConfig) {
 
           const finishReason = parsed.choices?.[0]?.finish_reason;
           if (finishReason === 'tool_calls' && toolCallName && toolCallArguments) {
-            await executeToolCall(toolCallName, toolCallArguments, assistantMessageId, userContent, (c) => { assistantContent = c; });
+            await executeToolCall(toolCallName, toolCallArguments, assistantMessageId, (c) => { assistantContent = c; });
             toolCallName = '';
             toolCallArguments = '';
           }
@@ -179,11 +146,11 @@ export function useChatEngine(config: ChatEngineConfig) {
 
     // Fallback: execute accumulated tool call if finish_reason was missing
     if (toolCallName && toolCallArguments) {
-      await executeToolCall(toolCallName, toolCallArguments, assistantMessageId, userContent, (c) => { assistantContent = c; });
+      await executeToolCall(toolCallName, toolCallArguments, assistantMessageId, (c) => { assistantContent = c; });
     }
 
     // Fallback: parse actions from text
-    assistantContent = parseTextActions(assistantContent, assistantMessageId, userContent);
+    assistantContent = parseTextActions(assistantContent, assistantMessageId);
 
     return assistantContent;
   }, []);
@@ -192,7 +159,6 @@ export function useChatEngine(config: ChatEngineConfig) {
     name: string,
     argsStr: string,
     assistantMessageId: string,
-    userContent: string,
     setContent: (c: string) => void,
   ) => {
     try {
@@ -202,7 +168,6 @@ export function useChatEngine(config: ChatEngineConfig) {
       // Handle search results
       if (name === 'search_recipes' && result) {
         const list = result as SearchResult[];
-        // Get current content from messages
         let currentContent = '';
         setMessages(prev => {
           const msg = prev.find(m => m.id === assistantMessageId);
@@ -223,22 +188,12 @@ export function useChatEngine(config: ChatEngineConfig) {
         setContent(currentContent);
         setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: currentContent } : m));
       }
-
-      // Handle mode switch
-      if (result && typeof result === 'object' && 'modeSwitch' in result) {
-        const ms = result as ModeSwitchResult;
-        pendingModeSwitchRef.current = {
-          newMode: ms.modeSwitch,
-          recipe: ms.recipe || null,
-          initialContext: ms.initialContext || userContent,
-        };
-      }
     } catch (e) {
       console.error('Failed to parse/execute tool call:', e, argsStr);
     }
   }, []);
 
-  const parseTextActions = useCallback((content: string, assistantMessageId: string, userContent: string): string => {
+  const parseTextActions = useCallback((content: string, assistantMessageId: string): string => {
     const actionRegex = /\{\s*"action"\s*:\s*"([^"]+)"\s*,\s*"parameters"\s*:\s*(\{[^}]*\})\s*\}/g;
     let match;
     let cleaned = content;
@@ -248,23 +203,15 @@ export function useChatEngine(config: ChatEngineConfig) {
       try {
         const parameters = JSON.parse(match[2]);
         const actionMap: Record<string, string> = {
-          start_recipe_creation: 'start_recipe_creation', start_cooking: 'start_cooking',
-          start_editing: 'start_editing', search_recipes: 'search_recipes',
-          open_recipe: 'open_recipe', navigate: 'navigate',
-          start_memory: 'start_memory', save_recipe: 'save_recipe',
+          search_recipes: 'search_recipes', open_recipe: 'open_recipe',
+          navigate: 'navigate', save_recipe: 'save_recipe',
+          extract_modified_recipe: 'extract_modified_recipe',
+          create_new_recipe: 'create_new_recipe',
+          get_preferences: 'get_preferences', update_preferences: 'update_preferences',
         };
         const toolType = actionMap[actionType];
         if (toolType) {
-          onToolCallRef.current({ type: toolType, data: { ...parameters } }).then(result => {
-            if (result && typeof result === 'object' && 'modeSwitch' in result) {
-              const ms = result as ModeSwitchResult;
-              pendingModeSwitchRef.current = {
-                newMode: ms.modeSwitch,
-                recipe: ms.recipe || null,
-                initialContext: ms.initialContext || userContent,
-              };
-            }
-          });
+          onToolCallRef.current({ type: toolType, data: { ...parameters } });
         }
         cleaned = cleaned.replace(match[0], '').trim();
       } catch (e) {
@@ -276,81 +223,6 @@ export function useChatEngine(config: ChatEngineConfig) {
       setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: cleaned } : m));
     }
     return cleaned;
-  }, []);
-
-  // Continue conversation with new agent after mode switch
-  const continueWithNewAgent = useCallback(async (
-    newMode: ChatMode,
-    recipe: ActiveRecipeData | null,
-    initialContext: string,
-    previousAssistantMessageId: string,
-  ) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-
-      const { endpoint, body } = await buildContinuationRequestRef.current({ newMode, recipe, initialContext });
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok || !response.body) return;
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let assistantContent = '';
-      let toolCallName = '';
-      let toolCallArguments = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let newlineIndex: number;
-        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-          let line = buffer.slice(0, newlineIndex);
-          buffer = buffer.slice(newlineIndex + 1);
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (line.startsWith(':') || line.trim() === '') continue;
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const delta = parsed.choices?.[0]?.delta;
-            if (delta?.content) {
-              assistantContent += delta.content;
-              setMessages(prev => prev.map(m =>
-                m.id === previousAssistantMessageId ? { ...m, content: assistantContent } : m
-              ));
-            }
-            // Handle tool_calls in continuation streams
-            if (delta?.tool_calls) {
-              for (const toolCall of delta.tool_calls) {
-                if (toolCall.function?.name) toolCallName = toolCall.function.name;
-                if (toolCall.function?.arguments) toolCallArguments += toolCall.function.arguments;
-              }
-            }
-            const finishReason = parsed.choices?.[0]?.finish_reason;
-            if (finishReason === 'tool_calls' && toolCallName && toolCallArguments) {
-              console.log('Continuation tool call:', toolCallName);
-              await onToolCallRef.current({ type: toolCallName, data: JSON.parse(toolCallArguments) });
-              toolCallName = '';
-              toolCallArguments = '';
-            }
-          } catch {
-            buffer = line + '\n' + buffer;
-            break;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error continuing with new agent:', error);
-    }
   }, []);
 
   // Send a message
@@ -385,7 +257,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Vous devez être connecté');
 
-      const { endpoint, body } = await buildRequestRef.current({ apiMessages, mode, activeRecipe });
+      const { endpoint, body } = await buildRequestRef.current({ apiMessages, activeRecipe });
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -404,45 +276,24 @@ export function useChatEngine(config: ChatEngineConfig) {
 
       const reader = response.body.getReader();
       await parseSSEStream(reader, assistantMessageId, content);
-
-      // After streaming, check for mode switch continuation
-      if (pendingModeSwitchRef.current) {
-        const { newMode, recipe, initialContext } = pendingModeSwitchRef.current;
-        pendingModeSwitchRef.current = null;
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await continueWithNewAgent(newMode, recipe, initialContext, assistantMessageId);
-      }
     } catch (error) {
       console.error('Chat error:', error);
-      console.error('Chat error:', error instanceof Error ? error.message : 'Erreur de communication');
       setMessages(prev => prev.filter(m => m.id !== assistantMessageId));
-      pendingModeSwitchRef.current = null;
     } finally {
       setIsStreaming(false);
     }
-  }, [messages, isStreaming, mode, activeRecipe, parseSSEStream, continueWithNewAgent]);
+  }, [messages, isStreaming, activeRecipe, parseSSEStream]);
 
   const resetChat = useCallback(() => {
     setMessages([{ id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() }]);
-    setMode(initialMode);
     setActiveRecipe(initialActiveRecipe);
     setPendingRecipe(null);
     setSearchResults([]);
-  }, [welcomeMessage, initialMode, initialActiveRecipe]);
-
-  const getModeInfo = useCallback(() => {
-    switch (mode) {
-      case 'creating': return { label: 'Création', icon: '✨', color: 'bg-primary/10 text-primary' };
-      case 'cooking': return { label: 'En cuisine', icon: '👨‍🍳', color: 'bg-green-500/10 text-green-600' };
-      case 'editing': return { label: 'Modification', icon: '🔧', color: 'bg-orange-500/10 text-orange-600' };
-      case 'memory': return { label: 'Mémoire', icon: '🧠', color: 'bg-purple-500/10 text-purple-600' };
-      default: return null;
-    }
-  }, [mode]);
+  }, [welcomeMessage, initialActiveRecipe]);
 
   return {
-    messages, isStreaming, mode, activeRecipe, pendingRecipe, searchResults,
-    setMode, setActiveRecipe, setPendingRecipe, setSearchResults, setMessages,
-    sendMessage, resetChat, getModeInfo,
+    messages, isStreaming, activeRecipe, pendingRecipe, searchResults,
+    setActiveRecipe, setPendingRecipe, setSearchResults, setMessages,
+    sendMessage, resetChat,
   };
 }

@@ -6,18 +6,9 @@ import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAIStreaming } from "../_shared/ai-providers.ts";
 
 // Input validation schema
-// Message content can be string or array (for multimodal)
 const ContentPartSchema = z.union([
-  z.object({
-    type: z.literal("text"),
-    text: z.string().max(10000),
-  }),
-  z.object({
-    type: z.literal("image_url"),
-    image_url: z.object({
-      url: z.string(), // base64 data URL or https URL
-    }),
-  }),
+  z.object({ type: z.literal("text"), text: z.string().max(10000) }),
+  z.object({ type: z.literal("image_url"), image_url: z.object({ url: z.string() }) }),
 ]);
 
 const MessageSchema = z.object({
@@ -61,13 +52,11 @@ const ActiveRecipeSchema = z.object({
 const RequestSchema = z.object({
   messages: z.array(MessageSchema).max(50, "Too many messages"),
   recipes: z.array(RecipeSchema).optional(),
-  mode: z.enum(["orchestration", "creating", "cooking", "editing", "memory"]).default("orchestration"),
   activeRecipe: ActiveRecipeSchema,
-  isContinuation: z.boolean().optional().default(false),
 });
 
-// ===== ORCHESTRATION MODE PROMPT =====
-const ORCHESTRATION_PROMPT = `Tu es l'assistant culinaire de cette application. Tu orchestres toutes les interactions.
+// ===== UNIFIED SYSTEM PROMPT =====
+const UNIFIED_PROMPT = `Tu es Chef, l'assistant culinaire de cette application. Tu gères toutes les interactions culinaires dans une seule conversation.
 
 ## TON STYLE
 - Direct et efficace, sans bavardage inutile
@@ -75,512 +64,258 @@ const ORCHESTRATION_PROMPT = `Tu es l'assistant culinaire de cette application. 
 - Pas d'emojis
 - Réponses claires avec des explications quand c'est pertinent
 
-## ANALYSE D'IMAGES
-Si l'utilisateur envoie une image de nourriture ou d'ingrédients :
-- Identifie ce que tu vois (plat, ingrédients, état de cuisson, etc.)
-- Propose des actions pertinentes : reproduire le plat, identifier les ingrédients, suggérer une recette
-- Si c'est une photo d'un plat : propose de créer la recette correspondante
-- Si c'est une photo d'ingrédients : propose des recettes possibles avec ces ingrédients
+## TES COMPÉTENCES (SKILLS)
 
-## DÉTECTION D'INTENTION
-Analyse chaque message pour déterminer l'intention :
+### Skill : Recherche & Navigation
+- Cherche des recettes dans le livre de l'utilisateur avec search_recipes
+- Ouvre une recette spécifique avec open_recipe
+- Navigue vers le dashboard ou le profil avec navigate
 
-1. **RECHERCHE** : "cherche", "trouve", "j'ai quoi comme", "montre-moi", "une recette de"
-   → Utilise search_recipes
-
-2. **CRÉATION** : "crée", "invente", "nouvelle recette", "j'aimerais faire", "une idée de"
-   → Utilise start_recipe_creation
-
-3. **CUISINE** : "je vais cuisiner", "on fait", "guide-moi", "c'est parti pour", "je cuisine"
-   → Utilise start_cooking (après avoir identifié la recette)
-
-4. **MODIFICATION** : "adapte", "modifie", "version végétarienne", "sans gluten", "change"
-   → Utilise start_editing (après avoir identifié la recette)
-
-5. **NAVIGATION** : "mes recettes", "profil", "tableau de bord"
-   → Utilise navigate
-
-6. **MÉMOIRE** : "qu'est-ce que tu sais de moi", "mes préférences", "mes allergies", "mon équipement", "modifie ma mémoire", "je suis allergique", "j'ai un nouveau", "ajoute à mes préférences", "retire de mes allergies"
-   → Utilise start_memory
-
-## WORKFLOW TYPIQUE
-
-1. L'utilisateur cherche une recette → Tu présentes les résultats
-2. Il choisit une recette → Tu proposes : "Tu veux la cuisiner ou la modifier ?"
-3. Selon sa réponse → Tu appelles start_cooking ou start_editing
-
-## RÈGLES IMPORTANTES
-1. Utilise search_recipes d'abord pour trouver les recettes
-2. Ne propose start_cooking ou start_editing qu'APRÈS avoir identifié la recette
-3. Pour les créations, passe directement à start_recipe_creation
-4. Propose toujours une action après avoir répondu
-5. Ne mentionne JAMAIS les éléments du profil utilisateur (allergies, préférences, équipement) sauf si l'utilisateur te le demande explicitement. Respecte-les silencieusement.`;
-
-// ===== CREATING MODE PROMPT =====
-const CREATING_PROMPT = `Tu es un assistant culinaire expert. Tu aides l'utilisateur à construire sa recette idéale.
-
-## TON RÔLE
-Tu guides l'utilisateur de l'idée à la recette finale, puis tu enregistres avec save_recipe.
-
-## COMPORTEMENT
+### Skill : Création de recette
+Quand l'utilisateur veut créer une nouvelle recette :
 1. DÉCOUVERTE (1-2 échanges max) : Pose UNE question à la fois pour comprendre l'envie
 2. PROPOSITION : Propose une recette avec titre, ingrédients principaux et grandes lignes
-3. AFFINAGE : Ajuste selon les retours (portions, variantes, substitutions)
+3. AFFINAGE : Ajuste selon les retours
 4. VALIDATION : Dès que l'utilisateur approuve → appelle save_recipe IMMÉDIATEMENT
 
-## DÉCLENCHEMENT save_recipe - TRÈS IMPORTANT
-Appelle save_recipe OBLIGATOIREMENT quand l'utilisateur dit :
-- "ok", "parfait", "super", "génial", "excellent", "top", "nickel"
-- "on fait ça", "c'est bon", "ça me va", "j'adore", "validé"
-- "enregistre", "sauvegarde", "garde cette recette"
-- Toute validation enthousiaste ou approbation claire
+Appelle save_recipe quand l'utilisateur dit "ok", "parfait", "super", "génial", "c'est bon", "ça me va", "enregistre", etc.
+NE PAS ATTENDRE de confirmation supplémentaire.
 
-NE PAS ATTENDRE de confirmation supplémentaire. Dès la première validation → save_recipe.
+Format ingrédients : Catégories parmi "Légumes", "Viandes", "Poissons", "Épices", "Produits laitiers", "Féculents", "Fruits", "Condiments", "Huiles", "Autres". Quantité et unité séparées.
 
-## FORMAT INGRÉDIENTS
-Catégories : "Légumes", "Viandes", "Poissons", "Épices", "Produits laitiers", "Féculents", "Fruits", "Condiments", "Huiles", "Autres"
-Quantité et unité séparées : quantity="200", unit="g" (jamais "200g")
-
-## EXEMPLE
-User: "Je voudrais faire une quiche"
-Assistant: "Classique lorraine ou version légumes type poireaux-chèvre ? Pour combien de personnes ?"
-User: "Lorraine pour 4"
-Assistant: "Quiche lorraine crémeuse pour 4 : pâte brisée, 200g lardons, 3 oeufs, 20cl crème, muscade. 35-40 min à 180°C. Ça te convient ?"
-User: "Super !"
-[→ APPEL save_recipe IMMÉDIAT]
-
-
-## RÈGLE PROFIL
-Ne mentionne JAMAIS les éléments du profil utilisateur dans tes réponses. Respecte les contraintes (allergies, restrictions) silencieusement sans les citer.
-
-Style : direct, efficace, pas d'emojis. Tu tutoies.`;
-
-// ===== COOKING MODE PROMPT =====
-const COOKING_PROMPT = `Tu es un assistant culinaire qui guide l'utilisateur dans la réalisation d'une recette.
-
-## TON RÔLE
-- Guide l'utilisateur étape par étape
+### Skill : Guidage cuisine
+Quand l'utilisateur veut cuisiner une recette (qui est en contexte) :
+- Guide étape par étape
 - Adapte les quantités si changement de portions
 - Suggère des substitutions d'ingrédients
-- Explique les techniques de cuisine quand c'est utile
-- Réponds aux questions sur temps de cuisson, textures, etc.
-- Donne des conseils pratiques et anticipe les difficultés
+- Explique les techniques de cuisine
+- Anticipe les erreurs courantes
 
-## RÈGLES
-- Tu ne crées pas de nouvelle recette, tu aides à réaliser celle en contexte
-- Anticipe les erreurs courantes et préviens l'utilisateur
-- Donne le "pourquoi" des gestes techniques quand c'est pertinent
-
-## QUAND SAUVEGARDER
-Si l'utilisateur fait des modifications qu'il veut garder, utilise save_cooking_notes pour enregistrer les notes de cette session.
-
-
-## RÈGLE PROFIL
-Ne mentionne JAMAIS les éléments du profil utilisateur dans tes réponses sauf si l'utilisateur le demande. Respecte les contraintes silencieusement.
-
-Style : direct, clair, pas d'emojis. Tu tutoies.`;
-
-// ===== EDITING MODE PROMPT =====
-const EDITING_PROMPT = `Tu es un assistant culinaire expert. Tu aides l'utilisateur à MODIFIER une recette existante ou CRÉER une nouvelle recette inspirée.
-
-## TON RÔLE
-- Adapter la recette (végétarien, sans gluten, moins calorique...)
-- Suggérer des substitutions pertinentes
-- Proposer des améliorations de techniques
+### Skill : Modification de recette
+Quand l'utilisateur veut modifier une recette existante (en contexte) :
+- Adapter (végétarien, sans gluten, moins calorique...)
+- Suggérer des substitutions
 - Ajuster les quantités
-- Créer de nouvelles recettes inspirées de l'originale
 
-## QUAND MODIFIER LA RECETTE (extract_modified_recipe)
-Appelle extract_modified_recipe quand l'utilisateur valide une MODIFICATION :
-- "ok", "parfait", "super", "enregistre", "sauvegarde", "applique"
+Utilise extract_modified_recipe quand l'utilisateur valide une MODIFICATION de la recette en contexte.
+Utilise create_new_recipe quand l'utilisateur veut une recette COMPLÈTEMENT DIFFÉRENTE inspirée de l'originale.
 
-## QUAND CRÉER UNE NOUVELLE RECETTE (create_new_recipe)
-Appelle create_new_recipe quand l'utilisateur veut :
-- Une version avec une AUTRE protéine ("et avec du poulet ?")
-- Réutiliser des RESTES dans un AUTRE plat
-- Une recette COMPLÈTEMENT DIFFÉRENTE inspirée
+### Skill : Profil & Préférences
+Quand l'utilisateur parle de ses préférences, allergies, équipement, style culinaire :
+- Utilise get_preferences pour consulter
+- Utilise update_preferences pour modifier
 
-## EXEMPLE MODIFICATION
-User: "Je voudrais une version végétarienne"
-Assistant: "Pour la version végétarienne, je remplace les lardons par 200g champignons dorés + 1 c.à.c paprika fumé pour compenser le fumé. Je sauvegarde ?"
-User: "Super !"
-[→ APPEL extract_modified_recipe IMMÉDIAT]
+### Skill : Analyse d'images
+Si l'utilisateur envoie une image :
+- Identifie ce que tu vois (plat, ingrédients, état de cuisson)
+- Propose des actions pertinentes : reproduire le plat, identifier les ingrédients, suggérer une recette
 
-## EXEMPLE NOUVELLE RECETTE
-User: "Et si je faisais pareil mais avec du poulet ?"
-Assistant: "Coq au Vin : mêmes techniques de base, cuisses de poulet, cuisson 1h30. Je crée cette nouvelle recette ?"
-User: "Oui !"
-[→ APPEL create_new_recipe]
+## RÈGLES IMPORTANTES
+1. Ne mentionne JAMAIS les éléments du profil utilisateur (allergies, préférences, équipement) sauf si l'utilisateur te le demande explicitement. Respecte-les silencieusement.
+2. Propose toujours une action après avoir répondu.
+3. N'hésite pas à utiliser tes outils directement sans demander confirmation quand l'intention est claire.`;
 
-## RÈGLE PROFIL
-Ne mentionne JAMAIS les éléments du profil utilisateur dans tes réponses sauf si l'utilisateur le demande. Respecte les contraintes silencieusement.
-
-Style : direct, efficace, pas d'emojis. Tu tutoies.`;
-
-// ===== ORCHESTRATION TOOLS =====
-const SEARCH_RECIPES_TOOL = {
-  type: "function",
-  function: {
-    name: "search_recipes",
-    description: "Recherche des recettes dans le livre de l'utilisateur.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "Terme de recherche" },
-        status_filter: { type: "string", enum: ["all", "draft", "tested", "validated", "archived"] },
-        favorites_only: { type: "boolean" }
-      },
-      required: ["query"]
-    }
-  }
-};
-
-const START_COOKING_TOOL = {
-  type: "function",
-  function: {
-    name: "start_cooking",
-    description: "Démarre le guidage pour cuisiner une recette. L'utilisateur veut réaliser une recette.",
-    parameters: {
-      type: "object",
-      properties: {
-        recipe_id: { type: "string", description: "L'ID de la recette à cuisiner" },
-        recipe_title: { type: "string", description: "Le titre de la recette" }
-      },
-      required: ["recipe_id", "recipe_title"]
-    }
-  }
-};
-
-const START_EDITING_TOOL = {
-  type: "function",
-  function: {
-    name: "start_editing",
-    description: "Démarre la modification d'une recette existante.",
-    parameters: {
-      type: "object",
-      properties: {
-        recipe_id: { type: "string", description: "L'ID de la recette à modifier" },
-        recipe_title: { type: "string", description: "Le titre de la recette" },
-        modification_request: { type: "string", description: "Ce que l'utilisateur veut modifier" }
-      },
-      required: ["recipe_id", "recipe_title"]
-    }
-  }
-};
-
-const START_RECIPE_CREATION_TOOL = {
-  type: "function",
-  function: {
-    name: "start_recipe_creation",
-    description: "Démarre une conversation de création de recette. L'utilisateur veut créer une nouvelle recette.",
-    parameters: {
-      type: "object",
-      properties: {
-        initial_idea: { type: "string", description: "L'idée initiale de l'utilisateur" }
-      },
-      required: ["initial_idea"]
-    }
-  }
-};
-
-const NAVIGATE_TOOL = {
-  type: "function",
-  function: {
-    name: "navigate",
-    description: "Navigue vers une page de l'application",
-    parameters: {
-      type: "object",
-      properties: {
-        destination: { type: "string", enum: ["dashboard", "new_recipe", "profile"] }
-      },
-      required: ["destination"]
-    }
-  }
-};
-
-const OPEN_RECIPE_TOOL = {
-  type: "function",
-  function: {
-    name: "open_recipe",
-    description: "Ouvre une recette spécifique pour la consulter.",
-    parameters: {
-      type: "object",
-      properties: {
-        recipe_id: { type: "string" },
-        recipe_title: { type: "string" }
-      },
-      required: ["recipe_id", "recipe_title"]
-    }
-  }
-};
-
-const START_MEMORY_TOOL = {
-  type: "function",
-  function: {
-    name: "start_memory",
-    description: "Ouvre l'assistant mémoire pour consulter ou modifier les préférences culinaires de l'utilisateur (goûts, allergies, équipement, style culinaire).",
-    parameters: { type: "object", properties: {} }
-  }
-};
-
-const BACK_TO_ORCHESTRATION_TOOL = {
-  type: "function",
-  function: {
-    name: "back_to_orchestration",
-    description: "Retourne au mode orchestration. Utiliser quand l'utilisateur veut changer de sujet ou faire autre chose.",
-    parameters: { type: "object", properties: {} }
-  }
-};
-
-// ===== CREATING MODE TOOLS =====
-const SAVE_RECIPE_TOOL = {
-  type: "function",
-  function: {
-    name: "save_recipe",
-    description: "Enregistre la recette créée. APPELER IMMÉDIATEMENT quand l'utilisateur valide.",
-    parameters: {
-      type: "object",
-      properties: {
-        title: { type: "string" },
-        servings: { type: "number" },
-        ingredients: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              name: { type: "string" },
-              quantity: { type: "string" },
-              unit: { type: "string" },
-              category: { type: "string" }
-            },
-            required: ["name", "quantity", "unit", "category"]
-          }
+// ===== ALL TOOLS =====
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "search_recipes",
+      description: "Recherche des recettes dans le livre de l'utilisateur.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Terme de recherche" },
+          status_filter: { type: "string", enum: ["all", "draft", "tested", "validated", "archived"] },
+          favorites_only: { type: "boolean" },
         },
-        steps: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              order: { type: "number" },
-              text: { type: "string" }
-            },
-            required: ["order", "text"]
-          }
-        }
+        required: ["query"],
       },
-      required: ["title", "servings", "ingredients", "steps"]
-    }
-  }
-};
-
-// ===== EDITING MODE TOOLS =====
-const EXTRACT_MODIFIED_RECIPE_TOOL = {
-  type: "function",
-  function: {
-    name: "extract_modified_recipe",
-    description: "Enregistre les modifications de la recette actuelle.",
-    parameters: {
-      type: "object",
-      properties: {
-        title: { type: "string" },
-        servings: { type: "number" },
-        ingredients: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              name: { type: "string" },
-              quantity: { type: "number" },
-              unit: { type: "string" },
-              category: { type: "string" }
-            },
-            required: ["name", "quantity", "unit"]
-          }
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "open_recipe",
+      description: "Ouvre une recette spécifique pour la consulter.",
+      parameters: {
+        type: "object",
+        properties: {
+          recipe_id: { type: "string" },
+          recipe_title: { type: "string" },
         },
-        steps: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              order: { type: "number" },
-              text: { type: "string" }
-            },
-            required: ["order", "text"]
-          }
-        }
+        required: ["recipe_id", "recipe_title"],
       },
-      required: ["title", "servings", "ingredients", "steps"]
-    }
-  }
-};
-
-const CREATE_NEW_RECIPE_TOOL = {
-  type: "function",
-  function: {
-    name: "create_new_recipe",
-    description: "Crée une NOUVELLE recette séparée inspirée de la recette actuelle.",
-    parameters: {
-      type: "object",
-      properties: {
-        title: { type: "string" },
-        servings: { type: "number" },
-        ingredients: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              name: { type: "string" },
-              quantity: { type: "number" },
-              unit: { type: "string" },
-              category: { type: "string" }
-            },
-            required: ["name", "quantity", "unit"]
-          }
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "navigate",
+      description: "Navigue vers une page de l'application",
+      parameters: {
+        type: "object",
+        properties: {
+          destination: { type: "string", enum: ["dashboard", "new_recipe", "profile"] },
         },
-        steps: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              order: { type: "number" },
-              text: { type: "string" }
-            },
-            required: ["order", "text"]
-          }
-        },
-        relation_to_original: { type: "string" }
+        required: ["destination"],
       },
-      required: ["title", "servings", "ingredients", "steps"]
-    }
-  }
-};
-
-// Format user preferences for context
-function formatPreferencesContext(prefs: any): string {
-  if (!prefs) return "";
-  const sections: string[] = [];
-
-  const taste = prefs.taste_preferences || {};
-  if (taste.liked_flavors?.length > 0) {
-    sections.push(`Saveurs aimées : ${taste.liked_flavors.join(", ")}`);
-  }
-  if (taste.disliked_flavors?.length > 0) {
-    sections.push(`Saveurs évitées : ${taste.disliked_flavors.join(", ")}`);
-  }
-  if (taste.liked_ingredients?.length > 0) {
-    sections.push(`Ingrédients favoris : ${taste.liked_ingredients.join(", ")}`);
-  }
-  if (taste.disliked_ingredients?.length > 0) {
-    sections.push(`Ingrédients évités : ${taste.disliked_ingredients.join(", ")}`);
-  }
-  if (taste.special_ingredients?.length > 0) {
-    sections.push(`Aliments particuliers (à utiliser si pertinent) : ${taste.special_ingredients.join(", ")}`);
-  }
-
-  const diet = prefs.dietary_constraints || {};
-  if (diet.allergies?.length > 0) {
-    sections.push(`ALLERGIES : ${diet.allergies.join(", ")}`);
-  }
-  if (diet.diets?.length > 0) {
-    sections.push(`Régime : ${diet.diets.join(", ")}`);
-  }
-  if (diet.restrictions?.length > 0) {
-    sections.push(`Restrictions : ${diet.restrictions.join(", ")}`);
-  }
-
-  const equipment = prefs.kitchen_equipment || {};
-  if (equipment.available?.length > 0) {
-    sections.push(`Équipement disponible : ${equipment.available.join(", ")}`);
-  }
-  if (equipment.unavailable?.length > 0) {
-    sections.push(`Équipement non disponible : ${equipment.unavailable.join(", ")}`);
-  }
-
-  const style = prefs.culinary_style || {};
-  if (style.favorite_cuisines?.length > 0) {
-    sections.push(`Cuisines favorites : ${style.favorite_cuisines.join(", ")}`);
-  }
-  if (style.favorite_techniques?.length > 0) {
-    sections.push(`Techniques : ${style.favorite_techniques.join(", ")}`);
-  }
-  if (style.preferred_difficulty) {
-    sections.push(`Difficulté préférée : ${style.preferred_difficulty}`);
-  }
-
-  if (sections.length === 0) return "";
-  return `\n\n--- PROFIL UTILISATEUR (USAGE SILENCIEUX) ---
-IMPORTANT : Ces informations servent de contexte interne. Tu DOIS les respecter (allergies, restrictions, ingrédients évités) mais tu ne dois PAS les mentionner dans tes réponses sauf si l'utilisateur te pose explicitement la question sur ses préférences ou son profil.
-${sections.join("\n")}
---- FIN PROFIL ---`;
-}
-
-// Format active recipe context
-function formatRecipeContext(recipe: any, mode: string): string {
-  if (!recipe) return "";
-
-  let context = `\n\n--- RECETTE ${mode === "editing" ? "À MODIFIER" : "EN COURS"} ---\n`;
-  context += `ID: ${recipe.id}\n`;
-  context += `Titre : ${recipe.title}\n`;
-
-  if (recipe.servings) context += `Portions : ${recipe.servings}\n`;
-  if (recipe.season) context += `Saison : ${recipe.season}\n`;
-
-  if (recipe.ingredients?.length > 0) {
-    context += `\nIngrédients :\n`;
-    for (const ing of recipe.ingredients) {
-      const qty = ing.quantity ?? "";
-      const unit = ing.unit ?? "";
-      context += `- ${qty} ${unit} ${ing.name}${ing.category ? ` (${ing.category})` : ""}\n`;
-    }
-  }
-
-  if (recipe.steps?.length > 0) {
-    context += `\nÉtapes :\n`;
-    const sortedSteps = [...recipe.steps].sort((a: any, b: any) => a.order - b.order);
-    const completedSet = new Set(recipe.completedSteps || []);
-    for (const step of sortedSteps) {
-      if (mode === "cooking") {
-        const isDone = step.completed || completedSet.has(step.order);
-        const status = isDone ? "✓" : "○";
-        context += `${status} ${step.order}. ${step.text}\n`;
-      } else {
-        context += `${step.order}. ${step.text}\n`;
-      }
-    }
-    if (mode === "cooking" && completedSet.size > 0) {
-      context += `\nProgression : ${completedSet.size}/${sortedSteps.length} étapes complétées\n`;
-    }
-  }
-
-  context += `--- FIN DE LA RECETTE ---`;
-  return context;
-}
-
-// Get tools based on mode
-function getToolsForMode(mode: string) {
-  switch (mode) {
-    case "orchestration":
-      return [
-        SEARCH_RECIPES_TOOL,
-        START_COOKING_TOOL,
-        START_EDITING_TOOL,
-        START_RECIPE_CREATION_TOOL,
-        NAVIGATE_TOOL,
-        OPEN_RECIPE_TOOL,
-        START_MEMORY_TOOL,
-      ];
-    case "creating":
-      return [SAVE_RECIPE_TOOL, BACK_TO_ORCHESTRATION_TOOL];
-    case "cooking":
-      return [BACK_TO_ORCHESTRATION_TOOL];
-    case "editing":
-      return [EXTRACT_MODIFIED_RECIPE_TOOL, CREATE_NEW_RECIPE_TOOL, BACK_TO_ORCHESTRATION_TOOL];
-    case "memory":
-      return [BACK_TO_ORCHESTRATION_TOOL];
-    default:
-      return [];
-  }
-}
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_recipe",
+      description: "Enregistre une nouvelle recette. APPELER IMMÉDIATEMENT quand l'utilisateur valide.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          servings: { type: "number" },
+          ingredients: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                quantity: { type: "string" },
+                unit: { type: "string" },
+                category: { type: "string" },
+              },
+              required: ["name", "quantity", "unit", "category"],
+            },
+          },
+          steps: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                order: { type: "number" },
+                text: { type: "string" },
+              },
+              required: ["order", "text"],
+            },
+          },
+        },
+        required: ["title", "servings", "ingredients", "steps"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "extract_modified_recipe",
+      description: "Enregistre les modifications de la recette actuelle.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          servings: { type: "number" },
+          ingredients: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                quantity: { type: "number" },
+                unit: { type: "string" },
+                category: { type: "string" },
+              },
+              required: ["name", "quantity", "unit"],
+            },
+          },
+          steps: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                order: { type: "number" },
+                text: { type: "string" },
+              },
+              required: ["order", "text"],
+            },
+          },
+        },
+        required: ["title", "servings", "ingredients", "steps"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_new_recipe",
+      description: "Crée une NOUVELLE recette séparée inspirée de la recette actuelle.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          servings: { type: "number" },
+          ingredients: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                quantity: { type: "number" },
+                unit: { type: "string" },
+                category: { type: "string" },
+              },
+              required: ["name", "quantity", "unit"],
+            },
+          },
+          steps: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                order: { type: "number" },
+                text: { type: "string" },
+              },
+              required: ["order", "text"],
+            },
+          },
+          relation_to_original: { type: "string" },
+        },
+        required: ["title", "servings", "ingredients", "steps"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_preferences",
+      description: "Récupère les préférences culinaires actuelles de l'utilisateur.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_preferences",
+      description: "Met à jour les préférences culinaires de l'utilisateur.",
+      parameters: {
+        type: "object",
+        properties: {
+          operations: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                operation: { type: "string", enum: ["add", "remove", "set"] },
+                category: { type: "string", enum: ["taste_preferences", "kitchen_equipment", "culinary_style", "dietary_constraints"] },
+                field: { type: "string", description: "Le champ à modifier (ex: liked_flavors, disliked_ingredients, special_ingredients, available, favorite_cuisines, allergies, diets, etc.)" },
+                values: { type: "array", items: { type: "string" } },
+                value: { type: "string" },
+              },
+              required: ["operation", "category", "field"],
+            },
+          },
+        },
+        required: ["operations"],
+      },
+    },
+  },
+];
 
 const SUGGESTIONS_INSTRUCTION = `
 
@@ -600,26 +335,74 @@ Exemples :
 - Apres une recherche : [suggestions]["Cuisiner la premiere","Voir le detail","Autre recherche"][/suggestions]
 - Apres un conseil : [suggestions]["Etape suivante","Temps de cuisson","Conseil texture"][/suggestions]`;
 
-// Get system prompt based on mode
-function getSystemPromptForMode(mode: string): string {
-  let prompt: string;
-  switch (mode) {
-    case "orchestration":
-      prompt = ORCHESTRATION_PROMPT;
-      break;
-    case "creating":
-      prompt = CREATING_PROMPT;
-      break;
-    case "cooking":
-      prompt = COOKING_PROMPT;
-      break;
-    case "editing":
-      prompt = EDITING_PROMPT;
-      break;
-    default:
-      prompt = ORCHESTRATION_PROMPT;
+// Format user preferences for context
+function formatPreferencesContext(prefs: any): string {
+  if (!prefs) return "";
+  const sections: string[] = [];
+
+  const taste = prefs.taste_preferences || {};
+  if (taste.liked_flavors?.length > 0) sections.push(`Saveurs aimées : ${taste.liked_flavors.join(", ")}`);
+  if (taste.disliked_flavors?.length > 0) sections.push(`Saveurs évitées : ${taste.disliked_flavors.join(", ")}`);
+  if (taste.liked_ingredients?.length > 0) sections.push(`Ingrédients favoris : ${taste.liked_ingredients.join(", ")}`);
+  if (taste.disliked_ingredients?.length > 0) sections.push(`Ingrédients évités : ${taste.disliked_ingredients.join(", ")}`);
+  if (taste.special_ingredients?.length > 0) sections.push(`Aliments particuliers : ${taste.special_ingredients.join(", ")}`);
+
+  const diet = prefs.dietary_constraints || {};
+  if (diet.allergies?.length > 0) sections.push(`ALLERGIES : ${diet.allergies.join(", ")}`);
+  if (diet.diets?.length > 0) sections.push(`Régime : ${diet.diets.join(", ")}`);
+  if (diet.restrictions?.length > 0) sections.push(`Restrictions : ${diet.restrictions.join(", ")}`);
+
+  const equipment = prefs.kitchen_equipment || {};
+  if (equipment.available?.length > 0) sections.push(`Équipement disponible : ${equipment.available.join(", ")}`);
+  if (equipment.unavailable?.length > 0) sections.push(`Équipement non disponible : ${equipment.unavailable.join(", ")}`);
+
+  const style = prefs.culinary_style || {};
+  if (style.favorite_cuisines?.length > 0) sections.push(`Cuisines favorites : ${style.favorite_cuisines.join(", ")}`);
+  if (style.favorite_techniques?.length > 0) sections.push(`Techniques : ${style.favorite_techniques.join(", ")}`);
+  if (style.preferred_difficulty) sections.push(`Difficulté préférée : ${style.preferred_difficulty}`);
+
+  if (sections.length === 0) return "";
+  return `\n\n--- PROFIL UTILISATEUR (USAGE SILENCIEUX) ---
+IMPORTANT : Ces informations servent de contexte interne. Tu DOIS les respecter (allergies, restrictions, ingrédients évités) mais tu ne dois PAS les mentionner dans tes réponses sauf si l'utilisateur te pose explicitement la question sur ses préférences ou son profil.
+${sections.join("\n")}
+--- FIN PROFIL ---`;
+}
+
+// Format active recipe context
+function formatRecipeContext(recipe: any): string {
+  if (!recipe) return "";
+
+  let context = `\n\n--- RECETTE EN CONTEXTE ---\n`;
+  context += `ID: ${recipe.id}\n`;
+  context += `Titre : ${recipe.title}\n`;
+  if (recipe.servings) context += `Portions : ${recipe.servings}\n`;
+  if (recipe.season) context += `Saison : ${recipe.season}\n`;
+
+  if (recipe.ingredients?.length > 0) {
+    context += `\nIngrédients :\n`;
+    for (const ing of recipe.ingredients) {
+      const qty = ing.quantity ?? "";
+      const unit = ing.unit ?? "";
+      context += `- ${qty} ${unit} ${ing.name}${ing.category ? ` (${ing.category})` : ""}\n`;
+    }
   }
-  return prompt + SUGGESTIONS_INSTRUCTION;
+
+  if (recipe.steps?.length > 0) {
+    context += `\nÉtapes :\n`;
+    const sortedSteps = [...recipe.steps].sort((a: any, b: any) => a.order - b.order);
+    const completedSet = new Set(recipe.completedSteps || []);
+    for (const step of sortedSteps) {
+      const isDone = step.completed || completedSet.has(step.order);
+      const status = isDone ? "✓" : "○";
+      context += `${status} ${step.order}. ${step.text}\n`;
+    }
+    if (completedSet.size > 0) {
+      context += `\nProgression : ${completedSet.size}/${sortedSteps.length} étapes complétées\n`;
+    }
+  }
+
+  context += `--- FIN DE LA RECETTE ---`;
+  return context;
 }
 
 serve(async (req) => {
@@ -628,7 +411,6 @@ serve(async (req) => {
   }
 
   try {
-    // Verify authentication
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
@@ -639,19 +421,14 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Missing required environment variables");
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      throw new Error("Missing required environment variables");
-    }
-
-    // Verify JWT and get user
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
 
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
-
     if (claimsError || !claimsData?.claims) {
       return new Response(
         JSON.stringify({ error: "unauthorized", message: "Invalid token" }),
@@ -660,8 +437,6 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub as string;
-
-    // Validate input
     const body = await req.json();
     const parseResult = RequestSchema.safeParse(body);
 
@@ -672,12 +447,10 @@ serve(async (req) => {
       );
     }
 
-    const { messages, recipes, mode, activeRecipe, isContinuation } = parseResult.data;
-
-    console.log("Home assistant - mode:", mode, "messages:", messages.length, "user:", userId, "continuation:", isContinuation);
+    const { messages, recipes, activeRecipe } = parseResult.data;
+    console.log("Home assistant (unified) - messages:", messages.length, "user:", userId);
     if (activeRecipe) console.log("Active recipe:", activeRecipe.title);
 
-    // Resolve AI config with agent_configs support
     const aiConfig = await resolveAIConfig(supabaseClient, userId, {
       agentType: "chat",
       defaultModel: "google/gemini-3-flash-preview",
@@ -685,82 +458,42 @@ serve(async (req) => {
     });
     console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
 
-    // Build system prompt
-    let systemPrompt = getSystemPromptForMode(mode);
+    // Build unified system prompt
+    let systemPrompt = UNIFIED_PROMPT + SUGGESTIONS_INSTRUCTION;
 
-    // Add continuation instruction if this is after a mode switch
-    if (isContinuation) {
-      const continuationInstructions: Record<string, string> = {
-        creating: `\n\n## MODE CONTINUATION
-Tu viens d'être activé pour aider l'utilisateur à créer une recette. Son idée initiale est dans le message. 
-COMMENCE IMMÉDIATEMENT par répondre à son idée avec enthousiasme et pose une première question pour affiner (type de cuisine, portions, préférences...).
-NE MENTIONNE PAS le changement de mode, réponds naturellement comme si la conversation continuait.`,
-        cooking: `\n\n## MODE CONTINUATION
-Tu viens d'être activé pour guider l'utilisateur dans la réalisation d'une recette. 
-COMMENCE IMMÉDIATEMENT par saluer chaleureusement et présenter rapidement la recette (titre, portions, temps estimé).
-Puis demande si l'utilisateur est prêt à commencer ou s'il a des questions.
-NE MENTIONNE PAS le changement de mode.`,
-        editing: `\n\n## MODE CONTINUATION
-Tu viens d'être activé pour modifier une recette existante. La demande de modification est dans le message.
-COMMENCE IMMÉDIATEMENT par analyser la demande et proposer des modifications concrètes.
-NE MENTIONNE PAS le changement de mode, réponds naturellement.`,
-      };
-      systemPrompt += continuationInstructions[mode] || "";
-    }
-
-    // Fetch user preferences
+    // Fetch and add user preferences
     const { data: prefs } = await supabaseClient
       .from("user_culinary_preferences")
       .select("*")
       .eq("user_id", userId)
       .single();
 
-    const prefsContext = formatPreferencesContext(prefs);
-    if (prefsContext) {
-      systemPrompt += prefsContext;
-    }
+    systemPrompt += formatPreferencesContext(prefs);
 
-    // Add recipes context for orchestration mode
-    if (mode === "orchestration" && recipes && recipes.length > 0) {
+    // Add recipes list
+    if (recipes && recipes.length > 0) {
       systemPrompt += `\n\n## RECETTES DE L'UTILISATEUR (${recipes.length} recettes)\n`;
       systemPrompt += recipes.map((r) =>
         `- ID: ${r.id} | "${r.title}" | Statut: ${r.status}${r.is_favorite ? " ⭐" : ""}`
       ).join("\n");
     }
 
-    // Add active recipe context for cooking/editing modes
-    if ((mode === "cooking" || mode === "editing") && activeRecipe) {
-      systemPrompt += formatRecipeContext(activeRecipe, mode);
+    // Add active recipe context
+    if (activeRecipe) {
+      systemPrompt += formatRecipeContext(activeRecipe);
     }
 
-    // Get tools for current mode
-    const tools = getToolsForMode(mode);
-
-    // Call AI with resolved config (supports agent_configs)
     const response = await callAIStreaming(aiConfig, [{ role: "system", content: systemPrompt }, ...messages], {
-      tools: tools.length > 0 ? tools : undefined,
+      tools: TOOLS,
       stream: true,
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Trop de requêtes, réessaie dans un moment." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Crédits épuisés." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      if (response.status === 429) return new Response(JSON.stringify({ error: "Trop de requêtes." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (response.status === 402) return new Response(JSON.stringify({ error: "Crédits épuisés." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       const errorText = await response.text();
       console.error("AI error:", response.status, errorText);
-      return new Response(JSON.stringify({ error: "Erreur du service IA" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(JSON.stringify({ error: "Erreur du service IA" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     return new Response(response.body, {

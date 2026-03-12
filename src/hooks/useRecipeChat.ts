@@ -2,11 +2,11 @@ import { useCallback, useRef } from 'react';
 
 import { useRecipes } from './useRecipes';
 import { useUserPreferences, UserCulinaryPreferences } from './useUserPreferences';
-import { useChatEngine, ChatMode, ActiveRecipeData, PendingRecipe, ToolCallAction } from './useChatEngine';
-import type { Recipe, Ingredient, Step } from '@/types/recipe';
+import { useChatEngine, ActiveRecipeData, PendingRecipe, ToolCallAction } from './useChatEngine';
+import type { Recipe } from '@/types/recipe';
 
 // Re-export types
-export type { ChatMessage, ChatMode, MessageContent } from './useChatEngine';
+export type { ChatMessage, MessageContent } from './useChatEngine';
 
 interface UseRecipeChatOptions {
   recipe: Recipe;
@@ -45,36 +45,6 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
         }).slice(0, 10).map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite ?? false }));
       }
 
-      case 'start_cooking': {
-        engine.setMode('cooking');
-        // Mode switch silencieux
-        return { modeSwitch: 'cooking', recipe: activeRecipeRef.current, initialContext: action.data.initial_context };
-      }
-
-      case 'start_editing': {
-        engine.setMode('editing');
-        // Mode switch silencieux
-        return { modeSwitch: 'editing', recipe: activeRecipeRef.current, initialContext: action.data.modification_request };
-      }
-
-      case 'start_recipe_creation': {
-        engine.setMode('creating');
-        // Mode switch silencieux
-        return { modeSwitch: 'creating', initialContext: action.data.initial_idea };
-      }
-
-      case 'back_to_orchestration': {
-        engine.setMode('cooking');
-        // Retour silencieux
-        return null;
-      }
-
-      case 'start_memory': {
-        engine.setMode('memory');
-        // Mode switch silencieux
-        return { modeSwitch: 'memory', initialContext: 'Affiche mes préférences actuelles' };
-      }
-
       case 'get_preferences': return preferences;
 
       case 'update_preferences': {
@@ -83,7 +53,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
           category: 'taste_preferences' | 'kitchen_equipment' | 'culinary_style' | 'dietary_constraints';
           field: string; values?: string[]; value?: string | null;
         }>;
-        if (!preferences) { console.error('Impossible de charger les préférences'); return { error: 'No preferences loaded' }; }
+        if (!preferences) return { error: 'No preferences loaded' };
         const updatedPrefs = JSON.parse(JSON.stringify(preferences)) as UserCulinaryPreferences;
         for (const op of operations) {
           const category = (updatedPrefs as any)[op.category];
@@ -93,7 +63,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
           else if (op.operation === 'set') { category[op.field] = op.value; }
         }
         try { await updatePreferences(updatedPrefs); return { success: true, updatedPreferences: updatedPrefs }; }
-        catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
+        catch (error) { return { error: 'Update failed' }; }
       }
 
       case 'save_recipe': { engine.setPendingRecipe(action.data as unknown as PendingRecipe); return null; }
@@ -110,34 +80,20 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
     }
   }, [recipes, preferences, updatePreferences]);
 
-  const buildRequest = useCallback(async ({ apiMessages, mode, activeRecipe }: any) => {
+  const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: any) => {
     const recipeSummaries = recipes.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
     const activeWithSteps = activeRecipe ? { ...activeRecipe, completedSteps: Array.from(completedSteps) } : null;
     return {
       endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`,
-      body: { messages: apiMessages, recipes: recipeSummaries, mode, activeRecipe: activeWithSteps },
+      body: { messages: apiMessages, recipes: recipeSummaries, activeRecipe: activeWithSteps },
     };
   }, [recipes, completedSteps]);
 
-  const buildContinuationRequest = useCallback(async ({ newMode, recipe: r, initialContext }: any) => {
-    const recipeSummaries = recipes.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
-    const activeWithSteps = r ? { ...r, completedSteps: Array.from(completedSteps) } : null;
-    const endpoint = newMode === 'memory'
-      ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/memory-assistant`
-      : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`;
-    const body = newMode === 'memory'
-      ? { messages: [{ role: 'user', content: initialContext }], currentPreferences: preferences, isContinuation: true }
-      : { messages: [{ role: 'user', content: initialContext }], recipes: recipeSummaries, mode: newMode, activeRecipe: activeWithSteps, isContinuation: true };
-    return { endpoint, body };
-  }, [recipes, preferences, completedSteps]);
-
   const engine = useChatEngine({
     welcomeMessage,
-    initialMode: 'cooking',
     initialActiveRecipe,
     onToolCall: handleToolCall,
     buildRequest,
-    buildContinuationRequest,
   });
 
   // Keep ref in sync
@@ -168,11 +124,10 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
   }, []);
 
   return {
-    messages: engine.messages, isStreaming: engine.isStreaming, mode: engine.mode,
+    messages: engine.messages, isStreaming: engine.isStreaming,
     activeRecipe: engine.activeRecipe, pendingRecipe: engine.pendingRecipe,
     searchResults: engine.searchResults,
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
-    savePendingRecipe, cancelPendingRecipe, getModeInfo: engine.getModeInfo,
-    setMode: engine.setMode,
+    savePendingRecipe, cancelPendingRecipe,
   };
 }
