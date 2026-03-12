@@ -130,15 +130,6 @@ export function ChatInterface({
       {/* Header content (mode badge, nav buttons, etc.) injected by parent */}
       {headerContent}
 
-      {/* Mode badge (if no custom header and mode is active) */}
-      {!headerContent && modeInfo && (
-        <div className="px-4 pt-2">
-          <Badge variant="outline" className={`${modeInfo.color} text-xs font-normal`}>
-            <span className="mr-1">{modeInfo.icon}</span>
-            {modeInfo.label}
-          </Badge>
-        </div>
-      )}
 
       {/* Main content */}
       {showWelcomeScreen && !hasConversation ? (
