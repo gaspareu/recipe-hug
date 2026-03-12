@@ -4,24 +4,21 @@ import ReactMarkdown from 'react-markdown';
 import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TextShimmer } from '@/components/ui/text-shimmer';
 import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 
-import type { ChatMessage, ChatMode, PendingRecipe } from '@/hooks/useChatEngine';
+import type { ChatMessage, PendingRecipe } from '@/hooks/useChatEngine';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   isStreaming: boolean;
-  mode: ChatMode;
   pendingRecipe: PendingRecipe | null;
   sendMessage: (content: string, imageDataUrl?: string) => void;
   savePendingRecipe: () => void;
   cancelPendingRecipe: () => void;
-  getModeInfo: () => { label: string; icon: string; color: string } | null;
   suggestions: string[];
   placeholder?: string;
   showWelcomeScreen?: boolean;
@@ -35,12 +32,10 @@ interface ChatInterfaceProps {
 export function ChatInterface({
   messages,
   isStreaming,
-  mode,
   pendingRecipe,
   sendMessage,
   savePendingRecipe,
   cancelPendingRecipe,
-  getModeInfo,
   suggestions,
   placeholder = 'Poser une question',
   showWelcomeScreen = false,
@@ -109,7 +104,6 @@ export function ChatInterface({
   };
 
   const hasConversation = messages.length > 1;
-  const modeInfo = getModeInfo();
 
   // Extract dynamic suggestions from last assistant message
   const suggestionsRegex = /\[suggestions\]\s*(\[.*?\])\s*\[\/suggestions\]/s;
@@ -127,9 +121,7 @@ export function ChatInterface({
 
   return (
     <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
-      {/* Header content (mode badge, nav buttons, etc.) injected by parent */}
       {headerContent}
-
 
       {/* Main content */}
       {showWelcomeScreen && !hasConversation ? (
@@ -205,7 +197,7 @@ export function ChatInterface({
               {activeSuggestions.map((suggestion, i) => (
                 <Button
                   key={i}
-                  variant={hasConversation && mode !== 'orchestration' ? 'ghost' : 'outline'}
+                  variant={hasConversation ? 'ghost' : 'outline'}
                   size="sm"
                   onClick={() => sendMessage(suggestion)}
                   disabled={isStreaming}
@@ -232,7 +224,6 @@ export function ChatInterface({
           )}
 
           <div className="flex items-end gap-2">
-            {/* Add button with popover */}
             <TooltipProvider>
               <Popover>
                 <Tooltip>

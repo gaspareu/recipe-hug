@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { ChatInterface } from '@/components/chat/ChatInterface';
@@ -10,8 +9,8 @@ import { ChatInterface } from '@/components/chat/ChatInterface';
 export default function Home() {
   const navigate = useNavigate();
   const {
-    messages, isStreaming, mode, activeRecipe, pendingRecipe,
-    sendMessage, resetChat, savePendingRecipe, cancelPendingRecipe, getModeInfo,
+    messages, isStreaming, pendingRecipe,
+    sendMessage, resetChat, savePendingRecipe, cancelPendingRecipe,
   } = useHomeChat();
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -27,17 +26,9 @@ export default function Home() {
     }
   }, []);
 
-  const getSuggestions = () => {
-    switch (mode) {
-      case 'creating': return ['Plutôt simple et rapide', 'Une version végétarienne', 'Enregistrer cette recette'];
-      case 'cooking': return ['Étape suivante', 'Substituer un ingrédient', 'Quelle texture viser'];
-      case 'editing': return ['Version végétarienne', 'Moins calorique', 'Enregistrer les modifications'];
-      default: return ['Chercher une recette de poulet', 'Créer une recette de tarte', 'Voir toutes mes recettes', 'Cuisiner avec des oeufs'];
-    }
-  };
+  const defaultSuggestions = ['Chercher une recette de poulet', 'Créer une recette de tarte', 'Voir toutes mes recettes', 'Cuisiner avec des oeufs'];
 
   const hasConversation = messages.length > 1;
-  const modeInfo = getModeInfo();
 
   return (
     <div className="h-[100dvh] flex flex-col bg-background pt-[env(safe-area-inset-top)]" {...swipeHandlers} style={swipeStyle}>
@@ -48,13 +39,6 @@ export default function Home() {
             <Button variant="ghost" size="icon" onClick={resetChat} disabled={isStreaming || !hasConversation} title="Nouvelle conversation" className="h-9 w-9">
               <Plus className="h-4 w-4" />
             </Button>
-            {modeInfo && (
-              <Badge variant="outline" className={`${modeInfo.color} text-xs font-normal`}>
-                <span className="mr-1">{modeInfo.icon}</span>
-                {modeInfo.label}
-                {activeRecipe && <span className="ml-1 opacity-70">• {activeRecipe.title}</span>}
-              </Badge>
-            )}
           </div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} title="Livre de recettes" className="h-9 w-9">
@@ -72,13 +56,11 @@ export default function Home() {
         <ChatInterface
           messages={messages}
           isStreaming={isStreaming}
-          mode={mode}
           pendingRecipe={pendingRecipe}
           sendMessage={sendMessage}
           savePendingRecipe={savePendingRecipe}
           cancelPendingRecipe={cancelPendingRecipe}
-          getModeInfo={getModeInfo}
-          suggestions={getSuggestions()}
+          suggestions={defaultSuggestions}
           placeholder="Poser une question"
           showWelcomeScreen={true}
           skipFirstMessage={true}
