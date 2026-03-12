@@ -285,7 +285,7 @@ export function ChatInterface({
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder={isListening ? 'Parlez...' : placeholder}
-                className="w-full min-h-[24px] max-h-[200px] resize-none bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-0 px-0 text-base leading-9 placeholder:text-muted-foreground self-center text-foreground"
+                className={`w-full min-h-[24px] max-h-[200px] resize-none bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-0 px-0 text-base placeholder:text-muted-foreground self-center text-foreground ${input ? 'leading-6' : 'leading-9'}`}
                 rows={1}
                 disabled={isStreaming || isListening}
               />
