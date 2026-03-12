@@ -304,35 +304,25 @@ function RecipeChatContent({
   onRecipeCreate: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[]; relationToOriginal?: string }) => Promise<void>;
 }) {
   const {
-    messages, isStreaming, mode, pendingRecipe,
-    sendMessage, savePendingRecipe, cancelPendingRecipe, getModeInfo,
+    messages, isStreaming, pendingRecipe,
+    sendMessage, savePendingRecipe, cancelPendingRecipe,
   } = useRecipeChat({
     recipe, completedSteps,
     onRecipeUpdate: async (data) => await onRecipeUpdate(data),
     onRecipeCreate: async (data) => await onRecipeCreate(data),
   });
 
-  const getSuggestions = () => {
-    switch (mode) {
-      case 'creating': return ['Plutôt simple et rapide', 'Une version végétarienne', "C'est parfait, enregistre !"];
-      case 'cooking': return ['Étape suivante', 'Je peux substituer un ingrédient ?', "C'est quoi la bonne texture ?"];
-      case 'editing': return ['Version végétarienne', 'Moins calorique', 'Enregistre les modifications'];
-      case 'memory': return ['Mes allergies', 'Mon équipement', 'Mes préférences'];
-      default: return ["C'est parti !", 'Modifie cette recette', 'Des conseils ?'];
-    }
-  };
+  const defaultSuggestions = ["C'est parti !", 'Modifie cette recette', 'Des conseils ?'];
 
   return (
     <ChatInterface
       messages={messages}
       isStreaming={isStreaming}
-      mode={mode}
       pendingRecipe={pendingRecipe}
       sendMessage={sendMessage}
       savePendingRecipe={savePendingRecipe}
       cancelPendingRecipe={cancelPendingRecipe}
-      getModeInfo={getModeInfo}
-      suggestions={getSuggestions()}
+      suggestions={defaultSuggestions}
       placeholder="Poser une question..."
     />
   );
