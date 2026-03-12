@@ -53,7 +53,10 @@ function formatPreferencesForGeneration(prefs: any): string {
   const equipment = prefs.kitchen_equipment || {};
   if (equipment.unavailable?.length > 0) parts.push(`Équipement non disponible : ${equipment.unavailable.join(", ")}`);
   if (parts.length === 0) return "";
-  return `\n\n--- PROFIL UTILISATEUR ---\n${parts.join("\n")}\n--- FIN PROFIL ---`;
+  return `\n\n--- PROFIL UTILISATEUR (USAGE SILENCIEUX) ---
+IMPORTANT : Respecte ces contraintes (allergies, restrictions, ingrédients évités) sans les mentionner explicitement dans la recette. Adapte naturellement sans justifier par le profil.
+${parts.join("\n")}
+--- FIN PROFIL ---`;
 }
 
 serve(async (req) => {

@@ -113,7 +113,8 @@ Analyse chaque message pour déterminer l'intention :
 1. Utilise search_recipes d'abord pour trouver les recettes
 2. Ne propose start_cooking ou start_editing qu'APRÈS avoir identifié la recette
 3. Pour les créations, passe directement à start_recipe_creation
-4. Propose toujours une action après avoir répondu`;
+4. Propose toujours une action après avoir répondu
+5. Ne mentionne JAMAIS les éléments du profil utilisateur (allergies, préférences, équipement) sauf si l'utilisateur te le demande explicitement. Respecte-les silencieusement.`;
 
 // ===== CREATING MODE PROMPT =====
 const CREATING_PROMPT = `Tu es un assistant culinaire expert. Tu aides l'utilisateur à construire sa recette idéale.
@@ -148,6 +149,10 @@ Assistant: "Quiche lorraine crémeuse pour 4 : pâte brisée, 200g lardons, 3 oe
 User: "Super !"
 [→ APPEL save_recipe IMMÉDIAT]
 
+
+## RÈGLE PROFIL
+Ne mentionne JAMAIS les éléments du profil utilisateur dans tes réponses. Respecte les contraintes (allergies, restrictions) silencieusement sans les citer.
+
 Style : direct, efficace, pas d'emojis. Tu tutoies.`;
 
 // ===== COOKING MODE PROMPT =====
@@ -168,6 +173,10 @@ const COOKING_PROMPT = `Tu es un assistant culinaire qui guide l'utilisateur dan
 
 ## QUAND SAUVEGARDER
 Si l'utilisateur fait des modifications qu'il veut garder, utilise save_cooking_notes pour enregistrer les notes de cette session.
+
+
+## RÈGLE PROFIL
+Ne mentionne JAMAIS les éléments du profil utilisateur dans tes réponses sauf si l'utilisateur le demande. Respecte les contraintes silencieusement.
 
 Style : direct, clair, pas d'emojis. Tu tutoies.`;
 
@@ -202,6 +211,9 @@ User: "Et si je faisais pareil mais avec du poulet ?"
 Assistant: "Coq au Vin : mêmes techniques de base, cuisses de poulet, cuisson 1h30. Je crée cette nouvelle recette ?"
 User: "Oui !"
 [→ APPEL create_new_recipe]
+
+## RÈGLE PROFIL
+Ne mentionne JAMAIS les éléments du profil utilisateur dans tes réponses sauf si l'utilisateur le demande. Respecte les contraintes silencieusement.
 
 Style : direct, efficace, pas d'emojis. Tu tutoies.`;
 
@@ -496,7 +508,10 @@ function formatPreferencesContext(prefs: any): string {
   }
 
   if (sections.length === 0) return "";
-  return `\n\n--- PROFIL UTILISATEUR ---\n${sections.join("\n")}\n--- FIN PROFIL ---`;
+  return `\n\n--- PROFIL UTILISATEUR (USAGE SILENCIEUX) ---
+IMPORTANT : Ces informations servent de contexte interne. Tu DOIS les respecter (allergies, restrictions, ingrédients évités) mais tu ne dois PAS les mentionner dans tes réponses sauf si l'utilisateur te pose explicitement la question sur ses préférences ou son profil.
+${sections.join("\n")}
+--- FIN PROFIL ---`;
 }
 
 // Format active recipe context
