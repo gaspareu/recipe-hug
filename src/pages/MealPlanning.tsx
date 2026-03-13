@@ -127,7 +127,7 @@ export default function MealPlanning() {
   const today = new Date();
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col">
+    <div className="min-h-[100dvh] bg-background flex flex-col pt-[env(safe-area-inset-top)]">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border">
         <div className="container max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
