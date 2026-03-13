@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, User } from 'lucide-react';
+import { Plus, BookOpen, User, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
