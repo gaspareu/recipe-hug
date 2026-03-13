@@ -57,10 +57,47 @@ export function useHomeChat() {
       }
 
       case 'navigate': {
-        const routes: Record<string, string> = { dashboard: '/dashboard', new_recipe: '/home', profile: '/profile' };
+        const routes: Record<string, string> = { dashboard: '/dashboard', new_recipe: '/home', profile: '/profile', meal_planning: '/meal-planning' };
         const dest = action.data.destination as string;
         if (routes[dest]) setTimeout(() => navigate(routes[dest]), 500);
         return null;
+      }
+
+      case 'save_meal_plan': {
+        const weekStart = action.data.week_start as string;
+        const meals = action.data.meals as Array<{
+          day_of_week: number; meal_type: string;
+          recipe_id?: string; custom_meal?: string; notes?: string;
+        }>;
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.user) return { error: 'Not authenticated' };
+          
+          // Delete existing meals for this week
+          await supabase.from('meal_plans').delete()
+            .eq('user_id', session.user.id)
+            .eq('week_start', weekStart);
+          
+          // Insert new meals
+          const rows = meals.map(m => ({
+            user_id: session.user.id,
+            week_start: weekStart,
+            day_of_week: m.day_of_week,
+            meal_type: m.meal_type,
+            recipe_id: m.recipe_id || null,
+            custom_meal: m.custom_meal || null,
+            notes: m.notes || null,
+          }));
+          const { error } = await supabase.from('meal_plans').insert(rows);
+          if (error) throw error;
+          
+          // Navigate to meal planning page
+          setTimeout(() => navigate('/meal-planning'), 500);
+          return { success: true };
+        } catch (error) {
+          console.error('Error saving meal plan:', error);
+          return { error: 'Failed to save meal plan' };
+        }
       }
 
       case 'get_preferences': return preferences;

@@ -41,6 +41,9 @@ export default function Home() {
             </Button>
           </div>
           <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/meal-planning')} title="Planning repas" className="h-9 w-9">
+              <CalendarDays className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} title="Livre de recettes" className="h-9 w-9">
               <BookOpen className="h-4 w-4" />
             </Button>
