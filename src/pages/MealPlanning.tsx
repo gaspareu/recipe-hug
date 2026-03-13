@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, CalendarDays, Plus, X, Utensils } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, CalendarDays, X, Utensils } from 'lucide-react';
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { GroceryListSheet } from '@/components/meal-planning/GroceryListSheet';
 
 const MEAL_TYPES = [
   { key: 'breakfast', label: 'Petit-déj', icon: '☀️' },
@@ -28,6 +29,12 @@ interface MealPlanEntry {
   recipe_title?: string;
 }
 
+interface RecipeWithIngredients {
+  id: string;
+  title: string;
+  ingredients: any[];
+}
+
 function useMealPlans(weekStart: string) {
   return useQuery({
     queryKey: ['meal_plans', weekStart],
@@ -40,21 +47,23 @@ function useMealPlans(weekStart: string) {
 
       // Fetch recipe titles for entries with recipe_id
       const recipeIds = (data || []).filter(m => m.recipe_id).map(m => m.recipe_id!);
-      let recipeTitles: Record<string, string> = {};
+      let recipesMap: Record<string, RecipeWithIngredients> = {};
       if (recipeIds.length > 0) {
         const { data: recipes } = await supabase
           .from('recipes')
-          .select('id, title')
+          .select('id, title, ingredients')
           .in('id', recipeIds);
         if (recipes) {
-          recipeTitles = Object.fromEntries(recipes.map(r => [r.id, r.title]));
+          recipesMap = Object.fromEntries(recipes.map(r => [r.id, r as RecipeWithIngredients]));
         }
       }
 
-      return (data || []).map(m => ({
+      const entries = (data || []).map(m => ({
         ...m,
-        recipe_title: m.recipe_id ? recipeTitles[m.recipe_id] : undefined,
+        recipe_title: m.recipe_id ? recipesMap[m.recipe_id]?.title : undefined,
       })) as MealPlanEntry[];
+
+      return { entries, recipesMap };
     },
   });
 }
@@ -70,7 +79,36 @@ export default function MealPlanning() {
     return format(ws, 'yyyy-MM-dd');
   }, [currentDate]);
 
-  const { data: meals = [], isLoading } = useMealPlans(weekStart);
+  const { data, isLoading } = useMealPlans(weekStart);
+  const meals = data?.entries ?? [];
+  const recipesMap = data?.recipesMap ?? {};
+
+  // Aggregate all ingredients from linked recipes
+  const groceryData = useMemo(() => {
+    const allIngredients: Array<{ name: string; quantity: number | string | null; unit: string | null; category: string }> = [];
+    const customMeals: string[] = [];
+
+    for (const meal of meals) {
+      if (meal.recipe_id && recipesMap[meal.recipe_id]) {
+        const recipe = recipesMap[meal.recipe_id];
+        const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+        for (const ing of ingredients) {
+          allIngredients.push({
+            name: ing.name || '',
+            quantity: ing.quantity ?? null,
+            unit: ing.unit ?? null,
+            category: ing.category || 'Autres',
+          });
+        }
+      } else if (meal.custom_meal) {
+        if (!customMeals.includes(meal.custom_meal)) {
+          customMeals.push(meal.custom_meal);
+        }
+      }
+    }
+
+    return { ingredients: allIngredients, customMeals };
+  }, [meals, recipesMap]);
 
   const weekDays = useMemo(() => {
     const ws = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -97,9 +135,16 @@ export default function MealPlanning() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-lg font-semibold text-foreground">Planning repas</h1>
-          <Button variant="ghost" size="icon" onClick={() => navigate('/home')} title="Demander à Chef" className="h-9 w-9">
-            <Utensils className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <GroceryListSheet
+              ingredients={groceryData.ingredients}
+              customMeals={groceryData.customMeals}
+              hasMeals={meals.length > 0}
+            />
+            <Button variant="ghost" size="icon" onClick={() => navigate('/home')} title="Demander à Chef" className="h-9 w-9">
+              <Utensils className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 
