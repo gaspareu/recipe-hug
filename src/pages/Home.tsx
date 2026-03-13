@@ -26,7 +26,7 @@ export default function Home() {
     }
   }, []);
 
-  const defaultSuggestions = ['Chercher une recette de poulet', 'Créer une recette de tarte', 'Voir toutes mes recettes', 'Cuisiner avec des oeufs'];
+  const defaultSuggestions = ['Planifier ma semaine', 'Chercher une recette de poulet', 'Créer une recette de tarte', 'Voir toutes mes recettes'];
 
   const hasConversation = messages.length > 1;
 
