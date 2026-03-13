@@ -167,7 +167,7 @@ const TOOLS = [
       parameters: {
         type: "object",
         properties: {
-          destination: { type: "string", enum: ["dashboard", "new_recipe", "profile"] },
+          destination: { type: "string", enum: ["dashboard", "new_recipe", "profile", "meal_planning"] },
         },
         required: ["destination"],
       },
