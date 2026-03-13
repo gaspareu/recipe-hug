@@ -14,6 +14,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const RecipeDetail = lazy(() => import("./pages/RecipeDetail"));
 const RecipeEdit = lazy(() => import("./pages/RecipeEdit"));
 const Profile = lazy(() => import("./pages/Profile"));
+const MealPlanning = lazy(() => import("./pages/MealPlanning"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -53,6 +54,11 @@ const App = () => (
                 <Route path="/profile" element={
                   <ProtectedRoute>
                     <Profile />
+                  </ProtectedRoute>
+                } />
+                <Route path="/meal-planning" element={
+                  <ProtectedRoute>
+                    <MealPlanning />
                   </ProtectedRoute>
                 } />
                 <Route path="*" element={<NotFound />} />

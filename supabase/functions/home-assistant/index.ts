@@ -110,6 +110,17 @@ Si l'utilisateur envoie une image :
 - Identifie ce que tu vois (plat, ingrédients, état de cuisson)
 - Propose des actions pertinentes : reproduire le plat, identifier les ingrédients, suggérer une recette
 
+### Skill : Planification de repas
+Quand l'utilisateur veut planifier ses repas de la semaine :
+- Utilise save_meal_plan pour enregistrer un planning complet
+- Propose un mix de recettes existantes du livre et de nouvelles idées
+- Respecte les préférences, allergies et l'équipement disponible
+- Varie les types de cuisine et les protéines sur la semaine
+- Adapte les suggestions à la saison
+- Le planning couvre 7 jours (lundi=0 à dimanche=6) avec petit-déjeuner, déjeuner et dîner
+- Pour les recettes existantes, utilise leur recipe_id. Pour les nouvelles idées, mets custom_meal avec le nom du plat.
+- Quand l'utilisateur valide le planning, appelle save_meal_plan IMMÉDIATEMENT
+
 ## RÈGLES IMPORTANTES
 1. Ne mentionne JAMAIS les éléments du profil utilisateur (allergies, préférences, équipement) sauf si l'utilisateur te le demande explicitement. Respecte-les silencieusement.
 2. Propose toujours une action après avoir répondu.
@@ -156,7 +167,7 @@ const TOOLS = [
       parameters: {
         type: "object",
         properties: {
-          destination: { type: "string", enum: ["dashboard", "new_recipe", "profile"] },
+          destination: { type: "string", enum: ["dashboard", "new_recipe", "profile", "meal_planning"] },
         },
         required: ["destination"],
       },
@@ -311,7 +322,35 @@ const TOOLS = [
             },
           },
         },
-        required: ["operations"],
+      required: ["operations"],
+    },
+  },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_meal_plan",
+      description: "Enregistre un planning de repas hebdomadaire. Appeler quand l'utilisateur valide le planning proposé.",
+      parameters: {
+        type: "object",
+        properties: {
+          week_start: { type: "string", description: "Date du lundi de la semaine au format YYYY-MM-DD" },
+          meals: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                day_of_week: { type: "number", description: "Jour de la semaine (0=lundi, 6=dimanche)" },
+                meal_type: { type: "string", enum: ["breakfast", "lunch", "dinner"] },
+                recipe_id: { type: "string", description: "ID d'une recette existante (si applicable)" },
+                custom_meal: { type: "string", description: "Nom du plat si pas de recette existante" },
+                notes: { type: "string", description: "Notes ou précisions optionnelles" },
+              },
+              required: ["day_of_week", "meal_type"],
+            },
+          },
+        },
+        required: ["week_start", "meals"],
       },
     },
   },

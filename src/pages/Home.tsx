@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, User } from 'lucide-react';
+import { Plus, BookOpen, User, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
@@ -26,7 +26,7 @@ export default function Home() {
     }
   }, []);
 
-  const defaultSuggestions = ['Chercher une recette de poulet', 'Créer une recette de tarte', 'Voir toutes mes recettes', 'Cuisiner avec des oeufs'];
+  const defaultSuggestions = ['Planifier ma semaine', 'Chercher une recette de poulet', 'Créer une recette de tarte', 'Voir toutes mes recettes'];
 
   const hasConversation = messages.length > 1;
 
@@ -41,6 +41,9 @@ export default function Home() {
             </Button>
           </div>
           <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/meal-planning')} title="Planning repas" className="h-9 w-9">
+              <CalendarDays className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} title="Livre de recettes" className="h-9 w-9">
               <BookOpen className="h-4 w-4" />
             </Button>
