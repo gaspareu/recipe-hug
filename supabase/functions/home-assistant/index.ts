@@ -322,7 +322,35 @@ const TOOLS = [
             },
           },
         },
-        required: ["operations"],
+      required: ["operations"],
+    },
+  },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_meal_plan",
+      description: "Enregistre un planning de repas hebdomadaire. Appeler quand l'utilisateur valide le planning proposé.",
+      parameters: {
+        type: "object",
+        properties: {
+          week_start: { type: "string", description: "Date du lundi de la semaine au format YYYY-MM-DD" },
+          meals: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                day_of_week: { type: "number", description: "Jour de la semaine (0=lundi, 6=dimanche)" },
+                meal_type: { type: "string", enum: ["breakfast", "lunch", "dinner"] },
+                recipe_id: { type: "string", description: "ID d'une recette existante (si applicable)" },
+                custom_meal: { type: "string", description: "Nom du plat si pas de recette existante" },
+                notes: { type: "string", description: "Notes ou précisions optionnelles" },
+              },
+              required: ["day_of_week", "meal_type"],
+            },
+          },
+        },
+        required: ["week_start", "meals"],
       },
     },
   },
