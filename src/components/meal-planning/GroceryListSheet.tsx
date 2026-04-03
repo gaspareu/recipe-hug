@@ -20,31 +20,60 @@ interface GroceryListSheetProps {
 }
 
 function aggregateIngredients(ingredients: GroceryIngredient[]) {
-  const map = new Map<string, { name: string; quantities: string[]; category: string }>();
+  // Map keyed by "name|unit" for numeric quantities, "name|non-numeric" for others
+  const numericMap = new Map<string, { name: string; unit: string | null; total: number; category: string }>();
+  const nonNumericList: { name: string; quantities: string[]; category: string }[] = [];
 
   for (const ing of ingredients) {
-    const key = ing.name.toLowerCase().trim();
-    const existing = map.get(key);
-    const qtyStr = ing.quantity && ing.unit
-      ? `${ing.quantity} ${ing.unit}`
-      : ing.quantity
-        ? `${ing.quantity}`
-        : '';
+    const numericQty = typeof ing.quantity === 'number'
+      ? ing.quantity
+      : typeof ing.quantity === 'string' && ing.quantity.trim() !== '' && !isNaN(Number(ing.quantity))
+        ? Number(ing.quantity)
+        : null;
 
-    if (existing) {
-      if (qtyStr && !existing.quantities.includes(qtyStr)) {
-        existing.quantities.push(qtyStr);
+    if (numericQty !== null) {
+      const unit = ing.unit?.trim() || '';
+      const key = `${ing.name.toLowerCase().trim()}|${unit.toLowerCase()}`;
+      const existing = numericMap.get(key);
+      if (existing) {
+        numericMap.set(key, { ...existing, total: existing.total + numericQty });
+      } else {
+        numericMap.set(key, {
+          name: ing.name,
+          unit: ing.unit || null,
+          total: numericQty,
+          category: ing.category || 'Autres',
+        });
       }
     } else {
-      map.set(key, {
-        name: ing.name,
-        quantities: qtyStr ? [qtyStr] : [],
-        category: ing.category || 'Autres',
-      });
+      // Non-numeric quantity: keep distinct, group by name
+      const qtyStr = ing.quantity && ing.unit
+        ? `${ing.quantity} ${ing.unit}`
+        : ing.quantity
+          ? `${ing.quantity}`
+          : '';
+      const entry = nonNumericList.find(e => e.name.toLowerCase().trim() === ing.name.toLowerCase().trim());
+      if (entry) {
+        if (qtyStr && !entry.quantities.includes(qtyStr)) {
+          entry.quantities.push(qtyStr);
+        }
+      } else {
+        nonNumericList.push({
+          name: ing.name,
+          quantities: qtyStr ? [qtyStr] : [],
+          category: ing.category || 'Autres',
+        });
+      }
     }
   }
 
-  return Array.from(map.values());
+  const numericResults = Array.from(numericMap.values()).map(({ name, unit, total, category }) => ({
+    name,
+    quantities: [unit ? `${total} ${unit}` : `${total}`],
+    category,
+  }));
+
+  return [...numericResults, ...nonNumericList];
 }
 
 function groupByCategory(items: ReturnType<typeof aggregateIngredients>) {

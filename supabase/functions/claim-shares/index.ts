@@ -16,29 +16,21 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const { data: userData, error: userError } = await adminClient.auth.getUser(token);
+    if (userError || !userData?.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const userId = claimsData.claims.sub;
-    const userEmail = claimsData.claims.email;
-
-    // Get user phone from admin API
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: userData } = await adminClient.auth.admin.getUserById(userId);
-    const userPhone = userData?.user?.phone;
+    const userId = userData.user.id;
+    const userEmail = userData.user.email;
+    const userPhone = userData.user.phone;
 
     // Find pending shares matching email or phone
     let query = adminClient

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 import { z } from 'zod';
 
@@ -21,17 +22,20 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
   const [tab, setTab] = useState<'email' | 'phone'>('email');
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleShare = async () => {
     const schema = tab === 'email' ? emailSchema : phoneSchema;
     const result = schema.safeParse(value);
     if (!result.success) {
+      setValidationError(result.error.errors[0]?.message ?? 'Valeur invalide');
       return;
     }
+    setValidationError(null);
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('share-recipe', {
+      const { error } = await supabase.functions.invoke('share-recipe', {
         body: {
           recipeId,
           identifier: result.data,
@@ -41,10 +45,12 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
 
       if (error) throw error;
 
+      toast.success('Recette partagée !');
       setValue('');
       setOpen(false);
     } catch (err) {
       console.error('Share error:', err);
+      toast.error('Erreur lors du partage. Réessayez.');
     } finally {
       setLoading(false);
     }
@@ -61,7 +67,7 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
         <DialogHeader>
           <DialogTitle>Partager la recette</DialogTitle>
         </DialogHeader>
-        <Tabs value={tab} onValueChange={(v) => { setTab(v as 'email' | 'phone'); setValue(''); }}>
+        <Tabs value={tab} onValueChange={(v) => { setTab(v as 'email' | 'phone'); setValue(''); setValidationError(null); }}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="email" className="flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5" />Email
@@ -78,9 +84,12 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
                 type="email"
                 placeholder="ami@exemple.com"
                 value={value}
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => { setValue(e.target.value); setValidationError(null); }}
                 onKeyDown={(e) => e.key === 'Enter' && handleShare()}
               />
+              {validationError && tab === 'email' && (
+                <p className="text-destructive text-sm">{validationError}</p>
+              )}
             </div>
           </TabsContent>
           <TabsContent value="phone" className="space-y-3 mt-4">
@@ -91,9 +100,12 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
                 type="tel"
                 placeholder="+33612345678"
                 value={value}
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => { setValue(e.target.value); setValidationError(null); }}
                 onKeyDown={(e) => e.key === 'Enter' && handleShare()}
               />
+              {validationError && tab === 'phone' && (
+                <p className="text-destructive text-sm">{validationError}</p>
+              )}
             </div>
           </TabsContent>
         </Tabs>

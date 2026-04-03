@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { ArrowLeft, Save, X, Trash2 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -32,8 +32,8 @@ import { useRecipe, useUpdateRecipe, useDeleteRecipe } from '@/hooks/useRecipes'
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
 const AVAILABLE_TAGS = [
-  'protéines', 'fibres', 'léger', 'végétarien', 'végan', 
-  'sans gluten', 'sans lactose', 'vitamines', 'fer', 
+  'protéines', 'fibres', 'léger', 'végétarien', 'végan',
+  'sans gluten', 'sans lactose', 'vitamines', 'fer',
   'oméga-3', 'énergétique', 'réconfortant'
 ];
 
@@ -42,7 +42,7 @@ const SEASONS = ['printemps', 'été', 'automne', 'hiver', 'toutes saisons'];
 export default function RecipeEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
+
   const { data: recipe, isLoading } = useRecipe(id || '');
   const updateRecipe = useUpdateRecipe();
   const deleteRecipe = useDeleteRecipe();
@@ -54,6 +54,7 @@ export default function RecipeEdit() {
   const [steps, setSteps] = useState<Step[]>([]);
   const [nutritionTags, setNutritionTags] = useState<string[]>([]);
   const [season, setSeason] = useState<string>('');
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     if (recipe) {
@@ -64,22 +65,27 @@ export default function RecipeEdit() {
       setSteps(recipe.steps);
       setNutritionTags(recipe.nutrition_tags || []);
       setSeason(recipe.season || '');
+      setIsDirty(false);
     }
   }, [recipe]);
+
+  const blocker = useBlocker(isDirty);
 
   const addTag = (tag: string) => {
     if (!nutritionTags.includes(tag) && nutritionTags.length < 3) {
       setNutritionTags([...nutritionTags, tag]);
+      setIsDirty(true);
     }
   };
 
   const removeTag = (tag: string) => {
     setNutritionTags(nutritionTags.filter(t => t !== tag));
+    setIsDirty(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!id || !title.trim()) {
       return;
     }
@@ -95,7 +101,8 @@ export default function RecipeEdit() {
         nutrition_tags: nutritionTags.length > 0 ? nutritionTags : null,
         season: season || null,
       });
-      
+
+      setIsDirty(false);
       navigate(`/recipes/${id}`);
     } catch (error) {
       console.error('Error updating recipe:', error);
@@ -104,9 +111,10 @@ export default function RecipeEdit() {
 
   const handleDelete = async () => {
     if (!id) return;
-    
+
     try {
       await deleteRecipe.mutateAsync(id);
+      setIsDirty(false);
       navigate('/dashboard');
     } catch (error) {
       console.error('Error deleting recipe:', error);
@@ -158,7 +166,7 @@ export default function RecipeEdit() {
                 id="title"
                 placeholder="Ex: Tarte aux pommes de mamie"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => { setTitle(e.target.value); setIsDirty(true); }}
               />
             </div>
 
@@ -171,12 +179,12 @@ export default function RecipeEdit() {
                   min="1"
                   placeholder="4"
                   value={servings}
-                  onChange={(e) => setServings(e.target.value ? parseInt(e.target.value) : '')}
+                  onChange={(e) => { setServings(e.target.value ? parseInt(e.target.value) : ''); setIsDirty(true); }}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Statut</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as RecipeStatus)}>
+                <Select value={status} onValueChange={(v) => { setStatus(v as RecipeStatus); setIsDirty(true); }}>
                   <SelectTrigger id="status">
                     <SelectValue />
                   </SelectTrigger>
@@ -192,7 +200,7 @@ export default function RecipeEdit() {
 
             <div className="space-y-2">
               <Label htmlFor="season">Saison</Label>
-              <Select value={season || "none"} onValueChange={(v) => setSeason(v === "none" ? "" : v)}>
+              <Select value={season || "none"} onValueChange={(v) => { setSeason(v === "none" ? "" : v); setIsDirty(true); }}>
                 <SelectTrigger id="season">
                   <SelectValue placeholder="Sélectionner une saison" />
                 </SelectTrigger>
@@ -232,16 +240,16 @@ export default function RecipeEdit() {
             </div>
           </div>
 
-          <IngredientEditor ingredients={ingredients} onChange={setIngredients} />
-          
-          <StepsEditor steps={steps} onChange={setSteps} />
+          <IngredientEditor ingredients={ingredients} onChange={(v) => { setIngredients(v); setIsDirty(true); }} />
+
+          <StepsEditor steps={steps} onChange={(v) => { setSteps(v); setIsDirty(true); }} />
 
           <div className="flex flex-col sm:flex-row gap-3">
             <Button type="submit" className="flex-1 min-w-0" disabled={updateRecipe.isPending}>
               <Save className="mr-2 h-4 w-4 shrink-0" />
               <span className="truncate">{updateRecipe.isPending ? 'Enregistrement...' : 'Enregistrer'}</span>
             </Button>
-            
+
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button type="button" variant="outline" className="text-destructive shrink-0">
@@ -267,6 +275,26 @@ export default function RecipeEdit() {
           </div>
         </form>
       </div>
+
+      {/* Dialog de confirmation d'abandon */}
+      <AlertDialog open={blocker.state === 'blocked'}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quitter sans enregistrer ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vos modifications seront perdues.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => blocker.reset?.()}>
+              Rester
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => blocker.proceed?.()}>
+              Quitter
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MainLayout>
   );
 }

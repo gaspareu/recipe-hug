@@ -30,11 +30,12 @@ export function FilterBar({
   seasonFilter,
   onSeasonFilterChange
 }: FilterBarProps) {
-  const hasActiveFilters = statusFilter !== 'all' || favoritesOnly || seasonFilter !== 'all';
+  const hasActiveFilters = statusFilter !== 'all' || favoritesOnly || seasonFilter !== 'all' || search !== '';
   const clearAllFilters = () => {
     onStatusFilterChange('all');
     onFavoritesOnlyChange(false);
     onSeasonFilterChange('all');
+    onSearchChange('');
   };
   return <div className="space-y-3">
       <div className="relative">

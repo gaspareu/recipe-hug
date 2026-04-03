@@ -171,7 +171,13 @@ export function ChatInterface({
       )}
 
       {/* Pending recipe bar */}
+      <AnimatePresence>
       {pendingRecipe && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+        >
         <div className="flex flex-col gap-3 p-3 mx-4 bg-primary/5 border border-primary/20 rounded-2xl">
           <p className="text-sm text-foreground text-center break-words">
             {pendingRecipe.isUpdate ? `Mettre à jour "${pendingRecipe.title}" ?` : `Enregistrer "${pendingRecipe.title}" ?`}
@@ -186,7 +192,9 @@ export function ChatInterface({
             </Button>
           </div>
         </div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* Bottom area */}
       <div className="shrink-0 p-4 space-y-4">

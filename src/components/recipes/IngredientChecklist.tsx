@@ -20,8 +20,17 @@ interface CheckedState {
 }
 
 // Hook for managing checklist state
-export function useIngredientChecklist(ingredients: Ingredient[]) {
-  const [checked, setChecked] = useState<CheckedState>({});
+export function useIngredientChecklist(ingredients: Ingredient[], recipeId?: string) {
+  const storageKey = recipeId ? `recipe-${recipeId}-checklist` : null;
+
+  const [checked, setChecked] = useState<CheckedState>(() => {
+    if (!storageKey) return {};
+    try {
+      return JSON.parse(sessionStorage.getItem(storageKey) || '{}');
+    } catch {
+      return {};
+    }
+  });
 
   const allChecked = useMemo(() => {
     if (ingredients.length === 0) return false;
@@ -32,21 +41,29 @@ export function useIngredientChecklist(ingredients: Ingredient[]) {
     });
   }, [ingredients, checked]);
 
+  const updateChecked = (newState: CheckedState) => {
+    setChecked(newState);
+    if (storageKey) {
+      sessionStorage.setItem(storageKey, JSON.stringify(newState));
+    }
+  };
+
   const checkAll = () => {
     const newChecked: CheckedState = {};
     ingredients.forEach((ingredient, index) => {
       const key = `${index}-${ingredient.name}`;
       newChecked[key] = true;
     });
-    setChecked(newChecked);
+    updateChecked(newChecked);
   };
 
   const uncheckAll = () => {
-    setChecked({});
+    updateChecked({});
   };
 
   const toggleChecked = (key: string) => {
-    setChecked(prev => ({ ...prev, [key]: !prev[key] }));
+    const newState = { ...checked, [key]: !checked[key] };
+    updateChecked(newState);
   };
 
   const isChecked = (key: string) => checked[key] ?? false;
@@ -61,13 +78,13 @@ export function useIngredientChecklist(ingredients: Ingredient[]) {
 }
 
 // Toggle button component
-export function IngredientToggleButton({ 
-  allChecked, 
-  onCheckAll, 
-  onUncheckAll 
-}: { 
-  allChecked: boolean; 
-  onCheckAll: () => void; 
+export function IngredientToggleButton({
+  allChecked,
+  onCheckAll,
+  onUncheckAll
+}: {
+  allChecked: boolean;
+  onCheckAll: () => void;
   onUncheckAll: () => void;
 }) {
   return (
@@ -124,7 +141,7 @@ function useCategoryState(categories: string[]) {
 function useGroupedIngredients(ingredients: Ingredient[]) {
   return useMemo(() => {
     const groups: Record<string, (Ingredient & { _index: number })[]> = {};
-    
+
     ingredients.forEach((ingredient, index) => {
       const category = ingredient.category || 'Autres';
       if (!groups[category]) {
@@ -147,25 +164,25 @@ function useGroupedIngredients(ingredients: Ingredient[]) {
 }
 
 // Shared ingredient item component
-function IngredientItem({ 
-  ingredient, 
-  checked, 
-  onToggle 
-}: { 
-  ingredient: Ingredient & { _index: number }; 
-  checked: boolean; 
+function IngredientItem({
+  ingredient,
+  checked,
+  onToggle
+}: {
+  ingredient: Ingredient & { _index: number };
+  checked: boolean;
   onToggle: () => void;
 }) {
   return (
-    <li 
+    <li
       onClick={onToggle}
       className="flex items-start gap-3 py-1.5 cursor-pointer group"
     >
-      <div 
+      <div
         className={cn(
           "relative flex-shrink-0 h-5 w-5 min-h-5 min-w-5 max-h-5 max-w-5 border-2 rounded-sm transition-all mt-0.5",
-          checked 
-            ? "border-primary bg-primary/10" 
+          checked
+            ? "border-primary bg-primary/10"
             : "border-muted-foreground/40 group-hover:border-primary/60"
         )}
       >
@@ -179,8 +196,8 @@ function IngredientItem({
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path 
-              d="M4 12 L9 18 L20 5" 
+            <path
+              d="M4 12 L9 18 L20 5"
               className="checkmark-path"
               style={{
                 strokeDasharray: 30,
@@ -191,8 +208,8 @@ function IngredientItem({
           </svg>
         )}
       </div>
-      
-      <span 
+
+      <span
         className={cn(
           "transition-all duration-200 leading-6 text-foreground",
           checked && "line-through text-muted-foreground/60"
@@ -207,14 +224,14 @@ function IngredientItem({
 }
 
 // Category group component
-function CategoryGroup({ 
-  category, 
-  ingredients, 
-  isOpen, 
-  onToggle, 
-  isChecked, 
-  onToggleItem 
-}: { 
+function CategoryGroup({
+  category,
+  ingredients,
+  isOpen,
+  onToggle,
+  isChecked,
+  onToggleItem
+}: {
   category: string;
   ingredients: (Ingredient & { _index: number })[];
   isOpen: boolean;
@@ -225,7 +242,7 @@ function CategoryGroup({
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle}>
       <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
-        <span 
+        <span
           className={cn(
             "text-sm font-solitreo text-primary transition-transform duration-200",
             isOpen ? "rotate-0" : "-rotate-90"
@@ -240,7 +257,7 @@ function CategoryGroup({
           ({ingredients.length})
         </span>
       </CollapsibleTrigger>
-      
+
       <CollapsibleContent className="mt-2">
         <ul className="space-y-1 pl-6">
           {ingredients.map((ingredient) => {
@@ -273,8 +290,8 @@ function CheckmarkStyles() {
 }
 
 // Main checklist component
-export function IngredientChecklist({ ingredients }: { ingredients: Ingredient[] }) {
-  const { allChecked, checkAll, uncheckAll, toggleChecked, isChecked } = useIngredientChecklist(ingredients);
+export function IngredientChecklist({ ingredients, recipeId }: { ingredients: Ingredient[]; recipeId?: string }) {
+  const { allChecked, checkAll, uncheckAll, toggleChecked, isChecked } = useIngredientChecklist(ingredients, recipeId);
   const groupedIngredients = useGroupedIngredients(ingredients);
   const { openCategories, toggleCategory } = useCategoryState(
     groupedIngredients.map(g => g.category)
@@ -299,24 +316,26 @@ export function IngredientChecklist({ ingredients }: { ingredients: Ingredient[]
 }
 
 // Wrapper component that includes the toggle button inline
-export function IngredientChecklistWithHeader({ 
-  ingredients, 
-  renderHeader 
-}: { 
+export function IngredientChecklistWithHeader({
+  ingredients,
+  recipeId,
+  renderHeader
+}: {
   ingredients: Ingredient[];
+  recipeId?: string;
   renderHeader?: (toggleButton: React.ReactNode) => React.ReactNode;
 }) {
-  const { allChecked, checkAll, uncheckAll, toggleChecked, isChecked } = useIngredientChecklist(ingredients);
+  const { allChecked, checkAll, uncheckAll, toggleChecked, isChecked } = useIngredientChecklist(ingredients, recipeId);
   const groupedIngredients = useGroupedIngredients(ingredients);
   const { openCategories, toggleCategory } = useCategoryState(
     groupedIngredients.map(g => g.category)
   );
 
   const toggleButton = (
-    <IngredientToggleButton 
-      allChecked={allChecked} 
-      onCheckAll={checkAll} 
-      onUncheckAll={uncheckAll} 
+    <IngredientToggleButton
+      allChecked={allChecked}
+      onCheckAll={checkAll}
+      onUncheckAll={uncheckAll}
     />
   );
 

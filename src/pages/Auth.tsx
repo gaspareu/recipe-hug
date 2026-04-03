@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,9 @@ const passwordSchema = z.string().min(6, 'Le mot de passe doit contenir au moins
 export default function Auth() {
   const { user, loading, signIn, signUp, resetPassword } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sharedBy = searchParams.get('shared_by');
+  const sharedRecipe = searchParams.get('recipe');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
@@ -161,7 +164,12 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+      {sharedBy && sharedRecipe && (
+        <div className="fixed top-0 left-0 right-0 bg-primary text-primary-foreground text-center px-4 py-3 text-sm font-medium z-50">
+          {sharedBy} t'a partagé la recette <span className="font-bold">"{sharedRecipe}"</span>. Crée un compte pour la voir.
+        </div>
+      )}
+      <Card className="w-full max-w-md" style={sharedBy && sharedRecipe ? { marginTop: '3rem' } : undefined}>
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">

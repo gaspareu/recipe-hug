@@ -55,7 +55,7 @@ export default function Home() {
       </header>
 
       {/* Chat area */}
-      <div className="flex-1 flex flex-col container max-w-3xl mx-auto w-full pt-16">
+      <div className="flex-1 flex flex-col container max-w-3xl mx-auto w-full pt-16 pb-[env(safe-area-inset-bottom)]">
         <ChatInterface
           messages={messages}
           isStreaming={isStreaming}

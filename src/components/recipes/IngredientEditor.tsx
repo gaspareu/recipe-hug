@@ -61,49 +61,53 @@ export function IngredientEditor({ ingredients, onChange }: IngredientEditorProp
       
       <div className="space-y-2">
         {ingredients.map((ingredient, index) => (
-          <div key={index} className="flex items-center gap-2 p-2 border rounded-lg bg-muted/30">
+          <div key={index} className="grid grid-cols-1 gap-1.5 p-2 border rounded-lg bg-muted/30 sm:flex sm:items-center sm:gap-2">
+            {/* Ligne 1 mobile : Nom (full-width) */}
             <Input
               placeholder="Nom"
               value={ingredient.name}
               onChange={(e) => updateIngredient(index, 'name', e.target.value)}
-              className="flex-1"
+              className="w-full sm:flex-1"
             />
-            <Input
-              type="number"
-              placeholder="Qté"
-              value={ingredient.quantity}
-              onChange={(e) => updateIngredient(index, 'quantity', parseFloat(e.target.value) || 0)}
-              className="w-20"
-            />
-            <Select value={ingredient.unit} onValueChange={(v) => updateIngredient(index, 'unit', v)}>
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {units.map((unit) => (
-                  <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={ingredient.category || 'Autre'} onValueChange={(v) => updateIngredient(index, 'category', v)}>
-              <SelectTrigger className="w-32 hidden sm:flex">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => removeIngredient(index)}
-              className="h-8 w-8 text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {/* Ligne 2 mobile : Qté + Unité + Catégorie + Supprimer */}
+            <div className="flex items-center gap-1.5 sm:contents">
+              <Input
+                type="number"
+                placeholder="Qté"
+                value={ingredient.quantity}
+                onChange={(e) => updateIngredient(index, 'quantity', parseFloat(e.target.value) || 0)}
+                className="w-20 shrink-0"
+              />
+              <Select value={ingredient.unit} onValueChange={(v) => updateIngredient(index, 'unit', v)}>
+                <SelectTrigger className="w-28 shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {units.map((unit) => (
+                    <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={ingredient.category || 'Autre'} onValueChange={(v) => updateIngredient(index, 'category', v)}>
+                <SelectTrigger className="flex-1 sm:w-32 sm:flex-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => removeIngredient(index)}
+                className="h-11 w-11 shrink-0 text-destructive sm:h-8 sm:w-8"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         ))}
       </div>

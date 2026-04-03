@@ -1,4 +1,4 @@
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { Step } from '@/types/recipe';
@@ -22,9 +22,20 @@ export function StepsEditor({ steps, onChange }: StepsEditorProps) {
 
   const removeStep = (index: number) => {
     const filtered = steps.filter((_, i) => i !== index);
-    // Réordonne les étapes
     const reordered = filtered.map((step, i) => ({ ...step, order: i + 1 }));
     onChange(reordered);
+  };
+
+  const moveStep = (index: number, direction: 'up' | 'down') => {
+    const sorted = [...steps].sort((a, b) => a.order - b.order);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= sorted.length) return;
+    const reordered = sorted.map((step, i) => {
+      if (i === index) return { ...step, order: targetIndex + 1 };
+      if (i === targetIndex) return { ...step, order: index + 1 };
+      return step;
+    });
+    onChange(reordered.sort((a, b) => a.order - b.order));
   };
 
   return (
@@ -36,21 +47,42 @@ export function StepsEditor({ steps, onChange }: StepsEditorProps) {
           Ajouter
         </Button>
       </div>
-      
+
       {steps.length === 0 && (
         <p className="text-sm text-muted-foreground py-4 text-center border border-dashed rounded-lg">
           Aucune étape. Cliquez sur "Ajouter" pour commencer.
         </p>
       )}
-      
+
       <div className="space-y-2">
         {steps
           .sort((a, b) => a.order - b.order)
           .map((step, index) => (
             <div key={index} className="flex items-start gap-2 p-2 border rounded-lg bg-muted/30">
-              <div className="flex items-center gap-1 pt-2 text-muted-foreground">
-                <GripVertical className="h-4 w-4" />
-                <span className="text-sm font-medium w-6">{step.order}.</span>
+              <div className="flex flex-col items-center gap-0.5 pt-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => moveStep(index, 'up')}
+                  disabled={index === 0}
+                  className="h-6 w-6 text-muted-foreground disabled:opacity-30"
+                  aria-label="Monter l'étape"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </Button>
+                <span className="text-sm font-medium w-6 text-center">{step.order}.</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => moveStep(index, 'down')}
+                  disabled={index === steps.length - 1}
+                  className="h-6 w-6 text-muted-foreground disabled:opacity-30"
+                  aria-label="Descendre l'étape"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
               </div>
               <Textarea
                 placeholder={`Décrivez l'étape ${step.order}...`}

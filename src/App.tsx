@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { InstallBanner } from "@/components/InstallBanner";
 
 // Lazy load pages for code-splitting
 const Auth = lazy(() => import("./pages/Auth"));
@@ -13,6 +15,7 @@ const Home = lazy(() => import("./pages/Home"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const RecipeDetail = lazy(() => import("./pages/RecipeDetail"));
 const RecipeEdit = lazy(() => import("./pages/RecipeEdit"));
+const RecipeNew = lazy(() => import("./pages/RecipeNew"));
 const Profile = lazy(() => import("./pages/Profile"));
 const MealPlanning = lazy(() => import("./pages/MealPlanning"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -40,7 +43,11 @@ const App = () => (
                     <Dashboard />
                   </ProtectedRoute>
                 } />
-                <Route path="/recipes/new" element={<Navigate to="/home" replace />} />
+                <Route path="/recipes/new" element={
+                  <ProtectedRoute>
+                    <RecipeNew />
+                  </ProtectedRoute>
+                } />
                 <Route path="/recipes/:id" element={
                   <ProtectedRoute>
                     <RecipeDetail />
@@ -64,6 +71,8 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
+            <OfflineBanner />
+            <InstallBanner />
           </ThemeProvider>
         </AuthProvider>
       </BrowserRouter>

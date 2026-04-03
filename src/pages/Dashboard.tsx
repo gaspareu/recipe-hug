@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ImageGallery } from '@/components/ui/image-gallery';
 import { FilterBar } from '@/components/recipes/FilterBar';
 import { FilterBadge } from '@/components/ui/filter-badge';
@@ -39,14 +40,19 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState<RecipeStatus | 'all'>('all');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [seasonFilter, setSeasonFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'recent' | 'alpha' | 'favorites'>('recent');
 
   const filteredRecipes = useMemo(() => {
     if (!recipes) return [];
     
     return recipes.filter((recipe) => {
-      // Recherche par titre
-      if (search && !recipe.title.toLowerCase().includes(search.toLowerCase())) {
-        return false;
+      // Recherche par titre, résumé et ingrédients
+      if (search) {
+        const q = search.toLowerCase();
+        const matchesTitle = recipe.title.toLowerCase().includes(q);
+        const matchesSummary = recipe.ai_summary?.toLowerCase().includes(q) ?? false;
+        const matchesIngredient = (recipe.ingredients as Array<{ name?: string }>)?.some(i => i.name?.toLowerCase().includes(q)) ?? false;
+        if (!matchesTitle && !matchesSummary && !matchesIngredient) return false;
       }
       // Filtre par statut
       if (statusFilter !== 'all' && recipe.status !== statusFilter) {
@@ -61,8 +67,17 @@ export default function Dashboard() {
         return false;
       }
       return true;
+    }).sort((a, b) => {
+      if (sortBy === 'alpha') return a.title.localeCompare(b.title);
+      if (sortBy === 'favorites') {
+        if (a.is_favorite && !b.is_favorite) return -1;
+        if (!a.is_favorite && b.is_favorite) return 1;
+        return 0;
+      }
+      // recent: ordre de la liste (supposé trié par created_at desc côté serveur)
+      return 0;
     });
-  }, [recipes, search, statusFilter, favoritesOnly, seasonFilter]);
+  }, [recipes, search, statusFilter, favoritesOnly, seasonFilter, sortBy]);
 
   const handleToggleFavorite = (id: string, isFavorite: boolean) => {
     toggleFavorite.mutate({ id, is_favorite: isFavorite });
@@ -84,12 +99,24 @@ export default function Dashboard() {
               {filteredRecipes.length} sur {recipes?.length || 0} recette{(recipes?.length || 0) !== 1 ? 's' : ''}
             </p>
           </div>
-          <Button asChild>
-            <Link to="/home">
-              <Plus className="mr-2 h-4 w-4" />
-              Nouvelle
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Select value={sortBy} onValueChange={v => setSortBy(v as 'recent' | 'alpha' | 'favorites')}>
+              <SelectTrigger className="w-auto text-sm h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">Plus récentes</SelectItem>
+                <SelectItem value="alpha">A-Z</SelectItem>
+                <SelectItem value="favorites">Favoris en tête</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button asChild>
+              <Link to="/home">
+                <Plus className="mr-2 h-4 w-4" />
+                Nouvelle
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <FilterBar

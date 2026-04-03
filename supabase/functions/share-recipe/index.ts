@@ -80,20 +80,51 @@ Deno.serve(async (req) => {
     // Admin client to look up users
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Check if recipient already exists
+    // Check if recipient already exists — targeted lookups, never listUsers()
     let recipientUserId: string | null = null;
 
     if (identifierType === "email") {
-      const { data } = await adminClient.auth.admin.listUsers();
-      const found = data?.users?.find(
-        (u) => u.email?.toLowerCase() === identifier.toLowerCase()
-      );
-      if (found) recipientUserId = found.id;
+      const { data: userData, error: userError } =
+        await adminClient.auth.admin.getUserByEmail(identifier);
+      if (userError && userError.status !== 404) {
+        console.error("getUserByEmail error:", userError);
+        return new Response(JSON.stringify({ error: "Failed to lookup user" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (userData?.user) recipientUserId = userData.user.id;
     } else {
-      const { data } = await adminClient.auth.admin.listUsers();
-      const found = data?.users?.find((u) => u.phone === identifier);
-      if (found) recipientUserId = found.id;
+      // phone: targeted RPC lookup on auth.users via SECURITY DEFINER function
+      const { data: phoneData, error: phoneError } = await adminClient.rpc(
+        "get_user_id_by_phone",
+        { phone_number: identifier }
+      );
+      if (phoneError) {
+        console.error("get_user_id_by_phone error:", phoneError);
+        return new Response(JSON.stringify({ error: "Failed to lookup user" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (phoneData) recipientUserId = phoneData as string;
     }
+
+    // Fetch sender display_name for the share URL
+    const { data: senderProfile } = await adminClient
+      .from("profiles")
+      .select("display_name")
+      .eq("id", senderId)
+      .single();
+
+    const senderName = senderProfile?.display_name ?? "";
+    const recipeTitle = snapshot.title ?? "";
+
+    const appUrl = Deno.env.get("APP_URL") ?? "https://recipe-hug.lovable.app";
+    const shareParams = new URLSearchParams();
+    if (senderName) shareParams.set("shared_by", senderName);
+    if (recipeTitle) shareParams.set("recipe", recipeTitle);
+    const shareUrl = `${appUrl}/auth?${shareParams.toString()}`;
 
     if (recipientUserId) {
       // User exists: create recipe directly in their account
@@ -153,7 +184,7 @@ Deno.serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ status: "pending", message: "Partage en attente de création de compte" }),
+        JSON.stringify({ status: "pending", message: "Partage en attente de création de compte", shareUrl }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

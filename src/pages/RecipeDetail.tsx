@@ -180,7 +180,7 @@ export default function RecipeDetail() {
           <Card><CardHeader><CardTitle className="flex items-center gap-2"><ListChecks className="h-5 w-5" />Ingrédients{recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />{recipe.servings} portions</span>}</CardTitle></CardHeader><CardContent><p className="text-muted-foreground text-sm">Aucun ingrédient</p></CardContent></Card>
         ) : (
           <Card>
-            <IngredientChecklistWithHeader ingredients={recipe.ingredients} renderHeader={toggleButton => (
+            <IngredientChecklistWithHeader ingredients={recipe.ingredients} recipeId={id} renderHeader={toggleButton => (
               <CardHeader className="pb-2"><CardTitle className="flex items-center justify-between"><span className="flex items-center gap-2"><ListChecks className="h-5 w-5" />Ingrédients{recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1 ml-1"><Users className="h-3.5 w-3.5" />{recipe.servings} portions</span>}</span>{toggleButton}</CardTitle></CardHeader>
             )} />
           </Card>
@@ -249,7 +249,21 @@ export default function RecipeDetail() {
           </CardContent>
         </Card>
 
-        
+
+        {totalSteps > 0 && (
+          <div className="fixed bottom-0 left-0 right-0 flex items-center justify-between gap-3 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-background/80 backdrop-blur-sm border-t border-border z-10">
+            <span className="text-sm text-muted-foreground">
+              Étape {Math.min(completedSteps.size + 1, totalSteps)} / {totalSteps}
+            </span>
+            <Button
+              onClick={handleAdvanceStep}
+              disabled={isComplete}
+              size="sm"
+            >
+              {isComplete ? 'Terminé ✓' : 'Étape suivante →'}
+            </Button>
+          </div>
+        )}
         {totalSteps > 0 && <CookingAssistantButton currentStep={completedSteps.size} totalSteps={totalSteps} onPress={() => setChatOpen(!chatOpen)} isComplete={isComplete} />}
       </div>
     </MainLayout>

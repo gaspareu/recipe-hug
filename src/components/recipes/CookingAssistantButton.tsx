@@ -45,7 +45,7 @@ export function CookingAssistantButton({
             className="fixed bottom-6 right-6 h-auto min-h-14 px-6 rounded-full shadow-lg z-50 md:right-[calc(50%-20rem+1.5rem)] gap-2"
           >
             {getIcon()}
-            <span className="hidden sm:inline">{getButtonText()}</span>
+            <span className="truncate max-w-[140px] text-sm">{getButtonText()}</span>
           </Button>
         </TooltipTrigger>
         <TooltipContent side="left">
