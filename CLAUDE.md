@@ -46,3 +46,8 @@ Voir `EDGE_FUNCTIONS.md` pour la documentation complète. Architecture clé :
 Toutes les fonctions IA utilisent le pattern : `resolveAIConfig(agentType, userId)` → sélectionne provider + modèle → `callAIStreaming` ou `callAINonStreaming`.
 
 Les clés API utilisateur sont chiffrées (AES-GCM) en base et ne sont jamais retournées en clair.
+
+## Déploiement
+
+- Vercel, branch main → auto-deploy
+- `vercel.json` à la racine gère le routing SPA (rewrites → index.html)
