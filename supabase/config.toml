@@ -9,16 +9,10 @@ verify_jwt = false
 [functions.analyze-recipe]
 verify_jwt = false
 
-[functions.cooking-assistant]
-verify_jwt = false
-
 [functions.extract-user-preferences]
 verify_jwt = false
 
 [functions.home-assistant]
-verify_jwt = false
-
-[functions.memory-assistant]
 verify_jwt = false
 
 [functions.elevenlabs-tts]
@@ -31,9 +25,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.generate-recipe-image]
-verify_jwt = false
-
-[functions.analyze-recipe-timeline]
 verify_jwt = false
 
 [functions.validate-ai-key]

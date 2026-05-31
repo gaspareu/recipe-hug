@@ -1,6 +1,6 @@
 # Edge Functions — Documentation
 
-> Référentiel des 12 fonctions backend. Toutes les fonctions IA utilisent le pattern unifié `resolveAIConfig` + modules partagés `_shared/`.
+> Référentiel des 13 fonctions backend. Toutes les fonctions IA utilisent le pattern unifié `resolveAIConfig` + modules partagés `_shared/`.
 
 ---
 
@@ -31,19 +31,18 @@ Agent Config (agent_configs[agentType]) → Global User Settings → Default Lov
 | # | Fonction | Catégorie | Agent Type | Capabilities | Pattern |
 |---|----------|-----------|------------|--------------|---------|
 | 1 | `home-assistant` | Streaming | `chat` | streaming, tools, vision | `resolveAIConfig` + `callAIStreaming` |
-| 2 | `cooking-assistant` | Streaming | `chat` | streaming, tools | `resolveAIConfig` + `callAIStreaming` |
-| 3 | `generate-recipe` | Non-streaming | `generate` | — | `resolveAIConfig` + `callAINonStreaming` |
-| 4 | `analyze-recipe` | Non-streaming | `analyze` | — | `resolveAIConfig` + `callAINonStreaming` |
-| 5 | `extract-user-preferences` | Non-streaming | `chat` | tools | `resolveAIConfig` + `buildToolCallRequest` |
-| 6 | `parse-recipe-image` | Non-streaming | `parse_image` | vision | `resolveAIConfig` + `buildVisionRequest` |
-| 7 | `generate-recipe-image` | Non-streaming | `generate_image` | image_generation | `resolveAIConfig` + custom |
-| 8 | `webhook-recipe` | Webhook | `webhook` + `generate_image` | — | `resolveAIConfig` + `buildSimpleRequest` |
-| 9 | `manage-ai-keys` | Utilitaire | — | — | Sans IA |
-| 10 | `validate-ai-key` | Utilitaire | — | — | Sans IA |
-| 11 | `elevenlabs-tts` | Utilitaire | — | — | Sans IA |
-| 12 | `elevenlabs-scribe-token` | Utilitaire | — | — | Sans IA |
-| 13 | `share-recipe` | Utilitaire | — | — | Sans IA |
-| 14 | `claim-shares` | Utilitaire | — | — | Sans IA |
+| 2 | `generate-recipe` | Non-streaming | `generate` | — | `resolveAIConfig` + `callAINonStreaming` |
+| 3 | `analyze-recipe` | Non-streaming | `analyze` | — | `resolveAIConfig` + `callAINonStreaming` |
+| 4 | `extract-user-preferences` | Non-streaming | `chat` | tools | `resolveAIConfig` + `buildToolCallRequest` |
+| 5 | `parse-recipe-image` | Non-streaming | `parse_image` | vision | `resolveAIConfig` + `buildVisionRequest` |
+| 6 | `generate-recipe-image` | Non-streaming | `generate_image` | image_generation | `resolveAIConfig` + custom |
+| 7 | `webhook-recipe` | Webhook | `webhook` + `generate_image` | — | `resolveAIConfig` + `buildSimpleRequest` |
+| 8 | `manage-ai-keys` | Utilitaire | — | — | Sans IA |
+| 9 | `validate-ai-key` | Utilitaire | — | — | Sans IA |
+| 10 | `elevenlabs-tts` | Utilitaire | — | — | Sans IA |
+| 11 | `elevenlabs-scribe-token` | Utilitaire | — | — | Sans IA |
+| 12 | `share-recipe` | Utilitaire | — | — | Sans IA |
+| 13 | `claim-shares` | Utilitaire | — | — | Sans IA |
 
 ---
 
@@ -60,12 +59,7 @@ Agent Config (agent_configs[agentType]) → Global User Settings → Default Lov
 - **Capabilities** : streaming, tools, vision
 - **Outils disponibles** : `save_recipe`, `update_preferences`, `navigate`, `save_meal_plan`
 
-> **Note** : L'ancien système multi-agents (orchestrateur, `memory-assistant`, modes cooking/memory) a été supprimé au profit de cet agent unifié, réduisant la latence et la complexité.
-
-### `cooking-assistant`
-- **Rôle** : Assistant de cuisson/édition pour une recette spécifique. Guide étape par étape, suggère des substitutions, peut modifier ou créer une recette via tool calling.
-- **Agent Type** : `chat`
-- **Capabilities** : streaming, tools
+> **Note** : L'ancien système multi-agents (orchestrateur, `cooking-assistant`, `memory-assistant`, modes cooking/memory) a été supprimé au profit de cet agent unifié, réduisant la latence et la complexité. L'assistant de cuisson lié à une recette (`useRecipeChat` côté frontend) appelle désormais directement `home-assistant`.
 
 ---
 

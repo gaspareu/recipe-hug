@@ -10,8 +10,8 @@ export type AIProvider = 'lovable' | 'gemini' | 'openai' | 'anthropic';
 export type AgentType = 
   | 'chat'           // home-assistant - Main orchestration
   | 'create_recipe'  // generate-recipe - Recipe creation
-  | 'cooking'        // cooking-assistant - Step-by-step guidance
-  | 'edit_recipe'    // cooking-assistant (edit mode)
+  | 'cooking'        // home-assistant (useRecipeChat) - Step-by-step guidance
+  | 'edit_recipe'    // home-assistant (useRecipeChat) - Recipe edit mode
   | 'generate_image' // generate-recipe-image - Image generation
   | 'parse_image'    // parse-recipe-image - Image analysis
   | 'webhook';       // webhook-recipe - External import
