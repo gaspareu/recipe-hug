@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **recipe-hug** — Application PWA de gestion de recettes avec assistant IA conversationnel (chat streaming, vision, génération d'images), planification de repas et préférences culinaires personnalisées. Projet Lovable déployé sur Vercel.
+> **recipe-hug** — Application PWA de gestion de recettes avec assistant IA conversationnel (chat streaming, vision, génération d'images), planification de repas et préférences culinaires personnalisées. Déployé sur Vercel.
 
 ## Commands
 
@@ -23,7 +23,7 @@ Il n'y a pas de script `typecheck` dédié ; `npm run build` (`vite build`) effe
 
 ## Architecture
 
-**Stack** : React 18 + TypeScript + Vite (SWC), Tailwind CSS + shadcn/ui (Radix), Supabase (auth, DB Postgres, storage, edge functions Deno), TanStack Query v5, React Router v7, vite-plugin-pwa. Auth OAuth via `@lovable.dev/cloud-auth-js`.
+**Stack** : React 18 + TypeScript + Vite (SWC), Tailwind CSS + shadcn/ui (Radix), Supabase (auth, DB Postgres, storage, edge functions Deno), TanStack Query v5, React Router v7, vite-plugin-pwa. Auth OAuth via Supabase natif (`supabase.auth.signInWithOAuth`).
 
 ### Frontend (`src/`)
 
@@ -46,8 +46,7 @@ Il n'y a pas de script `typecheck` dédié ; `npm run build` (`vite build`) effe
   - `useUserPreferences` — préférences culinaires ; `useWebhookToken` — token webhook personnel
   - `useVoiceMode` — mode vocal (ElevenLabs TTS + Scribe)
   - `useInstallPrompt` / `useNetworkStatus` / `useTheme` / `use-mobile` — PWA, offline, thème, responsive
-- **`integrations/supabase/`** — `client.ts` (instance `supabase`) et `types.ts` (types DB générés). **Auto-générés, ne pas éditer.** Import : `import { supabase } from "@/integrations/supabase/client"`.
-- **`integrations/lovable/`** — `lovable.auth.signInWithOAuth` (Google/Apple). **Auto-généré, ne pas modifier.**
+- **`integrations/supabase/`** — `client.ts` (instance `supabase`) et `types.ts` (types DB générés). **Auto-générés, ne pas éditer.** Import : `import { supabase } from "@/integrations/supabase/client"`. L'authentification (email/mot de passe + OAuth Google) passe directement par `supabase.auth`.
 - **`types/recipe.ts`** — types métier source de vérité : `Recipe`, `Ingredient`, `Step`, `RecipeStatus` (`draft | tested | validated | archived`), `RecipeFormData`.
 - **`lib/utils.ts`** — `cn()` (clsx + tailwind-merge), utilisé partout pour les classes conditionnelles.
 - Alias d'import : `@/` → `src/`.
@@ -57,7 +56,7 @@ Il n'y a pas de script `typecheck` dédié ; `npm run build` (`vite build`) effe
 Voir **`EDGE_FUNCTIONS.md`** pour la doc complète. Architecture clé :
 
 - **`_shared/`** — modules partagés entre toutes les fonctions :
-  - `ai-config.ts` → `resolveAIConfig` : résolution hiérarchique **Agent Config → Settings utilisateur → Default (Lovable)**, valide les capabilities requises (`tools`, `vision`, `image_generation`) avec fallback automatique
+  - `ai-config.ts` → `resolveAIConfig` : résolution hiérarchique **Agent Config → Settings utilisateur → Default (Anthropic)**, valide les capabilities requises (`tools`, `vision`, `image_generation`) avec fallback automatique
   - `ai-providers.ts` → appels IA unifiés : `callAIStreaming`, `callAINonStreaming`, helpers tool-calling/vision
   - `ai-types.ts` → types et constantes (`AIProvider`, `DEFAULT_MODELS`, `PROVIDER_ENDPOINTS`, `CAPABILITY_MODELS`)
   - `decrypt-keys.ts` → chiffrement AES-GCM des clés API (`encryptValue`, `decryptValue`, `maskApiKey`)
@@ -66,7 +65,7 @@ Voir **`EDGE_FUNCTIONS.md`** pour la doc complète. Architecture clé :
 - **Fonctions de traitement** (non-streaming) : `generate-recipe`, `analyze-recipe`, `extract-user-preferences`, `parse-recipe-image` (vision + protection SSRF), `generate-recipe-image`.
 - **Webhook externe** : `webhook-recipe` — authentifié par token (`profiles.webhook_token`), **pas** par JWT.
 - **Utilitaires (sans IA)** : `manage-ai-keys`, `validate-ai-key`, `elevenlabs-tts`, `elevenlabs-scribe-token`, `share-recipe`, `claim-shares`.
-- **Providers IA** : Lovable (défaut), Gemini, OpenAI, Anthropic.
+- **Providers IA** : Anthropic (défaut, clé serveur `ANTHROPIC_API_KEY`), Gemini, OpenAI (ces deux derniers en « bring your own key »). La génération d'images nécessite une clé Gemini ou OpenAI (Anthropic ne génère pas d'images).
 - `verify_jwt = false` est configuré dans `supabase/config.toml` pour les fonctions IA (l'auth est gérée dans le corps de la fonction).
 
 ### Flux de données IA
@@ -83,18 +82,17 @@ Migrations horodatées dans `supabase/migrations/` (appliquées dans l'ordre). T
 - **Data fetching** : toujours via TanStack Query encapsulé dans un hook de `src/hooks/`. Ne pas appeler `supabase` directement depuis un composant.
 - **UI** : composer à partir de `src/components/ui/` (shadcn) + classes Tailwind via `cn()`. Suivre les patterns existants du domaine concerné.
 - **Langue** : l'UI et les commentaires sont en **français** — rester cohérent.
-- **Fichiers auto-générés à NE PAS éditer** : `src/integrations/supabase/client.ts`, `src/integrations/supabase/types.ts`, `src/integrations/lovable/index.ts`.
+- **Fichiers auto-générés à NE PAS éditer** : `src/integrations/supabase/client.ts`, `src/integrations/supabase/types.ts`.
 - **Tests** : Vitest + Testing Library (jsdom), setup dans `src/test/setup.ts`, fichiers `*.test.ts(x)` colocalisés. Tests Deno pour le chiffrement des edge functions.
 
 ## Déploiement
 
 - **Vercel**, branche `main` → auto-deploy. `vercel.json` gère le routing SPA (rewrites → `index.html`).
-- Le projet est synchronisé avec **Lovable** (les modifications via Lovable sont committées automatiquement).
 - **PWA** : configurée via `vite-plugin-pwa` (`vite.config.ts`) — `registerType: autoUpdate`, runtime caching (Google Fonts, API Supabase en NetworkFirst), manifest dans `public/`.
 
 ## Variables d'environnement
 
-Front (préfixe `VITE_`, dans `.env`) : `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`. Les secrets des edge functions (clés IA par défaut, clé de chiffrement, ElevenLabs) sont gérés côté Supabase, hors du repo.
+Front (préfixe `VITE_`, dans `.env`) : `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`. Les secrets des edge functions (`ANTHROPIC_API_KEY` pour l'IA par défaut, `AI_KEYS_ENCRYPTION_SECRET` pour le chiffrement, clés ElevenLabs, `APP_URL`) sont gérés côté Supabase, hors du repo.
 
 ## Documentation complémentaire
 

@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 import type { Json } from '@/integrations/supabase/types';
 
-export type AIProvider = 'lovable' | 'gemini' | 'openai' | 'anthropic';
+export type AIProvider = 'anthropic' | 'gemini' | 'openai';
 
 // Agent types for per-function AI configuration
 export type AgentType = 
@@ -22,8 +22,9 @@ export interface AgentConfig {
   model: string;
 }
 
-// API keys per provider
-export type ProviderApiKeys = Partial<Record<Exclude<AIProvider, 'lovable'>, string>>;
+// API keys per provider. Anthropic est le fournisseur par défaut (clé côté serveur) ;
+// seuls les fournisseurs « bring your own key » (gemini, openai) sont stockés ici.
+export type ProviderApiKeys = Partial<Record<Exclude<AIProvider, 'anthropic'>, string>>;
 
 // Masked key info returned from server
 export interface MaskedKeyInfo {
@@ -63,18 +64,10 @@ export interface ModelInfo {
 
 // Models available per provider with capabilities
 export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
-  lovable: [
-    { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (défaut)', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'google/gemini-3-pro-preview', label: 'Gemini 3 Pro', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', capabilities: ['text', 'streaming'] },
-    { value: 'google/gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image', capabilities: ['image_generation'] },
-    { value: 'google/gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image', capabilities: ['image_generation'] },
-    { value: 'openai/gpt-5', label: 'GPT-5', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'openai/gpt-5-mini', label: 'GPT-5 Mini', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'openai/gpt-5-nano', label: 'GPT-5 Nano', capabilities: ['text', 'streaming'] },
-    { value: 'openai/gpt-5.2', label: 'GPT-5.2', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+  anthropic: [
+    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (défaut)', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', capabilities: ['text', 'streaming', 'tools'] },
   ],
   gemini: [
     { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', capabilities: ['text', 'streaming', 'vision', 'tools'] },
@@ -87,11 +80,7 @@ export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
     { value: 'gpt-4o', label: 'GPT-4o', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'o3-mini', label: 'o3-mini', capabilities: ['text', 'streaming', 'tools'] },
-  ],
-  anthropic: [
-    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', capabilities: ['text', 'streaming', 'tools'] },
+    { value: 'dall-e-3', label: 'DALL·E 3', capabilities: ['image_generation'] },
   ],
 };
 
@@ -142,9 +131,9 @@ export function getCompatibleModels(agentType: AgentType): FlatModelInfo[] {
 }
 
 export const PROVIDER_INFO: Record<AIProvider, { name: string; description: string; keyUrl?: string }> = {
-  lovable: {
-    name: 'Lovable AI',
-    description: 'Inclus dans votre abonnement, aucune configuration requise',
+  anthropic: {
+    name: 'Anthropic',
+    description: 'Fournisseur par défaut (Claude), aucune configuration requise',
   },
   gemini: {
     name: 'Google Gemini',
@@ -153,13 +142,8 @@ export const PROVIDER_INFO: Record<AIProvider, { name: string; description: stri
   },
   openai: {
     name: 'OpenAI',
-    description: 'API OpenAI (GPT-4o, o3)',
+    description: 'API OpenAI (GPT-4o, o3, DALL·E)',
     keyUrl: 'https://platform.openai.com/api-keys',
-  },
-  anthropic: {
-    name: 'Anthropic',
-    description: 'API Claude',
-    keyUrl: 'https://console.anthropic.com/settings/keys',
   },
 };
 
@@ -254,13 +238,14 @@ export function useAISettings() {
   });
 
   // Helper to check if a provider has a configured API key (derived from server-side masked keys)
+  // Anthropic est le fournisseur par défaut, sa clé est gérée côté serveur.
   const hasApiKeyForProvider = (provider: AIProvider): boolean => {
-    if (provider === 'lovable') return true;
+    if (provider === 'anthropic') return true;
     return !!maskedKeys?.[provider]?.has_key;
   };
 
   // Helper to get masked key for display
-  const getMaskedKeyForProvider = (provider: Exclude<AIProvider, 'lovable'>): string | null => {
+  const getMaskedKeyForProvider = (provider: Exclude<AIProvider, 'anthropic'>): string | null => {
     return maskedKeys?.[provider]?.masked || null;
   };
 
@@ -273,8 +258,8 @@ export function useAISettings() {
     maskedKeys,
     hasApiKeyForProvider,
     getMaskedKeyForProvider,
-    // Helper to get effective provider (default to lovable)
-    effectiveProvider: (settings?.provider || 'lovable') as AIProvider,
-    effectiveModel: settings?.preferred_model || PROVIDER_MODELS[settings?.provider || 'lovable'][0]?.value,
+    // Helper to get effective provider (default to anthropic)
+    effectiveProvider: (settings?.provider || 'anthropic') as AIProvider,
+    effectiveModel: settings?.preferred_model || PROVIDER_MODELS[settings?.provider || 'anthropic'][0]?.value,
   };
 }

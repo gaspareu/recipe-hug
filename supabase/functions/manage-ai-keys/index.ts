@@ -81,7 +81,7 @@ serve(async (req) => {
 
       const payload = {
         user_id: user.id,
-        provider: provider || "lovable",
+        provider: provider || "anthropic",
         preferred_model: preferred_model || null,
         agent_configs: agent_configs || {},
         provider_api_keys: encryptedKeys,

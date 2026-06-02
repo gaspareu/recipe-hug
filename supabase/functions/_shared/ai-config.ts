@@ -13,7 +13,8 @@ import { decryptProviderKeys } from "./decrypt-keys.ts";
 
 /** Get the API key for a specific provider from user settings */
 export function getApiKeyForProvider(settings: AISettings, provider: string): string | null {
-  if (provider === "lovable") return null;
+  // Anthropic est le fournisseur par défaut : sa clé provient du secret serveur ANTHROPIC_API_KEY.
+  if (provider === "anthropic") return null;
   const providerKey = settings.provider_api_keys?.[provider as keyof typeof settings.provider_api_keys];
   if (providerKey) return providerKey;
   if (settings.provider === provider && settings.api_key) return settings.api_key;
@@ -30,18 +31,18 @@ export async function getUserAISettings(supabaseClient: any, userId: string): Pr
       .maybeSingle();
 
     if (error || !data) {
-      return { provider: "lovable", api_key: null, preferred_model: null, provider_api_keys: {} };
+      return { provider: "anthropic", api_key: null, preferred_model: null, provider_api_keys: {} };
     }
 
     return {
-      provider: (data.provider || "lovable") as AIProvider,
+      provider: (data.provider || "anthropic") as AIProvider,
       api_key: data.api_key,
       preferred_model: data.preferred_model,
       provider_api_keys: await decryptProviderKeys(data.provider_api_keys || {}),
       agent_configs: data.agent_configs || undefined,
     };
   } catch {
-    return { provider: "lovable", api_key: null, preferred_model: null, provider_api_keys: {} };
+    return { provider: "anthropic", api_key: null, preferred_model: null, provider_api_keys: {} };
   }
 }
 
@@ -53,7 +54,7 @@ export interface ResolveOptions {
 
 /**
  * Resolve the AI configuration for a given agent type and user.
- * Priority: agent-specific config > global user settings > default (Lovable).
+ * Priority: agent-specific config > global user settings > default (Anthropic).
  * Validates required capabilities and falls back to default if not met.
  */
 export async function resolveAIConfig(
@@ -61,14 +62,14 @@ export async function resolveAIConfig(
   userId: string,
   options: ResolveOptions
 ): Promise<AIConfig> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  const defaultModel = options.defaultModel || DEFAULT_MODELS.lovable;
+  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+  const defaultModel = options.defaultModel || DEFAULT_MODELS.anthropic;
 
   const defaultConfig: AIConfig = {
-    provider: "lovable",
+    provider: "anthropic",
     model: defaultModel,
-    apiKey: LOVABLE_API_KEY || "",
-    endpoint: PROVIDER_ENDPOINTS.lovable,
+    apiKey: ANTHROPIC_API_KEY || "",
+    endpoint: PROVIDER_ENDPOINTS.anthropic,
   };
 
   console.log(`[AI Config] Resolving for agent: ${options.agentType}, user: ${userId}`);
@@ -85,8 +86,8 @@ export async function resolveAIConfig(
   if (agentConfig?.provider && agentConfig?.model) {
     console.log(`[AI Config] Found agent config: ${agentConfig.provider}/${agentConfig.model}`);
 
-    if (agentConfig.provider === "lovable") {
-      return { provider: "lovable", model: agentConfig.model, apiKey: LOVABLE_API_KEY || "", endpoint: PROVIDER_ENDPOINTS.lovable };
+    if (agentConfig.provider === "anthropic") {
+      return { provider: "anthropic", model: agentConfig.model, apiKey: ANTHROPIC_API_KEY || "", endpoint: PROVIDER_ENDPOINTS.anthropic };
     }
 
     if (!validateCapabilities(agentConfig.model, options.requiredCapabilities)) {
@@ -103,12 +104,12 @@ export async function resolveAIConfig(
       provider: agentConfig.provider,
       model: agentConfig.model,
       apiKey,
-      endpoint: PROVIDER_ENDPOINTS[agentConfig.provider] || PROVIDER_ENDPOINTS.lovable,
+      endpoint: PROVIDER_ENDPOINTS[agentConfig.provider] || PROVIDER_ENDPOINTS.anthropic,
     };
   }
 
   // 2. Fall back to global user settings
-  if (settings.provider && settings.provider !== "lovable" && settings.preferred_model) {
+  if (settings.provider && settings.provider !== "anthropic" && settings.preferred_model) {
     const globalApiKey = getApiKeyForProvider(settings, settings.provider);
 
     if (globalApiKey && validateCapabilities(settings.preferred_model!, options.requiredCapabilities)) {
@@ -117,7 +118,7 @@ export async function resolveAIConfig(
         provider: settings.provider,
         model: settings.preferred_model!,
         apiKey: globalApiKey,
-        endpoint: PROVIDER_ENDPOINTS[settings.provider] || PROVIDER_ENDPOINTS.lovable,
+        endpoint: PROVIDER_ENDPOINTS[settings.provider] || PROVIDER_ENDPOINTS.anthropic,
       };
     }
   }

@@ -12,7 +12,7 @@ export async function callAINonStreaming(config: AIConfig, messages: any[]): Pro
     return callAnthropicNonStreaming(config, messages);
   }
 
-  // OpenAI-compatible format (Lovable, OpenAI, Gemini OpenAI-compat)
+  // OpenAI-compatible format (OpenAI, Gemini OpenAI-compat)
   const response = await fetch(config.endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
@@ -62,7 +62,7 @@ export async function callAIStreaming(
     case "anthropic":
       return callAnthropicStreaming(config, messages, { ...options, stream });
     default:
-      // OpenAI-compatible (Lovable, OpenAI)
+      // OpenAI-compatible (OpenAI)
       return callOpenAICompatStreaming(config, messages, { ...options, stream });
   }
 }

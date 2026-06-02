@@ -7,9 +7,8 @@
 |---------|-------|--------|
 | Supabase | Auth, DB (PostgreSQL), Storage, Edge Functions | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
 | ElevenLabs | TTS + STT (voice mode) | Clé via edge function `elevenlabs-scribe-token` |
-| Lovable | AI provider par défaut | Clé interne (non exposée) |
+| Anthropic | AI provider par défaut | Clé serveur `ANTHROPIC_API_KEY` (non exposée) |
 | OpenAI | AI provider optionnel | Clé user chiffrée en DB |
-| Anthropic | AI provider optionnel | Clé user chiffrée en DB |
 | Gemini | AI provider optionnel | Clé user chiffrée en DB |
 
 ## Frontend Libraries

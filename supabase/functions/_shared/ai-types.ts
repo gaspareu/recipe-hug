@@ -1,6 +1,6 @@
 // ===== Shared AI Types & Constants =====
 
-export type AIProvider = "lovable" | "gemini" | "openai" | "anthropic";
+export type AIProvider = "anthropic" | "gemini" | "openai";
 
 export interface ProviderApiKeys {
   gemini?: string;
@@ -24,30 +24,19 @@ export interface AIConfig {
 }
 
 export const PROVIDER_ENDPOINTS: Record<string, string> = {
-  lovable: "https://ai.gateway.lovable.dev/v1/chat/completions",
   openai: "https://api.openai.com/v1/chat/completions",
   anthropic: "https://api.anthropic.com/v1/messages",
   gemini: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
 };
 
 export const DEFAULT_MODELS: Record<AIProvider, string> = {
-  lovable: "google/gemini-3-flash-preview",
+  anthropic: "claude-sonnet-4-20250514",
   gemini: "gemini-2.5-flash",
   openai: "gpt-4o",
-  anthropic: "claude-sonnet-4-20250514",
 };
 
 // Capability lists for model validation
 export const TOOL_CAPABLE_MODELS = [
-  // Lovable gateway
-  "google/gemini-3-flash-preview",
-  "google/gemini-3-pro-preview",
-  "google/gemini-2.5-flash",
-  "google/gemini-2.5-pro",
-  "openai/gpt-5",
-  "openai/gpt-5-mini",
-  "openai/gpt-5-nano",
-  "openai/gpt-5.2",
   // Direct Gemini
   "gemini-2.5-flash",
   "gemini-2.5-pro",
@@ -63,14 +52,6 @@ export const TOOL_CAPABLE_MODELS = [
 ];
 
 export const VISION_MODELS = [
-  // Lovable gateway
-  "google/gemini-3-flash-preview",
-  "google/gemini-3-pro-preview",
-  "google/gemini-2.5-flash",
-  "google/gemini-2.5-pro",
-  "openai/gpt-5",
-  "openai/gpt-5-mini",
-  "openai/gpt-5.2",
   // Direct Gemini
   "gemini-2.5-flash",
   "gemini-2.5-pro",
@@ -83,8 +64,6 @@ export const VISION_MODELS = [
 ];
 
 export const IMAGE_GEN_MODELS = [
-  "google/gemini-3-pro-image-preview",
-  "google/gemini-2.5-flash-image",
   "gemini-2.0-flash-exp-image-generation",
   "dall-e-3",
 ];
