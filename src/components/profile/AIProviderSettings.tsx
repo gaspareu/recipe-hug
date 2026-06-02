@@ -26,17 +26,15 @@ import { cn } from '@/lib/utils';
 // Provider icons/logos as simple colored badges
 const ProviderBadge = ({ provider, size = 'md' }: { provider: AIProvider; size?: 'sm' | 'md' }) => {
   const colors: Record<AIProvider, string> = {
-    lovable: 'bg-primary text-primary-foreground',
+    anthropic: 'bg-orange-500 text-white',
     gemini: 'bg-blue-500 text-white',
     openai: 'bg-emerald-600 text-white',
-    anthropic: 'bg-orange-500 text-white',
   };
 
   const initials: Record<AIProvider, string> = {
-    lovable: 'L',
+    anthropic: 'A',
     gemini: 'G',
     openai: 'O',
-    anthropic: 'A',
   };
 
   const sizeClasses = size === 'sm' ? 'w-6 h-6 text-xs' : 'w-8 h-8 text-sm';
@@ -104,7 +102,7 @@ const ProviderApiKeyInput = ({
   validationStatus,
   validationError,
 }: {
-  provider: Exclude<AIProvider, 'lovable'>;
+  provider: Exclude<AIProvider, 'anthropic'>;
   apiKey: string;
   onApiKeyChange: (key: string) => void;
   onValidate: () => void;
@@ -206,8 +204,8 @@ const ProviderCard = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const providerInfo = PROVIDER_INFO[provider];
-  const isLovable = provider === 'lovable';
-  const hasKey = isLovable || !!apiKey.trim() || hasExistingKey;
+  const isAnthropic = provider === 'anthropic';
+  const hasKey = isAnthropic || !!apiKey.trim() || hasExistingKey;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -228,7 +226,7 @@ const ProviderCard = ({
                   Par défaut
                 </Badge>
               )}
-              {isLovable && (
+              {isAnthropic && (
                 <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-0">
                   Inclus
                 </Badge>
@@ -239,8 +237,8 @@ const ProviderCard = ({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {!isLovable && (
-              <ApiKeyStatusIndicator 
+            {!isAnthropic && (
+              <ApiKeyStatusIndicator
                 hasKey={hasKey} 
                 isValidated={validationStatus === 'valid'}
                 isValidating={isValidating}
@@ -256,7 +254,7 @@ const ProviderCard = ({
       
       <CollapsibleContent className="pt-3 pb-1">
         <div className="space-y-4 pl-2 border-l-2 border-muted ml-4">
-          {!isLovable && (
+          {!isAnthropic && (
             <div className="pl-4">
               <Label className="text-sm mb-2 block">Clé API</Label>
               {hasExistingKey && !apiKey.trim() && maskedKey && (
@@ -266,7 +264,7 @@ const ProviderCard = ({
                 </p>
               )}
               <ProviderApiKeyInput
-                provider={provider as Exclude<AIProvider, 'lovable'>}
+                provider={provider as Exclude<AIProvider, 'anthropic'>}
                 apiKey={apiKey}
                 onApiKeyChange={onApiKeyChange}
                 onValidate={onValidate}
@@ -282,14 +280,14 @@ const ProviderCard = ({
             </div>
           )}
           
-          {isLovable && (
+          {isAnthropic && (
             <div className="pl-4">
               <div className="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
                 <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <div className="text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">Aucune configuration requise</p>
                   <p className="mt-1">
-                    Accès aux meilleurs modèles (Gemini, GPT-5) inclus dans votre abonnement.
+                    Fournisseur par défaut (modèles Claude). La clé est gérée côté serveur.
                   </p>
                 </div>
               </div>
@@ -303,11 +301,11 @@ const ProviderCard = ({
                 variant="outline"
                 size="sm"
                 onClick={onSetDefault}
-                disabled={!isLovable && !hasKey}
+                disabled={!isAnthropic && !hasKey}
               >
                 Définir par défaut
               </Button>
-              {!isLovable && !hasKey && (
+              {!isAnthropic && !hasKey && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Ajoutez une clé API pour utiliser ce fournisseur par défaut
                 </p>
@@ -344,12 +342,12 @@ const AgentConfigRow = ({
   const isCustomized = !!config?.provider || !!config?.model;
 
   // Filter compatible models by selected provider
-  const availableModels = compatibleModels.filter(m => 
-    effectiveProvider === 'lovable' || m.provider === effectiveProvider
+  const availableModels = compatibleModels.filter(m =>
+    effectiveProvider === 'anthropic' || m.provider === effectiveProvider
   );
 
-  // Check if provider has API key
-  const hasApiKey = effectiveProvider === 'lovable' || !!providerApiKeys[effectiveProvider as Exclude<AIProvider, 'lovable'>];
+  // Check if provider has API key (anthropic = clé serveur, toujours disponible)
+  const hasApiKey = effectiveProvider === 'anthropic' || !!providerApiKeys[effectiveProvider as Exclude<AIProvider, 'anthropic'>];
 
   const handleProviderChange = (provider: AIProvider) => {
     if (provider === globalProvider && !config?.model) {
@@ -357,8 +355,8 @@ const AgentConfigRow = ({
       onChange(undefined);
     } else {
       // Find first compatible model for this provider
-      const providerModels = compatibleModels.filter(m => 
-        provider === 'lovable' || m.provider === provider
+      const providerModels = compatibleModels.filter(m =>
+        provider === 'anthropic' || m.provider === provider
       );
       const firstModel = providerModels[0]?.value || null;
       onChange({ provider, model: firstModel });
@@ -381,7 +379,7 @@ const AgentConfigRow = ({
   };
 
   // Check if selected provider requires API key and if it's configured
-  const requiresApiKey = effectiveProvider !== 'lovable';
+  const requiresApiKey = effectiveProvider !== 'anthropic';
   const showApiKeyWarning = requiresApiKey && !hasApiKey && isCustomized;
 
   return (
@@ -440,8 +438,8 @@ const AgentConfigRow = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(['lovable', 'gemini', 'openai', 'anthropic'] as AIProvider[]).map((provider) => {
-                  const providerHasKey = provider === 'lovable' || !!providerApiKeys[provider as Exclude<AIProvider, 'lovable'>];
+                {(['anthropic', 'gemini', 'openai'] as AIProvider[]).map((provider) => {
+                  const providerHasKey = provider === 'anthropic' || !!providerApiKeys[provider as Exclude<AIProvider, 'anthropic'>];
                   return (
                     <SelectItem key={provider} value={provider}>
                       <div className="flex items-center gap-2">
@@ -450,7 +448,7 @@ const AgentConfigRow = ({
                         {provider === globalProvider && !isCustomized && (
                           <span className="text-xs text-muted-foreground">(par défaut)</span>
                         )}
-                        {provider !== 'lovable' && !providerHasKey && (
+                        {provider !== 'anthropic' && !providerHasKey && (
                           <XCircle className="h-3 w-3 text-muted-foreground/50" />
                         )}
                       </div>
@@ -514,7 +512,7 @@ const AgentConfigRow = ({
 export function AIProviderSettings() {
   const { settings, isLoading, updateSettings, validateApiKey, maskedKeys } = useAISettings();
 
-  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('lovable');
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('anthropic');
   const [providerApiKeys, setProviderApiKeys] = useState<ProviderApiKeys>({});
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [agentConfigs, setAgentConfigs] = useState<Partial<Record<AgentType, AgentConfig>>>({});
@@ -546,7 +544,7 @@ export function AIProviderSettings() {
     }
   }, [selectedProvider]);
 
-  const handleApiKeyChange = (provider: Exclude<AIProvider, 'lovable'>, key: string) => {
+  const handleApiKeyChange = (provider: Exclude<AIProvider, 'anthropic'>, key: string) => {
     setProviderApiKeys(prev => ({
       ...prev,
       [provider]: key,
@@ -558,7 +556,7 @@ export function AIProviderSettings() {
     }));
   };
 
-  const handleValidateKey = async (provider: Exclude<AIProvider, 'lovable'>) => {
+  const handleValidateKey = async (provider: Exclude<AIProvider, 'anthropic'>) => {
     const apiKey = providerApiKeys[provider];
     if (!apiKey?.trim()) return;
 
@@ -606,10 +604,10 @@ export function AIProviderSettings() {
   };
 
   const handleSave = async () => {
-    const newKeysToValidate: { provider: Exclude<AIProvider, 'lovable'>; key: string }[] = [];
-    
+    const newKeysToValidate: { provider: Exclude<AIProvider, 'anthropic'>; key: string }[] = [];
+
     // Collect all new keys that need validation
-    for (const provider of ['gemini', 'openai', 'anthropic'] as Exclude<AIProvider, 'lovable'>[]) {
+    for (const provider of ['gemini', 'openai'] as Exclude<AIProvider, 'anthropic'>[]) {
       const key = providerApiKeys[provider];
       if (key?.trim()) {
         // Skip if already validated as valid
@@ -675,7 +673,7 @@ export function AIProviderSettings() {
     setIsSaving(true);
     
     try {
-      const currentApiKey = selectedProvider === 'lovable' ? null : providerApiKeys[selectedProvider] || null;
+      const currentApiKey = selectedProvider === 'anthropic' ? null : providerApiKeys[selectedProvider] || null;
       
       await updateSettings.mutateAsync({
         provider: selectedProvider,
@@ -693,8 +691,8 @@ export function AIProviderSettings() {
     }
   };
 
-  const providers: AIProvider[] = ['lovable', 'gemini', 'openai', 'anthropic'];
-  const externalProviders: Exclude<AIProvider, 'lovable'>[] = ['gemini', 'openai', 'anthropic'];
+  const providers: AIProvider[] = ['anthropic', 'gemini', 'openai'];
+  const externalProviders: Exclude<AIProvider, 'anthropic'>[] = ['gemini', 'openai'];
   const models = PROVIDER_MODELS[selectedProvider];
   
   const agentTypes: AgentType[] = [
@@ -708,16 +706,16 @@ export function AIProviderSettings() {
     'webhook'
   ];
 
-  const hasChanges = 
-    selectedProvider !== (settings?.provider || 'lovable') ||
+  const hasChanges =
+    selectedProvider !== (settings?.provider || 'anthropic') ||
     Object.values(providerApiKeys).some(k => k?.trim()) || // Any new key typed
     selectedModel !== (settings?.preferred_model || '') ||
     JSON.stringify(agentConfigs) !== JSON.stringify(settings?.agent_configs || {});
 
   // Check if current default provider has a valid key (new typed key OR existing encrypted key)
-  const defaultProviderHasKey = selectedProvider === 'lovable' || 
+  const defaultProviderHasKey = selectedProvider === 'anthropic' ||
     !!providerApiKeys[selectedProvider]?.trim() ||
-    !!settings?.provider_api_keys?.[selectedProvider as Exclude<AIProvider, 'lovable'>];
+    !!settings?.provider_api_keys?.[selectedProvider as Exclude<AIProvider, 'anthropic'>];
 
   if (isLoading) {
     return (
@@ -763,11 +761,11 @@ export function AIProviderSettings() {
                   key={provider}
                   provider={provider}
                   isDefault={selectedProvider === provider}
-                  apiKey={provider === 'lovable' ? '' : (providerApiKeys[provider as Exclude<AIProvider, 'lovable'>] || '')}
-                  hasExistingKey={provider !== 'lovable' && !!settings?.provider_api_keys?.[provider as Exclude<AIProvider, 'lovable'>]}
-                  maskedKey={provider !== 'lovable' ? maskedKeys?.[provider as Exclude<AIProvider, 'lovable'>]?.masked : null}
-                  onApiKeyChange={(key) => handleApiKeyChange(provider as Exclude<AIProvider, 'lovable'>, key)}
-                  onValidate={() => handleValidateKey(provider as Exclude<AIProvider, 'lovable'>)}
+                  apiKey={provider === 'anthropic' ? '' : (providerApiKeys[provider as Exclude<AIProvider, 'anthropic'>] || '')}
+                  hasExistingKey={provider !== 'anthropic' && !!settings?.provider_api_keys?.[provider as Exclude<AIProvider, 'anthropic'>]}
+                  maskedKey={provider !== 'anthropic' ? maskedKeys?.[provider as Exclude<AIProvider, 'anthropic'>]?.masked : null}
+                  onApiKeyChange={(key) => handleApiKeyChange(provider as Exclude<AIProvider, 'anthropic'>, key)}
+                  onValidate={() => handleValidateKey(provider as Exclude<AIProvider, 'anthropic'>)}
                   onSetDefault={() => setSelectedProvider(provider)}
                   isValidating={state.isValidating}
                   validationStatus={state.status}

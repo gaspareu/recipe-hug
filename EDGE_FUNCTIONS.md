@@ -10,19 +10,20 @@
 |--------|--------------------|------|
 | `cors.ts` | `corsHeaders` | Headers CORS centralisés |
 | `ai-types.ts` | `AIProvider`, `AIConfig`, `AISettings`, `DEFAULT_MODELS`, `PROVIDER_ENDPOINTS`, `CAPABILITY_MODELS` | Types, constantes, listes de capabilities |
-| `ai-config.ts` | `resolveAIConfig`, `getUserAISettings`, `getApiKeyForProvider` | Résolution hiérarchique : Agent Config → Global → Default (Lovable) |
+| `ai-config.ts` | `resolveAIConfig`, `getUserAISettings`, `getApiKeyForProvider` | Résolution hiérarchique : Agent Config → Global → Default (Anthropic) |
 | `ai-providers.ts` | `callAINonStreaming`, `callAIStreaming`, `buildToolCallRequest`, `extractToolCallResult`, `buildVisionRequest`, `buildSimpleRequest`, `buildRequestHeaders`, `extractContentFromResponse` | Appels IA unifiés, transforms de stream, helpers tool-calling et vision |
 | `decrypt-keys.ts` | `encryptValue`, `decryptValue`, `decryptProviderKeys`, `maskApiKey` | Chiffrement/déchiffrement AES-GCM des clés API |
 
 ### Résolution de configuration (`resolveAIConfig`)
 
 ```
-Agent Config (agent_configs[agentType]) → Global User Settings → Default Lovable
+Agent Config (agent_configs[agentType]) → Global User Settings → Default Anthropic
 ```
 
 - Valide les capabilities requises (`tools`, `vision`, `image_generation`) avant sélection
-- Fallback automatique vers Lovable si clé manquante ou modèle incompatible
-- Supporte tous les providers : Lovable, Gemini, OpenAI, Anthropic
+- Fallback automatique vers Anthropic (clé serveur `ANTHROPIC_API_KEY`) si clé manquante ou modèle incompatible
+- Supporte les providers : Anthropic (défaut, clé serveur), Gemini, OpenAI (« bring your own key »)
+- La génération d'images requiert Gemini ou OpenAI/DALL·E — Anthropic ne génère pas d'images
 
 ---
 

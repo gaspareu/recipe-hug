@@ -16,7 +16,7 @@ cors.ts (5L)            headers CORS
 resolveAIConfig(agentType, userId)
   1. Agent Config (DB: agent_configs) → provider + model
   2. User Settings (DB: ai_settings) → custom provider/model/key
-  3. Default Lovable → fallback
+  3. Default Anthropic (server key ANTHROPIC_API_KEY) → fallback
 ```
 
 ## Edge Functions
@@ -45,7 +45,8 @@ Edge Function
 ```
 
 ## AI Providers Supportés
-- `lovable` (défaut) — clé interne
-- `openai` — GPT-4o, GPT-4o-mini
-- `anthropic` — Claude 3.5 Sonnet/Haiku
-- `gemini` — Gemini 1.5 Pro/Flash
+- `anthropic` (défaut) — Claude Sonnet 4 / 3.7 Sonnet / 3.5 Haiku — clé serveur `ANTHROPIC_API_KEY`
+- `openai` — GPT-4o, GPT-4o-mini, o3-mini, DALL·E 3 (BYOK)
+- `gemini` — Gemini 2.5 Flash/Pro, modèle image (BYOK)
+
+> Génération d'images : Gemini ou OpenAI/DALL·E uniquement (Anthropic ne génère pas d'images).

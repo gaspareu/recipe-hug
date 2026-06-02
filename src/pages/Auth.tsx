@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { Loader2, ChefHat } from 'lucide-react';
-import { lovable } from '@/integrations/lovable/index';
+import { supabase } from '@/integrations/supabase/client';
 import { Separator } from '@/components/ui/separator';
 
 const emailSchema = z.string().email('Email invalide');
@@ -34,13 +34,17 @@ export default function Auth() {
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
     });
-    if (result?.error) {
-      console.error('Google sign-in error:', result.error.message);
+    if (error) {
+      console.error('Google sign-in error:', error.message);
+      setGoogleLoading(false);
     }
-    setGoogleLoading(false);
+    // En cas de succès, le navigateur est redirigé vers Google : pas besoin de réinitialiser l'état.
   };
 
   // Redirect if already logged in

@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
     const senderName = senderProfile?.display_name ?? "";
     const recipeTitle = snapshot.title ?? "";
 
-    const appUrl = Deno.env.get("APP_URL") ?? "https://recipe-hug.lovable.app";
+    const appUrl = Deno.env.get("APP_URL") ?? "https://recipe-hug.vercel.app";
     const shareParams = new URLSearchParams();
     if (senderName) shareParams.set("shared_by", senderName);
     if (recipeTitle) shareParams.set("recipe", recipeTitle);

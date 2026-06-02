@@ -34,7 +34,7 @@ async function generateImage(config: any, prompt: string): Promise<string> {
     return `data:image/png;base64,${base64}`;
   }
 
-  // Lovable / Google Gemini format
+  // Google Gemini (OpenAI-compat) format
   const response = await fetch(config.endpoint, {
     method: "POST",
     headers: {
@@ -120,9 +120,11 @@ serve(async (req) => {
     }
 
     // Resolve AI configuration
+    // La génération d'images nécessite un fournisseur compatible (Gemini ou OpenAI/DALL·E)
+    // configuré par l'utilisateur : le fournisseur par défaut (Anthropic) ne génère pas d'images.
     const aiConfig = await resolveAIConfig(supabase, userId, {
       agentType: "generate_image",
-      defaultModel: "google/gemini-2.5-flash-image",
+      defaultModel: "gemini-2.0-flash-exp-image-generation",
       requiredCapabilities: ["image_generation"],
     });
     console.log(`Generating image for recipe ${recipeId} using ${aiConfig.provider}/${aiConfig.model}`);
