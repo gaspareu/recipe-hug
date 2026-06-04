@@ -1,0 +1,6 @@
+# Ne jamais committer les secrets ni les dumps
+.env
+*.dump
+*.sql.gz
+data-public.sql
+data-auth.sql
