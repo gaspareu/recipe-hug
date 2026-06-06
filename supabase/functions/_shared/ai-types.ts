@@ -64,7 +64,8 @@ export const VISION_MODELS = [
 ];
 
 export const IMAGE_GEN_MODELS = [
-  "gemini-2.0-flash-exp-image-generation",
+  "gemini-2.5-flash-image",
+  "gemini-3.1-flash-image",
   "dall-e-3",
 ];
 

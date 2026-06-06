@@ -125,7 +125,7 @@ serve(async (req) => {
     const aiConfig = await resolveAIConfig(supabase, userId, {
       agentType: "generate_image",
       defaultProvider: "gemini",
-      defaultModel: "gemini-2.0-flash-exp-image-generation",
+      defaultModel: "gemini-2.5-flash-image",
       requiredCapabilities: ["image_generation"],
     });
     console.log(`Generating image for recipe ${recipeId} using ${aiConfig.provider}/${aiConfig.model}`);
