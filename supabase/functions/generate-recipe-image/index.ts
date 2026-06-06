@@ -124,6 +124,7 @@ serve(async (req) => {
     // configuré par l'utilisateur : le fournisseur par défaut (Anthropic) ne génère pas d'images.
     const aiConfig = await resolveAIConfig(supabase, userId, {
       agentType: "generate_image",
+      defaultProvider: "gemini",
       defaultModel: "gemini-2.0-flash-exp-image-generation",
       requiredCapabilities: ["image_generation"],
     });

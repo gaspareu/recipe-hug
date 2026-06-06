@@ -49,6 +49,7 @@ export async function getUserAISettings(supabaseClient: any, userId: string): Pr
 export interface ResolveOptions {
   agentType: string;
   defaultModel?: string;
+  defaultProvider?: AIProvider;
   requiredCapabilities?: Capability[];
 }
 
@@ -63,13 +64,20 @@ export async function resolveAIConfig(
   options: ResolveOptions
 ): Promise<AIConfig> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-  const defaultModel = options.defaultModel || DEFAULT_MODELS.anthropic;
+  const defaultProvider = options.defaultProvider ?? "anthropic";
+  const defaultModel = options.defaultModel ?? DEFAULT_MODELS[defaultProvider] ?? DEFAULT_MODELS.anthropic;
+
+  const serverKeyByProvider: Record<string, string> = {
+    anthropic: ANTHROPIC_API_KEY ?? "",
+    gemini: Deno.env.get("GEMINI_API_KEY") ?? "",
+    openai: Deno.env.get("OPENAI_API_KEY") ?? "",
+  };
 
   const defaultConfig: AIConfig = {
-    provider: "anthropic",
+    provider: defaultProvider,
     model: defaultModel,
-    apiKey: ANTHROPIC_API_KEY || "",
-    endpoint: PROVIDER_ENDPOINTS.anthropic,
+    apiKey: serverKeyByProvider[defaultProvider] ?? "",
+    endpoint: PROVIDER_ENDPOINTS[defaultProvider] ?? PROVIDER_ENDPOINTS.anthropic,
   };
 
   console.log(`[AI Config] Resolving for agent: ${options.agentType}, user: ${userId}`);
