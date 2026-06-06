@@ -1,6 +1,7 @@
 # Edge Functions — Documentation
 
 > Référentiel des 13 fonctions backend. Toutes les fonctions IA utilisent le pattern unifié `resolveAIConfig` + modules partagés `_shared/`.
+> Pour le déploiement et les secrets, voir **`supabase/functions/CLAUDE.md`**.
 
 ---
 
@@ -17,13 +18,21 @@
 ### Résolution de configuration (`resolveAIConfig`)
 
 ```
-Agent Config (agent_configs[agentType]) → Global User Settings → Default Anthropic
+Agent Config (agent_configs[agentType]) → Global User Settings → defaultProvider (serveur)
 ```
 
-- Valide les capabilities requises (`tools`, `vision`, `image_generation`) avant sélection
-- Fallback automatique vers Anthropic (clé serveur `ANTHROPIC_API_KEY`) si clé manquante ou modèle incompatible
-- Supporte les providers : Anthropic (défaut, clé serveur), Gemini, OpenAI (« bring your own key »)
-- La génération d'images requiert Gemini ou OpenAI/DALL·E — Anthropic ne génère pas d'images
+Options de `ResolveOptions` :
+- `agentType` — identifiant de l'agent (ex : `"generate_image"`, `"chat"`)
+- `defaultModel` — modèle du fallback serveur
+- `defaultProvider` — provider du fallback serveur (`"gemini"` | `"openai"` | `"anthropic"`, défaut : `"anthropic"`)
+- `requiredCapabilities` — valide avant sélection, fallback si non satisfait
+
+Clés serveur utilisées selon `defaultProvider` :
+- `"anthropic"` → `ANTHROPIC_API_KEY`
+- `"gemini"` → `GEMINI_API_KEY`
+- `"openai"` → `OPENAI_API_KEY`
+
+Règle : Anthropic ne génère pas d'images → `generate-recipe-image` utilise `defaultProvider: "gemini"`.
 
 ---
 
@@ -88,6 +97,10 @@ Agent Config (agent_configs[agentType]) → Global User Settings → Default Ant
 - **Rôle** : Génère une photo réaliste d'un plat à partir du titre et des ingrédients, puis la stocke dans le bucket de stockage.
 - **Agent Type** : `generate_image`
 - **Capabilities** : image_generation
+- **Provider par défaut** : Gemini (`gemini-2.5-flash-image`) via `GEMINI_API_KEY` serveur
+- **API** : Native Gemini (`/v1beta/models/{model}:generateContent`) — **pas** l'endpoint OpenAI-compat
+- **Réponse** : `candidates[0].content.parts[].inlineData` (base64 + mimeType)
+- **verify_jwt** : `true` (modifie Storage + DB)
 
 ---
 

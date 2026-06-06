@@ -56,17 +56,18 @@ Il n'y a pas de script `typecheck` dédié ; `npm run build` (`vite build`) effe
 Voir **`EDGE_FUNCTIONS.md`** pour la doc complète. Architecture clé :
 
 - **`_shared/`** — modules partagés entre toutes les fonctions :
-  - `ai-config.ts` → `resolveAIConfig` : résolution hiérarchique **Agent Config → Settings utilisateur → Default (Anthropic)**, valide les capabilities requises (`tools`, `vision`, `image_generation`) avec fallback automatique
+  - `ai-config.ts` → `resolveAIConfig` : résolution hiérarchique **Agent Config → Settings utilisateur → Default configurable**, options : `agentType`, `defaultModel`, `defaultProvider` (si omis : Anthropic), `requiredCapabilities`
   - `ai-providers.ts` → appels IA unifiés : `callAIStreaming`, `callAINonStreaming`, helpers tool-calling/vision
-  - `ai-types.ts` → types et constantes (`AIProvider`, `DEFAULT_MODELS`, `PROVIDER_ENDPOINTS`, `CAPABILITY_MODELS`)
+  - `ai-types.ts` → types et constantes (`AIProvider`, `DEFAULT_MODELS`, `PROVIDER_ENDPOINTS`, `CAPABILITY_MODELS`) — modèles image : `gemini-2.5-flash-image`, `dall-e-3`
   - `decrypt-keys.ts` → chiffrement AES-GCM des clés API (`encryptValue`, `decryptValue`, `maskApiKey`)
   - `cors.ts` → `corsHeaders` centralisés
 - **Agent unifié** : `home-assistant` gère tout le chat d'accueil (création de recette, préférences, planning, navigation, vision) via tool calling (`save_recipe`, `update_preferences`, `navigate`, `save_meal_plan`). L'ancien système multi-agents a été supprimé.
 - **Fonctions de traitement** (non-streaming) : `generate-recipe`, `analyze-recipe`, `extract-user-preferences`, `parse-recipe-image` (vision + protection SSRF), `generate-recipe-image`.
 - **Webhook externe** : `webhook-recipe` — authentifié par token (`profiles.webhook_token`), **pas** par JWT.
 - **Utilitaires (sans IA)** : `manage-ai-keys`, `validate-ai-key`, `elevenlabs-tts`, `elevenlabs-scribe-token`, `share-recipe`, `claim-shares`.
-- **Providers IA** : Anthropic (défaut, clé serveur `ANTHROPIC_API_KEY`), Gemini, OpenAI (ces deux derniers en « bring your own key »). La génération d'images nécessite une clé Gemini ou OpenAI (Anthropic ne génère pas d'images).
+- **Providers IA** : Anthropic (défaut, clé serveur `ANTHROPIC_API_KEY`), Gemini (clé serveur `GEMINI_API_KEY` pour la génération d'images, BYOK pour le chat), OpenAI (BYOK). Anthropic ne génère pas d'images — `generate-recipe-image` utilise `gemini-2.5-flash-image` via l'API native Gemini (`/v1beta/models/{model}:generateContent`, **pas** l'endpoint OpenAI-compat).
 - `verify_jwt = false` est configuré dans `supabase/config.toml` pour les fonctions IA (l'auth est gérée dans le corps de la fonction).
+- **Déploiement MCP** : les imports `../_shared/` ne fonctionnent pas avec le bundler MCP — inliner le code partagé directement dans le fichier déployé. Voir `supabase/functions/CLAUDE.md`.
 
 ### Flux de données IA
 
@@ -92,9 +93,20 @@ Migrations horodatées dans `supabase/migrations/` (appliquées dans l'ordre). T
 
 ## Variables d'environnement
 
-Front (préfixe `VITE_`, dans `.env`) : `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`. Les secrets des edge functions (`ANTHROPIC_API_KEY` pour l'IA par défaut, `AI_KEYS_ENCRYPTION_SECRET` pour le chiffrement, clés ElevenLabs, `APP_URL`) sont gérés côté Supabase, hors du repo.
+Front (préfixe `VITE_`, dans `.env`) : `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`. Projet Supabase : `ifpqsyyvytfpossqycpc`.
+
+Secrets edge functions (Supabase Dashboard → Project Settings → Edge Functions) :
+
+| Secret | Usage |
+|--------|-------|
+| `ANTHROPIC_API_KEY` | IA par défaut (chat, analyse, génération) |
+| `GEMINI_API_KEY` | Génération d'images (défaut serveur pour `generate-recipe-image`) |
+| `AI_KEYS_ENCRYPTION_SECRET` | Chiffrement AES-GCM des clés API utilisateur |
+| `APP_URL` | URL de l'app (`https://recipe-hug.vercel.app`) |
+| `ELEVENLABS_API_KEY` | TTS + Scribe |
 
 ## Documentation complémentaire
 
 - `EDGE_FUNCTIONS.md` — référentiel détaillé des edge functions et du pattern IA partagé.
+- `supabase/functions/CLAUDE.md` — guide opérationnel : déploiement MCP, secrets, inventaire des fonctions.
 - `docs/CODEMAPS/` — cartes du code : `architecture.md`, `frontend.md`, `backend.md`, `data.md`, `dependencies.md`.
