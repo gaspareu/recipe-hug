@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { toast } from '@/components/ui/sonner';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, ImagePlus, History, Share2 } from 'lucide-react';
 import { ShareRecipeDialog } from '@/components/recipes/ShareRecipeDialog';
@@ -147,7 +148,8 @@ export default function RecipeDetail() {
                   const ingredients = recipe.ingredients as Array<{ name: string }>;
                   handleAnalyze();
                   generateImage.mutate({ recipeId: recipe.id, title: recipe.title, ingredients }, {
-                    onError: (error) => console.error('Image generation error:', error),
+                    onSuccess: () => toast('Image générée avec succès'),
+                    onError: (error) => toast(`Erreur : ${error.message}`, { description: 'La génération d\'image a échoué' }),
                   });
                 }} disabled={generateImage.isPending || isAnalyzing} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
                   {(generateImage.isPending || isAnalyzing) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
