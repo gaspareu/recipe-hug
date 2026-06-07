@@ -3,13 +3,15 @@ import { render, type RenderOptions } from "@testing-library/react";
 import { type ReactElement, type ReactNode } from "react";
 
 /**
- * QueryClient configuré pour les tests : pas de retry ni de cache persistant,
- * pour des assertions déterministes et rapides.
+ * QueryClient configuré pour les tests : pas de retry, et `gcTime: Infinity`
+ * pour que les données pré-remplies via `setQueryData` (sans observer actif)
+ * ne soient pas garbage-collectées pendant le test. Chaque test crée un
+ * client neuf, donc aucune fuite de cache entre tests.
  */
 export function createTestQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
-      queries: { retry: false, gcTime: 0 },
+      queries: { retry: false, gcTime: Infinity },
       mutations: { retry: false },
     },
   });
