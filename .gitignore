@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Test coverage
+coverage
+
 # Logs
 logs
 *.log

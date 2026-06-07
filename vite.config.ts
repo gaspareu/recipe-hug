@@ -59,5 +59,22 @@ export default defineConfig(() => ({
     setupFiles: "./src/test/setup.ts",
     css: true,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "text-summary", "html", "json-summary"],
+      reportsDirectory: "./coverage",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        // Composants shadcn/ui : réexports/wrappers générés, peu de logique propre
+        "src/components/ui/**",
+        // Fichiers Supabase auto-générés (interdits d'édition)
+        "src/integrations/supabase/**",
+        // Types purs, point d'entrée et setup de tests
+        "src/types/**",
+        "src/main.tsx",
+        "src/test/**",
+        "src/**/*.d.ts",
+      ],
+    },
   },
 }));
