@@ -4,32 +4,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { buildVisionRequest, buildRequestHeaders, extractContentFromResponse } from "../_shared/ai-providers.ts";
-
-// SSRF protection: validate URL is safe
-function isUrlSafe(urlString: string): boolean {
-  try {
-    const url = new URL(urlString);
-    if (url.protocol !== "https:") return false;
-
-    const hostname = url.hostname.toLowerCase();
-    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return false;
-    if (hostname === "169.254.169.254") return false;
-
-    const parts = hostname.split(".");
-    if (parts.length === 4) {
-      const firstOctet = parseInt(parts[0], 10);
-      const secondOctet = parseInt(parts[1], 10);
-      if (firstOctet === 10) return false;
-      if (firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31) return false;
-      if (firstOctet === 192 && secondOctet === 168) return false;
-      if (firstOctet === 169 && secondOctet === 254) return false;
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { isUrlSafe } from "../_shared/url-safety.ts";
 
 const RequestSchema = z.object({
   image_url: z
