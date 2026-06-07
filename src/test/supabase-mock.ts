@@ -46,11 +46,20 @@ export interface SupabaseMockOptions {
   result?: SupabaseResult;
   /** Résultats spécifiques par table (prioritaires sur `result`). */
   resultsByTable?: Record<string, SupabaseResult>;
+  /** Résultat par défaut de `rpc(...)`. */
+  rpcResult?: SupabaseResult;
+  /** Résultats `rpc(...)` spécifiques par nom de fonction. */
+  rpcResultsByName?: Record<string, SupabaseResult>;
+  /** Résultat par défaut de `functions.invoke(...)`. */
+  functionResult?: SupabaseResult;
+  /** Résultats `functions.invoke(...)` spécifiques par nom de fonction. */
+  functionResultsByName?: Record<string, SupabaseResult>;
 }
 
 /**
  * Crée un client Supabase factice couvrant les usages des hooks
- * (`auth.getUser`, `auth.getSession`, `from(table).<chaîne>`).
+ * (`auth.getUser`, `auth.getSession`, `from(table).<chaîne>`, `rpc`,
+ * `functions.invoke`).
  *
  * Exemple :
  * ```ts
@@ -76,5 +85,15 @@ export function createSupabaseMock(options: SupabaseMockOptions = {}) {
     from: vi.fn((table: string) =>
       createQueryBuilder(options.resultsByTable?.[table] ?? defaultResult),
     ),
+    rpc: vi.fn((name: string) =>
+      Promise.resolve(options.rpcResultsByName?.[name] ?? options.rpcResult ?? OK),
+    ),
+    functions: {
+      invoke: vi.fn((name: string) =>
+        Promise.resolve(
+          options.functionResultsByName?.[name] ?? options.functionResult ?? OK,
+        ),
+      ),
+    },
   };
 }
