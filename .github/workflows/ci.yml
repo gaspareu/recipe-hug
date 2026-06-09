@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    name: Frontend (tests, build, lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tests unitaires (Vitest)
+        run: npm run test:run
+
+      - name: Build de production
+        run: npm run build
+
+      # Typecheck non-bloquant : erreurs de type préexistantes (tests + RecipeNew.tsx).
+      # `vite build` ne vérifie pas les types ; ce step les surface via `tsc -b`.
+      # À repasser en bloquant une fois cette dette résorbée.
+      - name: Typecheck (informatif)
+        run: npm run typecheck
+        continue-on-error: true
+
+      # Lint non-bloquant : le repo porte une dette `no-explicit-any` préexistante.
+      # À repasser en bloquant une fois cette dette résorbée.
+      - name: Lint (informatif)
+        run: npm run lint
+        continue-on-error: true
+
+  edge-functions:
+    name: Edge functions (tests Deno)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Tests Deno (modules partagés)
+        run: deno test supabase/functions/_shared/

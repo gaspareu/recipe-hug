@@ -5,90 +5,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ShoppingCart, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
-
-interface GroceryIngredient {
-  name: string;
-  quantity: number | string | null;
-  unit: string | null;
-  category: string;
-}
+import { aggregateIngredients, groupByCategory, type GroceryIngredient } from '@/lib/grocery-list';
 
 interface GroceryListSheetProps {
   ingredients: GroceryIngredient[];
   customMeals: string[];
   hasMeals: boolean;
-}
-
-function aggregateIngredients(ingredients: GroceryIngredient[]) {
-  // Map keyed by "name|unit" for numeric quantities, "name|non-numeric" for others
-  const numericMap = new Map<string, { name: string; unit: string | null; total: number; category: string }>();
-  const nonNumericList: { name: string; quantities: string[]; category: string }[] = [];
-
-  for (const ing of ingredients) {
-    const numericQty = typeof ing.quantity === 'number'
-      ? ing.quantity
-      : typeof ing.quantity === 'string' && ing.quantity.trim() !== '' && !isNaN(Number(ing.quantity))
-        ? Number(ing.quantity)
-        : null;
-
-    if (numericQty !== null) {
-      const unit = ing.unit?.trim() || '';
-      const key = `${ing.name.toLowerCase().trim()}|${unit.toLowerCase()}`;
-      const existing = numericMap.get(key);
-      if (existing) {
-        numericMap.set(key, { ...existing, total: existing.total + numericQty });
-      } else {
-        numericMap.set(key, {
-          name: ing.name,
-          unit: ing.unit || null,
-          total: numericQty,
-          category: ing.category || 'Autres',
-        });
-      }
-    } else {
-      // Non-numeric quantity: keep distinct, group by name
-      const qtyStr = ing.quantity && ing.unit
-        ? `${ing.quantity} ${ing.unit}`
-        : ing.quantity
-          ? `${ing.quantity}`
-          : '';
-      const entry = nonNumericList.find(e => e.name.toLowerCase().trim() === ing.name.toLowerCase().trim());
-      if (entry) {
-        if (qtyStr && !entry.quantities.includes(qtyStr)) {
-          entry.quantities.push(qtyStr);
-        }
-      } else {
-        nonNumericList.push({
-          name: ing.name,
-          quantities: qtyStr ? [qtyStr] : [],
-          category: ing.category || 'Autres',
-        });
-      }
-    }
-  }
-
-  const numericResults = Array.from(numericMap.values()).map(({ name, unit, total, category }) => ({
-    name,
-    quantities: [unit ? `${total} ${unit}` : `${total}`],
-    category,
-  }));
-
-  return [...numericResults, ...nonNumericList];
-}
-
-function groupByCategory(items: ReturnType<typeof aggregateIngredients>) {
-  const groups: Record<string, typeof items> = {};
-  for (const item of items) {
-    const cat = item.category;
-    if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(item);
-  }
-  // Sort categories, putting "Autres" last
-  return Object.entries(groups).sort(([a], [b]) => {
-    if (a === 'Autres') return 1;
-    if (b === 'Autres') return -1;
-    return a.localeCompare(b, 'fr');
-  });
 }
 
 export function GroceryListSheet({ ingredients, customMeals, hasMeals }: GroceryListSheetProps) {

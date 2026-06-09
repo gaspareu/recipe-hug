@@ -4,6 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **recipe-hug** — Application PWA de gestion de recettes avec assistant IA conversationnel (chat streaming, vision, génération d'images), planification de repas et préférences culinaires personnalisées. Déployé sur Vercel.
 
+## Environnement de développement (Claude Code Web)
+
+Ce projet est manipulé **principalement via Claude Code Web** : les sessions tournent dans des conteneurs cloud **éphémères**, avec un **clone neuf du repo** à chaque démarrage et aucune persistance entre sessions. Conséquence directe : **tout l'outillage agent doit être committé dans le repo** pour être disponible automatiquement — le configurer « localement » dans une session ne sert à rien (perdu au redémarrage). S'outiller « en accordance » signifie donc privilégier des artefacts versionnés :
+
+- **`.mcp.json`** (racine, committé) — déclare le serveur MCP **Supabase** (HTTP). L'intégration **GitHub** est fournie nativement par Claude Code Web (pas de `gh` CLI dans le conteneur).
+- **`.claude/settings.json`** (committé) — hook `SessionStart` exécutant `npm ci` (conteneur prêt dès l'ouverture de session) + permissions pré-accordées pour npm/git/deno (moins de prompts).
+- **CI GitHub Actions** (`.github/workflows/ci.yml`) — tests + build + `deno test` ; c'est le **garde-fou de non-régression**, car la session web ne revalide pas tout automatiquement. `typecheck` et `lint` y tournent en mode informatif (non-bloquant) tant que la dette de types/lint préexistante n'est pas résorbée.
+- **`.github/dependabot.yml`** (committé) — PR hebdomadaires de mise à jour des dépendances npm et des GitHub Actions.
+
+Toute nouvelle dépendance d'outillage (MCP, hook, skill, permission) doit être ajoutée **au repo sous `.claude/` ou à la racine**, jamais configurée hors-repo.
+
 ## Commands
 
 ```bash
@@ -11,6 +22,7 @@ npm run dev          # Dev server (Vite, http://localhost:8080)
 npm run build        # Build de production (effectue aussi la vérif TypeScript)
 npm run build:dev    # Build en mode development
 npm run lint         # ESLint (flat config, eslint.config.js)
+npm run typecheck    # Vérification de types TypeScript (tsc -b --noEmit)
 npm run preview      # Prévisualise le build
 npm test             # Vitest (watch mode)
 npm run test:run     # Vitest (single run) — à utiliser en validation/CI
@@ -93,7 +105,7 @@ Migrations horodatées dans `supabase/migrations/` (appliquées dans l'ordre). T
 
 ## Variables d'environnement
 
-Front (préfixe `VITE_`, dans `.env`) : `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`. Projet Supabase : `ifpqsyyvytfpossqycpc`.
+Front (préfixe `VITE_`, dans `.env` — voir `.env.example` ; `.env` est gitignoré) : `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`. Valeurs publiques (la publishable key est la clé anon). Projet Supabase : `ifpqsyyvytfpossqycpc`.
 
 Secrets edge functions (Supabase Dashboard → Project Settings → Edge Functions) :
 
