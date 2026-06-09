@@ -24,8 +24,15 @@ jobs:
       - name: Tests unitaires (Vitest)
         run: npm run test:run
 
-      - name: Build de production (vérif TypeScript incluse)
+      - name: Build de production
         run: npm run build
+
+      # Typecheck non-bloquant : erreurs de type préexistantes (tests + RecipeNew.tsx).
+      # `vite build` ne vérifie pas les types ; ce step les surface via `tsc -b`.
+      # À repasser en bloquant une fois cette dette résorbée.
+      - name: Typecheck (informatif)
+        run: npm run typecheck
+        continue-on-error: true
 
       # Lint non-bloquant : le repo porte une dette `no-explicit-any` préexistante.
       # À repasser en bloquant une fois cette dette résorbée.
