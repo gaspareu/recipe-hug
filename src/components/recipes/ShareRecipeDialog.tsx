@@ -28,7 +28,7 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
     const schema = tab === 'email' ? emailSchema : phoneSchema;
     const result = schema.safeParse(value);
     if (!result.success) {
-      setValidationError(result.error.errors[0]?.message ?? 'Valeur invalide');
+      setValidationError(result.error.issues[0]?.message ?? 'Valeur invalide');
       return;
     }
     setValidationError(null);
