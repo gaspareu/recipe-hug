@@ -133,7 +133,7 @@ export function useChatEngine(config: ChatEngineConfig) {
 
           const finishReason = parsed.choices?.[0]?.finish_reason;
           if (finishReason === 'tool_calls' && toolCallName && toolCallArguments) {
-            await executeToolCall(toolCallName, toolCallArguments, assistantMessageId, (c) => { assistantContent = c; });
+            assistantContent = await executeToolCall(toolCallName, toolCallArguments, assistantMessageId, assistantContent);
             toolCallName = '';
             toolCallArguments = '';
           }
@@ -146,7 +146,7 @@ export function useChatEngine(config: ChatEngineConfig) {
 
     // Fallback: execute accumulated tool call if finish_reason was missing
     if (toolCallName && toolCallArguments) {
-      await executeToolCall(toolCallName, toolCallArguments, assistantMessageId, (c) => { assistantContent = c; });
+      assistantContent = await executeToolCall(toolCallName, toolCallArguments, assistantMessageId, assistantContent);
     }
 
     // Fallback: parse actions from text
@@ -155,12 +155,16 @@ export function useChatEngine(config: ChatEngineConfig) {
     return assistantContent;
   }, []);
 
+  // Exécute un tool call et retourne le contenu (éventuellement enrichi) du
+  // message assistant. Le contenu courant est passé par le parser : le relire
+  // via un updater setMessages à effet de bord n'est pas fiable (React peut
+  // différer son exécution et le batch écraserait alors le contenu ajouté).
   const executeToolCall = useCallback(async (
     name: string,
     argsStr: string,
     assistantMessageId: string,
-    setContent: (c: string) => void,
-  ) => {
+    currentContent: string,
+  ): Promise<string> => {
     try {
       const args = JSON.parse(argsStr);
       const result = await onToolCallRef.current({ type: name, data: args });
@@ -168,29 +172,25 @@ export function useChatEngine(config: ChatEngineConfig) {
       // Handle search results
       if (name === 'search_recipes' && result) {
         const list = result as SearchResult[];
-        let currentContent = '';
-        setMessages(prev => {
-          const msg = prev.find(m => m.id === assistantMessageId);
-          currentContent = msg?.content || '';
-          return prev;
-        });
-        
+        let content = currentContent;
+
         if (list.length === 0) {
-          currentContent += "\n\nJe n'ai trouvé aucune recette correspondante. Tu veux que je t'en crée une nouvelle ?";
+          content += "\n\nJe n'ai trouvé aucune recette correspondante. Tu veux que je t'en crée une nouvelle ?";
         } else {
-          currentContent += '\n\n**Résultats trouvés :**\n';
+          content += '\n\n**Résultats trouvés :**\n';
           list.forEach((r, i) => {
             const statusLabel = { draft: '📝 brouillon', tested: '🧪 testée', validated: '✅ validée', archived: '📦 archivée' }[r.status] || r.status;
-            currentContent += `${i + 1}. **${r.title}** - ${statusLabel}${r.is_favorite ? ' ⭐' : ''}\n`;
+            content += `${i + 1}. **${r.title}** - ${statusLabel}${r.is_favorite ? ' ⭐' : ''}\n`;
           });
-          currentContent += '\nDis-moi laquelle tu veux ouvrir, cuisiner ou modifier !';
+          content += '\nDis-moi laquelle tu veux ouvrir, cuisiner ou modifier !';
         }
-        setContent(currentContent);
-        setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: currentContent } : m));
+        setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content } : m));
+        return content;
       }
     } catch (e) {
       console.error('Failed to parse/execute tool call:', e, argsStr);
     }
+    return currentContent;
   }, []);
 
   const parseTextActions = useCallback((content: string, assistantMessageId: string): string => {
