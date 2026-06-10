@@ -65,9 +65,9 @@ export interface ModelInfo {
 // Models available per provider with capabilities
 export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
   anthropic: [
-    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (défaut)', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', capabilities: ['text', 'streaming', 'tools'] },
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (défaut)', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-opus-4-8', label: 'Claude Opus 4.8', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', capabilities: ['text', 'streaming', 'tools'] },
   ],
   gemini: [
     { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', capabilities: ['text', 'streaming', 'vision', 'tools'] },

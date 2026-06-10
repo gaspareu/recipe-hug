@@ -492,7 +492,7 @@ serve(async (req) => {
 
     const aiConfig = await resolveAIConfig(supabaseClient, userId, {
       agentType: "chat",
-      defaultModel: "google/gemini-3-flash-preview",
+      defaultModel: "claude-sonnet-4-6",
       requiredCapabilities: ["tools"],
     });
     console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);

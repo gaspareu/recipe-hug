@@ -208,14 +208,21 @@ function transformGeminiStreamToOpenAI(response: Response): Response {
   return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
 }
 
-function transformAnthropicStreamToOpenAI(response: Response): Response {
+export function transformAnthropicStreamToOpenAI(response: Response): Response {
   const reader = response.body!.getReader();
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
+  const sse = (payload: object) =>
+    encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
+
   const stream = new ReadableStream({
     async start(controller) {
       let buffer = "";
+      // Suit le type du content block courant : le SSE Anthropic envoie le nom
+      // de l'outil dans `content_block_start` puis les arguments en deltas
+      // `input_json_delta`, et clôt avec `content_block_stop`.
+      let currentBlockIsTool = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) { controller.enqueue(encoder.encode("data: [DONE]\n\n")); controller.close(); break; }
@@ -223,16 +230,39 @@ function transformAnthropicStreamToOpenAI(response: Response): Response {
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
         for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.type === "content_block_delta") {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: data.delta?.text || "" }, index: 0 }] })}\n\n`));
-              } else if (data.type === "tool_use") {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ id: data.id, type: "function", function: { name: data.name, arguments: JSON.stringify(data.input) } }] }, index: 0 }] })}\n\n`));
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            switch (data.type) {
+              case "content_block_start": {
+                const block = data.content_block;
+                if (block?.type === "tool_use") {
+                  currentBlockIsTool = true;
+                  // Émet le nom de l'outil (arguments accumulés dans les deltas).
+                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: block.id, type: "function", function: { name: block.name, arguments: "" } }] } }] }));
+                } else {
+                  currentBlockIsTool = false;
+                }
+                break;
               }
-            } catch { /* Skip invalid */ }
-          }
+              case "content_block_delta": {
+                if (data.delta?.type === "input_json_delta") {
+                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: data.delta.partial_json || "" } }] } }] }));
+                } else if (data.delta?.text != null) {
+                  controller.enqueue(sse({ choices: [{ index: 0, delta: { content: data.delta.text } }] }));
+                }
+                break;
+              }
+              case "content_block_stop": {
+                // Signale au front la fin de l'appel d'outil pour qu'il l'exécute.
+                if (currentBlockIsTool) {
+                  controller.enqueue(sse({ choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] }));
+                  currentBlockIsTool = false;
+                }
+                break;
+              }
+            }
+          } catch { /* Skip invalid */ }
         }
       }
     },

@@ -30,7 +30,7 @@ export const PROVIDER_ENDPOINTS: Record<string, string> = {
 };
 
 export const DEFAULT_MODELS: Record<AIProvider, string> = {
-  anthropic: "claude-sonnet-4-20250514",
+  anthropic: "claude-sonnet-4-6",
   gemini: "gemini-2.5-flash",
   openai: "gpt-4o",
 };
@@ -46,9 +46,9 @@ export const TOOL_CAPABLE_MODELS = [
   "gpt-4o-mini",
   "o3-mini",
   // Direct Anthropic
-  "claude-sonnet-4-20250514",
-  "claude-3-7-sonnet-20250219",
-  "claude-3-5-haiku-20241022",
+  "claude-opus-4-8",
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5",
 ];
 
 export const VISION_MODELS = [
@@ -59,8 +59,8 @@ export const VISION_MODELS = [
   "gpt-4o",
   "gpt-4o-mini",
   // Direct Anthropic
-  "claude-sonnet-4-20250514",
-  "claude-3-7-sonnet-20250219",
+  "claude-opus-4-8",
+  "claude-sonnet-4-6",
 ];
 
 export const IMAGE_GEN_MODELS = [

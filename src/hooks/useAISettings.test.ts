@@ -67,7 +67,7 @@ describe("useAISettings", () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.effectiveProvider).toBe("anthropic");
-    expect(result.current.effectiveModel).toBe("claude-sonnet-4-20250514");
+    expect(result.current.effectiveModel).toBe("claude-sonnet-4-6");
   });
 
   it("considère toujours qu'anthropic a une clé (gérée côté serveur)", async () => {
