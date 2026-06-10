@@ -4,22 +4,29 @@
 
 ## Déploiement via MCP Supabase
 
-### Contrainte critique : imports `_shared/` non supportés
+### Structure de fichiers à respecter
 
-Le bundler MCP place `index.ts` dans un sous-répertoire `source/`. Les imports relatifs `../_shared/cors.ts` échouent au bundling avec l'erreur :
+Le bundler MCP résout les imports relatifs à partir des **noms de fichiers fournis** dans le tableau `files`. Pour que les imports `../_shared/*.ts` fonctionnent, préfixer tous les noms par `functions/` et inclure les fichiers partagés :
+
+```jsonc
+// mcp deploy_edge_function
+{
+  "name": "home-assistant",
+  "entrypoint_path": "functions/home-assistant/index.ts",
+  "files": [
+    { "name": "functions/home-assistant/index.ts", "content": "..." },
+    { "name": "functions/_shared/cors.ts", "content": "..." },
+    { "name": "functions/_shared/ai-config.ts", "content": "..." },
+    { "name": "functions/_shared/ai-types.ts", "content": "..." },
+    { "name": "functions/_shared/ai-providers.ts", "content": "..." },
+    { "name": "functions/_shared/decrypt-keys.ts", "content": "..." }
+  ]
+}
 ```
-Module not found "file:///tmp/.../_shared/cors.ts"
-```
 
-**Règle** : quand on déploie via MCP (`mcp__claude_ai_Supabase__deploy_edge_function`), **inliner le code partagé** directement dans le fichier. Ne pas fournir les fichiers `_shared/` dans le tableau `files`.
+⚠️ Sans le préfixe `functions/` (ex. `index.ts` seul à la racine), les imports `../_shared/` échouent au bundling (`Module not found`). Ne pas inclure les fichiers de test (`*_test.ts`).
 
-```typescript
-// ✅ À faire : inliner
-const corsHeaders = { "Access-Control-Allow-Origin": "*", ... };
-
-// ❌ À éviter avec MCP
-import { corsHeaders } from "../_shared/cors.ts";
-```
+⚠️ **Penser à redéployer** : modifier `supabase/functions/` dans le repo ne change rien en prod tant que la fonction n'est pas redéployée (MCP ou CLI). Vérifier après coup avec `get_edge_function` que la version a augmenté.
 
 ### Via CLI Supabase (local → remote)
 
