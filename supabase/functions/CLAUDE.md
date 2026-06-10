@@ -63,6 +63,8 @@ Projet : `ifpqsyyvytfpossqycpc`
 | `elevenlabs-scribe-token` | false | Token STT temps réel |
 | `share-recipe` | false | Partage recette par email/tél |
 | `claim-shares` | false | Réclamer recettes partagées |
+| `manage-cookidoo-credentials` | false | CRUD identifiants Cookidoo chiffrés (AES-GCM) |
+| `export-recipe-cookidoo` | false | Export d'une recette vers Cookidoo (Thermomix) |
 
 > `generate-recipe-image` a `verify_jwt: true` car elle modifie des données utilisateur (upload Storage + update recipes).
 
@@ -111,3 +113,26 @@ Le callback OAuth Google doit pointer sur `/auth` (pas `/`) :
 redirectTo: `${window.location.origin}/auth`  // ✅
 // redirectTo: window.location.origin          // ❌ React Router redirige / → /home, strippant le ?code=
 ```
+
+---
+
+## Connecteur Cookidoo (export Thermomix)
+
+Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes recettes créées »).
+
+- **Source unique** : `supabase/functions/_shared/cookidoo/{auth,client,mapper,types}.ts`. Le CLI
+  `connector/cookidoo/cli.ts` importe **ces mêmes modules** (entrypoint mince, zéro duplication).
+- **Modules** :
+  - `mapper.ts` (pur, testé `mapper_test.ts`) → recipe-hug → payload Cookidoo + annotations TTS/STEAMING.
+  - `auth.ts` → login PKCE/cookie (`_oauth2_proxy` + `v-authenticated`, **pas** de Bearer token).
+  - `client.ts` → endpoints `/created-recipes` (create → attendre ~5 s → patch ; rate limit ~10 req/min).
+- **Fonctions** :
+  - `manage-cookidoo-credentials` — GET (statut, email masqué) / POST (upsert chiffré AES-GCM) / DELETE.
+    Mot de passe chiffré via `AI_KEYS_ENCRYPTION_SECRET`, jamais renvoyé en clair. Stocké dans
+    `user_cookidoo_credentials` (vue `_safe` sans `password_enc`).
+  - `export-recipe-cookidoo` — lit la recette (RLS) + déchiffre les creds → login → map → create → patch.
+    **Échecs métier renvoyés en HTTP 200 avec `{ ok:false, error }`** (supabase-js met `data` à null sur non-2xx),
+    erreurs classifiées : `auth_failed` / `ip_blocked` / `rate_limited`.
+- **⚠️ Risque IP** : Cookidoo peut bloquer les IP datacenter. Si `ip_blocked`, le CLI local
+  (IP résidentielle) reste le plan B — il partage exactement le même code `_shared/cookidoo`.
+- **Déploiement** : via CLI Supabase (les imports `../_shared/cookidoo/` sont suivis nativement).

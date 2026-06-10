@@ -29,3 +29,9 @@ verify_jwt = false
 
 [functions.validate-ai-key]
 verify_jwt = false
+
+[functions.manage-cookidoo-credentials]
+verify_jwt = false
+
+[functions.export-recipe-cookidoo]
+verify_jwt = false

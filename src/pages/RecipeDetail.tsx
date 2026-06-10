@@ -3,6 +3,7 @@ import { toast } from '@/components/ui/sonner';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, ImagePlus, History, Share2 } from 'lucide-react';
 import { ShareRecipeDialog } from '@/components/recipes/ShareRecipeDialog';
+import { ExportToCookidooButton } from '@/components/recipes/ExportToCookidooButton';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
@@ -158,6 +159,7 @@ export default function RecipeDetail() {
               <Tooltip><TooltipTrigger asChild>
                 <ShareRecipeDialog recipeId={recipe.id} />
               </TooltipTrigger><TooltipContent><p>Partager</p></TooltipContent></Tooltip>
+              <ExportToCookidooButton recipeId={recipe.id} />
             </TooltipProvider>
             <Tooltip><TooltipTrigger asChild>
               <Button variant="ghost" size="icon" asChild className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">

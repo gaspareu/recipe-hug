@@ -21,9 +21,11 @@
  * Le fichier recette JSON suit le modèle recipe-hug (voir sample-recipe.json) :
  *   { "title", "servings", "ingredients":[{name,quantity,unit}], "steps":[{order,text,duration_minutes}] }
  */
-import type { Recipe, ThermomixTool } from "./types.ts";
-import { mapRecipeToCookidoo } from "./mapper.ts";
-import { login, countryToLang, type CookieJar } from "./auth.ts";
+// Source unique : modules partagés sous supabase/functions/_shared/cookidoo/
+// (mêmes fichiers importés par les edge functions — aucune duplication).
+import type { Recipe, ThermomixTool } from "../../supabase/functions/_shared/cookidoo/types.ts";
+import { mapRecipeToCookidoo } from "../../supabase/functions/_shared/cookidoo/mapper.ts";
+import { login, countryToLang, type CookieJar } from "../../supabase/functions/_shared/cookidoo/auth.ts";
 import {
   createRecipe,
   deleteRecipe,
@@ -31,7 +33,7 @@ import {
   patchRecipe,
   recipeWebUrl,
   type ClientCtx,
-} from "./client.ts";
+} from "../../supabase/functions/_shared/cookidoo/client.ts";
 
 // ── Portabilité Deno / Node ──────────────────────────────────────────────────
 const g = globalThis as unknown as {
