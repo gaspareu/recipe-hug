@@ -266,7 +266,6 @@ export function useChatEngine(config: ChatEngineConfig) {
       });
 
       if (!response.ok) {
-        if (response.status === 429) { console.warn('Rate limited'); return; }
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || "Erreur de communication avec l'assistant");
       }
@@ -278,7 +277,13 @@ export function useChatEngine(config: ChatEngineConfig) {
       await parseSSEStream(reader, assistantMessageId, content);
     } catch (error) {
       console.error('Chat error:', error);
-      setMessages(prev => prev.filter(m => m.id !== assistantMessageId));
+      // Affiche l'erreur dans le fil plutôt que de la masquer : l'utilisateur
+      // doit savoir que sa demande a échoué (crédits IA épuisés, réseau, etc.).
+      const message = error instanceof Error ? error.message : "Erreur de communication avec l'assistant";
+      setMessages(prev => [
+        ...prev.filter(m => m.id !== assistantMessageId),
+        { id: `error-${Date.now()}`, role: 'assistant', content: `⚠️ ${message}`, timestamp: new Date() },
+      ]);
     } finally {
       setIsStreaming(false);
     }
