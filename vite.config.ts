@@ -3,9 +3,30 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+
+// Identifiant du commit compilé : Vercel expose le SHA du déploiement,
+// sinon on interroge git (clone local) ; "inconnu" en dernier recours.
+function resolveCommit(): string {
+  const vercelSha = process.env.VERCEL_GIT_COMMIT_SHA;
+  if (vercelSha) return vercelSha.slice(0, 7);
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+  } catch {
+    return "inconnu";
+  }
+}
+
+const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
 
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_COMMIT__: JSON.stringify(resolveCommit()),
+    __APP_BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+  },
   server: {
     host: "::",
     port: 8080,

@@ -14,6 +14,7 @@ import { CulinaryPreferencesContent } from '@/components/profile/CulinaryPrefere
 import { WebhookIntegrationContent } from '@/components/profile/WebhookIntegrationContent';
 import { ThemeSelectorContent } from '@/components/profile/ThemeSelectorContent';
 import { AIProviderSettingsContent } from '@/components/profile/AIProviderSettingsContent';
+import { formatAppVersion } from '@/lib/version';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -257,6 +258,14 @@ export default function Profile() {
         >
           <WebhookIntegrationContent />
         </CollapsibleSection>
+
+        {/* Version de l'application (build déployé) */}
+        <p
+          className="text-center text-xs text-muted-foreground pb-4"
+          data-testid="app-version"
+        >
+          {formatAppVersion()}
+        </p>
       </div>
     </MainLayout>
   );

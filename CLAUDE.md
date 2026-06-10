@@ -103,6 +103,7 @@ Migrations horodatées dans `supabase/migrations/` (appliquées dans l'ordre). T
 
 - **Vercel**, branche `main` → auto-deploy. `vercel.json` gère le routing SPA (rewrites → `index.html`).
 - **PWA** : configurée via `vite-plugin-pwa` (`vite.config.ts`) — `registerType: autoUpdate`, runtime caching (Google Fonts, API Supabase en NetworkFirst), manifest dans `public/`.
+- **Version visible** : `version` de `package.json` + SHA du commit + date de build, injectés à la compilation (`define` dans `vite.config.ts`, SHA fourni par `VERCEL_GIT_COMMIT_SHA` en prod) et affichés **en bas de la page Profil** (`src/lib/version.ts`). C'est la référence pour vérifier quel build front est réellement servi (le cache PWA peut retarder la mise à jour). Incrémenter `version` dans `package.json` à chaque évolution notable. Pour le backend, la version des edge functions se vérifie côté Supabase (`get_edge_function`).
 
 ## Variables d'environnement
 
