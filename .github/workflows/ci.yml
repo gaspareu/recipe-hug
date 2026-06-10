@@ -5,17 +5,26 @@ on:
     branches: [main]
   pull_request:
 
+# Moindre privilège pour le GITHUB_TOKEN (lecture seule du dépôt).
+permissions:
+  contents: read
+
+# Annule les runs obsolètes d'une même branche/PR pour économiser des minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend:
     name: Frontend (tests, build, lint)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -44,7 +53,7 @@ jobs:
     name: Edge functions (tests Deno)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Deno
         uses: denoland/setup-deno@v2

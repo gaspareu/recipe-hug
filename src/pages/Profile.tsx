@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Camera, User, Sun, ChefHat, Webhook, Cpu } from 'lucide-react';
+import { ArrowLeft, Save, Camera, User, Sun, ChefHat, Webhook, Cpu, UtensilsCrossed } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { CulinaryPreferencesContent } from '@/components/profile/CulinaryPrefere
 import { WebhookIntegrationContent } from '@/components/profile/WebhookIntegrationContent';
 import { ThemeSelectorContent } from '@/components/profile/ThemeSelectorContent';
 import { AIProviderSettingsContent } from '@/components/profile/AIProviderSettingsContent';
+import { CookidooSettingsContent } from '@/components/profile/CookidooSettingsContent';
 import { formatAppVersion } from '@/lib/version';
 
 export default function Profile() {
@@ -248,6 +249,15 @@ export default function Profile() {
           icon={<Cpu className="h-5 w-5" />}
         >
           <AIProviderSettingsContent />
+        </CollapsibleSection>
+
+        {/* Cookidoo / Thermomix */}
+        <CollapsibleSection
+          title="Cookidoo / Thermomix"
+          description="Envoyez vos recettes vers votre Thermomix"
+          icon={<UtensilsCrossed className="h-5 w-5" />}
+        >
+          <CookidooSettingsContent />
         </CollapsibleSection>
 
         {/* Webhook Integration */}
