@@ -58,9 +58,7 @@ Projet : `ifpqsyyvytfpossqycpc`
 | Fonction | verify_jwt | Rôle |
 |----------|-----------|------|
 | `home-assistant` | false | Chat IA unifié (streaming) |
-| `generate-recipe` | false | Génération recette texte |
 | `analyze-recipe` | false | Analyse nutritionnelle |
-| `extract-user-preferences` | false | Extraction préférences |
 | `parse-recipe-image` | false | OCR image → recette |
 | `generate-recipe-image` | **true** | Génération photo plat (Gemini) |
 | `webhook-recipe` | false | Réception webhook externe |

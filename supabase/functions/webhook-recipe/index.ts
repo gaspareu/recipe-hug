@@ -3,6 +3,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { buildSimpleRequest, extractContentFromResponse } from "../_shared/ai-providers.ts";
+import { generateAndStoreRecipeImage } from "../_shared/generate-image.ts";
 
 // Validation schemas
 const WebhookPayloadSchema = z.object({
@@ -25,7 +26,7 @@ const ExtractedRecipeSchema = z.object({
   nutrition_tags: z.array(z.string()).optional(),
 });
 
-// Background image generation function
+// Background image generation function (source unique : _shared/generate-image.ts)
 async function triggerImageGeneration(
   supabaseAdmin: any,
   recipeId: string,
@@ -36,7 +37,8 @@ async function triggerImageGeneration(
   try {
     const aiConfig = await resolveAIConfig(supabaseAdmin, userId, {
       agentType: "generate_image",
-      defaultModel: "google/gemini-2.5-flash-image",
+      defaultProvider: "gemini",
+      defaultModel: "gemini-2.5-flash-image",
       requiredCapabilities: ["image_generation"],
     });
 
@@ -46,67 +48,7 @@ async function triggerImageGeneration(
     }
 
     console.log(`Background image generation using ${aiConfig.provider}/${aiConfig.model}`);
-
-    const ingredientsList = Array.isArray(ingredients)
-      ? ingredients.slice(0, 8).map((i: any) => i.name || i).join(", ")
-      : "";
-
-    const prompt = `Professional food photography of "${title}". ${
-      ingredientsList ? `Main ingredients: ${ingredientsList}.` : ""
-    } Beautifully plated dish on a rustic wooden table, warm natural lighting, shallow depth of field, appetizing presentation. Ultra high resolution, 16:9 aspect ratio.`;
-
-    const response = await fetch(aiConfig.endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${aiConfig.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: aiConfig.model,
-        messages: [{ role: "user", content: prompt }],
-        modalities: ["image", "text"],
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      return;
-    }
-
-    const aiData = await response.json();
-    const imageUrl = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!imageUrl) {
-      console.error("No image in AI response");
-      return;
-    }
-
-    const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, "");
-    const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-    const fileName = `${userId}/${recipeId}-${Date.now()}.webp`;
-
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from("recipe-images")
-      .upload(fileName, imageBytes, { contentType: "image/webp", upsert: true });
-
-    if (uploadError) {
-      console.error("Upload error:", uploadError);
-      return;
-    }
-
-    const { data: urlData } = supabaseAdmin.storage.from("recipe-images").getPublicUrl(fileName);
-    const publicUrl = urlData.publicUrl;
-
-    const { error: updateError } = await supabaseAdmin
-      .from("recipes")
-      .update({ source_image_url: publicUrl })
-      .eq("id", recipeId);
-
-    if (updateError) {
-      console.error("Update error:", updateError);
-      return;
-    }
-
+    const publicUrl = await generateAndStoreRecipeImage(supabaseAdmin, aiConfig, { userId, recipeId, title, ingredients });
     console.log("Image generated and saved for recipe:", recipeId, publicUrl);
   } catch (err) {
     console.warn("Background image generation failed:", err);
@@ -190,7 +132,8 @@ Deno.serve(async (req) => {
     // Resolve AI config for extraction
     const aiConfig = await resolveAIConfig(supabaseAdmin, userId, {
       agentType: "webhook",
-      defaultModel: "google/gemini-2.5-flash",
+      // Extraction simple : Haiku suffit et coûte ~3x moins cher que Sonnet.
+      defaultModel: "claude-haiku-4-5",
     });
     console.log(`Extracting recipe using ${aiConfig.provider}/${aiConfig.model}`);
 
@@ -251,7 +194,9 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
 
     let extractedRecipe;
     try {
-      extractedRecipe = JSON.parse(aiContent);
+      // Tolère d'éventuelles clôtures markdown autour du JSON.
+      const cleanJson = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      extractedRecipe = JSON.parse(cleanJson);
     } catch (parseError) {
       console.error("Failed to parse AI response as JSON:", parseError);
       return new Response(

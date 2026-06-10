@@ -41,18 +41,16 @@ Règle : Anthropic ne génère pas d'images → `generate-recipe-image` utilise 
 | # | Fonction | Catégorie | Agent Type | Capabilities | Pattern |
 |---|----------|-----------|------------|--------------|---------|
 | 1 | `home-assistant` | Streaming | `chat` | streaming, tools, vision | `resolveAIConfig` + `callAIStreaming` |
-| 2 | `generate-recipe` | Non-streaming | `generate` | — | `resolveAIConfig` + `callAINonStreaming` |
-| 3 | `analyze-recipe` | Non-streaming | `analyze` | — | `resolveAIConfig` + `callAINonStreaming` |
-| 4 | `extract-user-preferences` | Non-streaming | `chat` | tools | `resolveAIConfig` + `buildToolCallRequest` |
-| 5 | `parse-recipe-image` | Non-streaming | `parse_image` | vision | `resolveAIConfig` + `buildVisionRequest` |
-| 6 | `generate-recipe-image` | Non-streaming | `generate_image` | image_generation | `resolveAIConfig` + custom |
-| 7 | `webhook-recipe` | Webhook | `webhook` + `generate_image` | — | `resolveAIConfig` + `buildSimpleRequest` |
-| 8 | `manage-ai-keys` | Utilitaire | — | — | Sans IA |
-| 9 | `validate-ai-key` | Utilitaire | — | — | Sans IA |
-| 10 | `elevenlabs-tts` | Utilitaire | — | — | Sans IA |
-| 11 | `elevenlabs-scribe-token` | Utilitaire | — | — | Sans IA |
-| 12 | `share-recipe` | Utilitaire | — | — | Sans IA |
-| 13 | `claim-shares` | Utilitaire | — | — | Sans IA |
+| 2 | `analyze-recipe` | Non-streaming | `analyze` | — | `resolveAIConfig` + `callAINonStreaming` |
+| 3 | `parse-recipe-image` | Non-streaming | `parse_image` | vision | `resolveAIConfig` + `buildVisionRequest` |
+| 4 | `generate-recipe-image` | Non-streaming | `generate_image` | image_generation | `resolveAIConfig` + custom |
+| 5 | `webhook-recipe` | Webhook | `webhook` + `generate_image` | — | `resolveAIConfig` + `buildSimpleRequest` |
+| 6 | `manage-ai-keys` | Utilitaire | — | — | Sans IA |
+| 7 | `validate-ai-key` | Utilitaire | — | — | Sans IA |
+| 8 | `elevenlabs-tts` | Utilitaire | — | — | Sans IA |
+| 9 | `elevenlabs-scribe-token` | Utilitaire | — | — | Sans IA |
+| 10 | `share-recipe` | Utilitaire | — | — | Sans IA |
+| 11 | `claim-shares` | Utilitaire | — | — | Sans IA |
 
 ---
 
@@ -75,18 +73,13 @@ Règle : Anthropic ne génère pas d'images → `generate-recipe-image` utilise 
 
 ## 2. Agents IA de traitement (non-streaming)
 
-### `generate-recipe`
-- **Rôle** : Génère une recette complète (titre, ingrédients, étapes) à partir d'un prompt texte. Retourne du JSON structuré.
-- **Agent Type** : `generate`
+> `generate-recipe` et `extract-user-preferences` ont été supprimées (code mort) :
+> le chat unifié `home-assistant` couvre ces usages via ses tools `save_recipe`
+> et `update_preferences`.
 
 ### `analyze-recipe`
 - **Rôle** : Analyse une recette et génère un résumé, des tags nutritionnels, un score calorique et la saison.
 - **Agent Type** : `analyze`
-
-### `extract-user-preferences`
-- **Rôle** : Analyse une conversation pour extraire automatiquement les préférences culinaires (goûts, allergies, équipement). Utilise le tool calling.
-- **Agent Type** : `chat`
-- **Capabilities** : tools
 
 ### `parse-recipe-image`
 - **Rôle** : Extrait une recette structurée à partir d'une photo (OCR via vision IA). Inclut une protection SSRF pour les URLs d'images.
