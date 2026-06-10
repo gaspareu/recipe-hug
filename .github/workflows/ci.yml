@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+# Moindre privilège pour le GITHUB_TOKEN (lecture seule du dépôt).
+permissions:
+  contents: read
+
+# Annule les runs obsolètes d'une même branche/PR pour économiser des minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend:
     name: Frontend (tests, build, lint)
@@ -15,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
