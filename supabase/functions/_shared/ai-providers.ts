@@ -146,7 +146,14 @@ async function callAnthropicStreaming(config: AIConfig, messages: any[], options
   }));
 
   const body: any = { model: config.model, max_tokens: 8192, messages: chatMessages };
-  if (systemMessage) body.system = systemMessage;
+  // Prompt caching : le prompt système (volumineux : persona + préférences +
+  // liste des recettes) et les définitions d'outils sont stables au sein d'une
+  // conversation. Un cache_control sur le bloc système met en cache tout le
+  // préfixe tools+system → les tours suivants le relisent à ~0,1x le prix.
+  // (ordre de rendu Anthropic : tools → system → messages.)
+  if (systemMessage) {
+    body.system = [{ type: "text", text: systemMessage, cache_control: { type: "ephemeral" } }];
+  }
   if (options.tools?.length) {
     body.tools = options.tools.map((t: any) => ({
       name: t.function.name,

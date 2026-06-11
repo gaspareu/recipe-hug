@@ -696,14 +696,11 @@ export function AIProviderSettings() {
   const models = PROVIDER_MODELS[selectedProvider];
   
   const agentTypes: AgentType[] = [
-    'chat', 
-    'create_recipe', 
-    'cooking', 
-    'edit_recipe', 
-    'generate_image', 
-    'parse_image', 
-     
-    'webhook'
+    'chat',
+    'analyze',
+    'generate_image',
+    'parse_image',
+    'webhook',
   ];
 
   const hasChanges =

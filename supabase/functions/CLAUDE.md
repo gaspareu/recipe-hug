@@ -35,6 +35,19 @@ supabase functions deploy <nom-fonction> --project-ref ifpqsyyvytfpossqycpc
 ```
 Les imports `../_shared/` fonctionnent normalement avec la CLI.
 
+### Déploiement automatique (CI) — voie privilégiée
+
+`.github/workflows/deploy-edge-functions.yml` déploie **toutes** les fonctions
+à chaque merge sur `main` touchant `supabase/functions/**` (`supabase functions
+deploy`, qui respecte `config.toml`). C'est la voie normale : elle évite la
+dérive « repo ≠ prod » des déploiements manuels depuis des sessions parallèles.
+Le déploiement MCP/manuel reste utile pour un **hotfix immédiat** hors cycle de
+merge — mais penser alors à merger le code correspondant pour ne pas régresser
+au prochain déploiement CI.
+
+> Prérequis (une fois) : secret de dépôt `SUPABASE_ACCESS_TOKEN`
+> (Supabase Dashboard → Account → Access Tokens).
+
 ---
 
 ## Secrets configurés (Supabase Dashboard)
