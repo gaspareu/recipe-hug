@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { toast } from '@/components/ui/sonner';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, ImagePlus, History, Share2 } from 'lucide-react';
@@ -34,6 +35,7 @@ import type { RecipeStatus, Step, Ingredient } from '@/types/recipe';
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
   const { data: recipe, isLoading, refetch } = useRecipe(id || '');
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
@@ -135,7 +137,12 @@ export default function RecipeDetail() {
     <MainLayout>
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Recipe Image with action buttons overlay */}
-        <div className="relative">
+        <motion.div
+          className="relative"
+          initial={reduceMotion ? false : { scale: 0.96, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }}
+        >
           <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={handleImageChange} onImageRemove={handleImageRemove} />
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/50 to-transparent pointer-events-none rounded-t-lg" />
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="absolute top-3 left-3 bg-background/60 backdrop-blur-sm hover:bg-background/80">
@@ -167,7 +174,7 @@ export default function RecipeDetail() {
               </Button>
             </TooltipTrigger><TooltipContent><p>Éditer</p></TooltipContent></Tooltip>
           </div>
-        </div>
+        </motion.div>
 
         <div className="overflow-x-auto pb-1 -mb-1">
           <div className="flex items-center gap-2 min-w-max py-1">

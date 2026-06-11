@@ -85,7 +85,7 @@ export function RecipeCard({
         </div>
 
         <CardHeader className="pb-2 pt-3">
-          <CardTitle className="text-base font-playfair font-semibold line-clamp-2 group-hover:text-primary transition-colors">
+          <CardTitle className="text-base font-solitreo font-semibold line-clamp-2 group-hover:text-primary transition-colors">
             {recipe.title}
           </CardTitle>
           <div className="flex items-center gap-2 flex-wrap mt-1">

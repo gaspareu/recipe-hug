@@ -2,21 +2,7 @@ import { useState, useRef } from 'react';
 import { Camera, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-
-// Placeholder images
-import placeholderLivre from '@/assets/placeholder_livre.jpg';
-import placeholderPlat from '@/assets/placeholder_plat.jpg';
-import placeholderSalade from '@/assets/placeholder_salade.jpg';
-
-const placeholders = [placeholderLivre, placeholderPlat, placeholderSalade];
-
-function getPlaceholderForRecipe(recipeId: string): string {
-  let hash = 0;
-  for (let i = 0; i < recipeId.length; i++) {
-    hash = recipeId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return placeholders[Math.abs(hash) % placeholders.length];
-}
+import { getPlaceholderForRecipe } from '@/lib/recipePlaceholder';
 
 interface RecipeImageDisplayProps {
   recipeId: string;

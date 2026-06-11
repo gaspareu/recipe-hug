@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { TextShimmer } from '@/components/ui/text-shimmer';
 import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
+import { messageVariants, messageTransition } from '@/lib/motion';
 
 import type { ChatMessage, PendingRecipe } from '@/hooks/useChatEngine';
 
@@ -112,7 +113,7 @@ export function ChatInterface({
   if (lastAssistantMessage?.content) {
     const match = lastAssistantMessage.content.match(suggestionsRegex);
     if (match) {
-      try { dynamicSuggestions = JSON.parse(match[1]); } catch {}
+      try { dynamicSuggestions = JSON.parse(match[1]); } catch { /* JSON invalide : on garde les suggestions par défaut */ }
     }
   }
   const activeSuggestions = dynamicSuggestions.length > 0 ? dynamicSuggestions : suggestions;
@@ -135,19 +136,35 @@ export function ChatInterface({
                 displayContent = displayContent.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
                 displayContent = displayContent.replace(/\[suggestions\]\s*\[.*?\]\s*\[\/suggestions\]/s, '').trim();
               }
+              const isLast = message.id === messages[messages.length - 1]?.id;
+              const showCaret = isStreaming && isLast && message.role === 'assistant' && displayContent !== '';
               return (
-                <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] ${message.role === 'user' ? 'bg-muted rounded-3xl px-4 py-3' : ''}`}>
+                <motion.div
+                  key={message.id}
+                  variants={messageVariants}
+                  initial="initial"
+                  animate="animate"
+                  transition={messageTransition}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`max-w-[80%] ${message.role === 'user' ? 'bg-muted rounded-3xl px-4 py-3' : ''}`}>
                     {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
                     {message.role === 'assistant' ? (
-                      <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground">
+                      <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-p:leading-relaxed prose-li:text-foreground">
                         <ReactMarkdown>{displayContent}</ReactMarkdown>
+                        {showCaret && (
+                          <motion.span
+                            className="ml-0.5 inline-block h-[1.05em] w-[2px] -mb-[0.15em] rounded-full bg-foreground/70 align-middle"
+                            animate={{ opacity: [1, 0, 1] }}
+                            transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+                          />
+                        )}
                       </div>
                     ) : message.content && message.content !== '📷 Image envoyée' && (
                       <p className="text-sm whitespace-pre-wrap text-foreground">{message.content}</p>
                     )}
                   </div>
-                </div>
+                </motion.div>
               );
             })}
 
@@ -219,7 +236,7 @@ export function ChatInterface({
         )}
 
         {/* Input container */}
-        <div className="relative bg-muted rounded-[24px] border border-border/50 px-3 py-3 max-w-[800px] mx-auto w-full">
+        <div className="relative bg-muted rounded-[24px] border border-border/50 px-3 py-3 max-w-[800px] mx-auto w-full transition-shadow focus-within:ring-1 focus-within:ring-primary/30 focus-within:border-primary/30">
           {selectedImage && (
             <div className="pb-2">
               <div className="relative inline-block">
@@ -294,35 +311,47 @@ export function ChatInterface({
 
             {/* Mic / Send button */}
             <div className="flex items-center gap-1">
-              {!input.trim() && !selectedImage ? (
-                <button
-                  onClick={() => {
-                    if (!voiceEnabled) { enableAndListen(); }
-                    else if (isListening) stopListening();
-                    else startListening();
-                  }}
-                  disabled={isStreaming || isConnecting}
-                  className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${isListening ? 'bg-primary text-primary-foreground' : isConnecting ? 'bg-muted animate-pulse' : 'hover:bg-accent text-foreground'}`}
-                  title={isConnecting ? 'Connexion...' : isListening ? "Arrêter l'écoute" : 'Dicter'}
-                >
-                  {isConnecting ? (
-                    <Mic className="h-5 w-5 text-muted-foreground" />
-                  ) : isListening ? (
-                    <SoundWaveIndicator />
-                  ) : (
-                    <Mic className="h-5 w-5" />
-                  )}
-                </button>
-              ) : (
-                <button
-                  onClick={handleSubmit}
-                  disabled={isStreaming}
-                  className="flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors bg-foreground text-background hover:bg-foreground/90"
-                  title="Envoyer"
-                >
-                  <ArrowUp className="h-5 w-5" />
-                </button>
-              )}
+              <AnimatePresence mode="popLayout" initial={false}>
+                {!input.trim() && !selectedImage ? (
+                  <motion.button
+                    key="mic"
+                    initial={{ scale: 0.7, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.7, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => {
+                      if (!voiceEnabled) { enableAndListen(); }
+                      else if (isListening) stopListening();
+                      else startListening();
+                    }}
+                    disabled={isStreaming || isConnecting}
+                    className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors ${isListening ? 'bg-primary text-primary-foreground' : isConnecting ? 'bg-muted animate-pulse' : 'hover:bg-accent text-foreground'}`}
+                    title={isConnecting ? 'Connexion...' : isListening ? "Arrêter l'écoute" : 'Dicter'}
+                  >
+                    {isConnecting ? (
+                      <Mic className="h-5 w-5 text-muted-foreground" />
+                    ) : isListening ? (
+                      <SoundWaveIndicator />
+                    ) : (
+                      <Mic className="h-5 w-5" />
+                    )}
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    key="send"
+                    initial={{ scale: 0.7, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.7, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={handleSubmit}
+                    disabled={isStreaming}
+                    className="flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors bg-foreground text-background hover:bg-foreground/90"
+                    title="Envoyer"
+                  >
+                    <ArrowUp className="h-5 w-5" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
