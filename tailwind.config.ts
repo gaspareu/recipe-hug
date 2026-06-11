@@ -15,11 +15,11 @@ export default {
   	extend: {
   		fontFamily: {
   			solitreo: [
-  				'Solitreo"',
+  				'Solitreo',
   				'cursive'
   			],
   			crimson: [
-  				'Crimson Text"',
+  				'Crimson Text',
   				'serif'
   			],
   			sans: [
