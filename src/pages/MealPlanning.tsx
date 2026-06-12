@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, CalendarDays, X, Utensils, Plus } from 'lucide-react';
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { motion, useReducedMotion } from 'framer-motion';
+import { fadeInUpVariants, fadeInUpTransition } from '@/lib/motion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -80,6 +82,7 @@ export default function MealPlanning() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const reduceMotion = useReducedMotion();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const weekStart = useMemo(() => {
@@ -281,9 +284,15 @@ export default function MealPlanning() {
               const isToday = isSameDay(day, today);
 
               return (
-                <Card
+                <motion.div
                   key={dayIndex}
-                  className={`p-3 ${isToday ? 'ring-2 ring-primary/30 bg-primary/5' : ''}`}
+                  variants={fadeInUpVariants}
+                  transition={fadeInUpTransition(dayIndex)}
+                  initial={reduceMotion ? false : 'initial'}
+                  animate="animate"
+                >
+                <Card
+                  className={`p-3 rounded-2xl border-border ${isToday ? 'border-accent bg-primary/5' : ''}`}
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`text-sm font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>
@@ -335,7 +344,7 @@ export default function MealPlanning() {
                         >
                           <span className="text-xs shrink-0 opacity-40">{icon}</span>
                           <span className="text-xs text-muted-foreground/50 shrink-0 w-14">{label}</span>
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground/40 group-hover/add:text-muted-foreground transition-colors">
+                          <span className="flex items-center gap-1 text-xs text-primary/50 group-hover/add:text-primary transition-colors">
                             <Plus className="h-3 w-3" />
                             Ajouter
                           </span>
@@ -344,6 +353,7 @@ export default function MealPlanning() {
                     })}
                   </div>
                 </Card>
+                </motion.div>
               );
             })}
           </div>
@@ -368,6 +378,7 @@ export default function MealPlanning() {
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">Choisir une recette</p>
               <Input
+                className="rounded-2xl focus-visible:ring-accent"
                 placeholder="Rechercher…"
                 value={recipeSearch}
                 onChange={e => {
@@ -405,6 +416,7 @@ export default function MealPlanning() {
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">Repas libre</p>
               <Input
+                className="rounded-2xl focus-visible:ring-accent"
                 placeholder="Ex : Pasta bolognaise maison"
                 value={customMealText}
                 onChange={e => {
