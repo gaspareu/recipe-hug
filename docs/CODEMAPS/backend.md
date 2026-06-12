@@ -24,13 +24,11 @@ resolveAIConfig(agentType, userId)
 |----------|-------|------|
 | `home-assistant` | 548 | Chat unifié : recettes, planning, navigation, vision |
 | `webhook-recipe` | 341 | Réception webhook → création recette |
-| `extract-user-preferences` | 270 | Extraction préférences via IA |
 | `generate-recipe-image` | 211 | Génération image (vision IA) |
 | `parse-recipe-image` | 187 | OCR image → recette structurée |
 | `manage-ai-keys` | 178 | CRUD clés API chiffrées |
 | `share-recipe` | 167 | Création lien partage |
 | `validate-ai-key` | 161 | Validation clé API provider |
-| `generate-recipe` | 143 | Génération recette par IA |
 | `elevenlabs-tts` | 116 | Text-to-speech ElevenLabs |
 | `claim-shares` | 115 | Récupération recette partagée |
 | `analyze-recipe` | 109 | Analyse nutritionnelle/tags |

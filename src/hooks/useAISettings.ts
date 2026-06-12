@@ -6,15 +6,15 @@ import type { Json } from '@/integrations/supabase/types';
 
 export type AIProvider = 'anthropic' | 'gemini' | 'openai';
 
-// Agent types for per-function AI configuration
-export type AgentType = 
-  | 'chat'           // home-assistant - Main orchestration
-  | 'create_recipe'  // generate-recipe - Recipe creation
-  | 'cooking'        // home-assistant (useRecipeChat) - Step-by-step guidance
-  | 'edit_recipe'    // home-assistant (useRecipeChat) - Recipe edit mode
-  | 'generate_image' // generate-recipe-image - Image generation
-  | 'parse_image'    // parse-recipe-image - Image analysis
-  | 'webhook';       // webhook-recipe - External import
+// Agent types for per-function AI configuration.
+// Doit refléter les agentType réellement passés à resolveAIConfig côté edge
+// functions — sinon la config par agent n'est jamais appliquée.
+export type AgentType =
+  | 'chat'           // home-assistant - Chat unifié (création, cuisine, édition, planning)
+  | 'analyze'        // analyze-recipe - Tags nutritionnels + saison
+  | 'generate_image' // generate-recipe-image - Génération d'images
+  | 'parse_image'    // parse-recipe-image - OCR photo → recette
+  | 'webhook';       // webhook-recipe - Import externe
 
 // Per-agent configuration
 export interface AgentConfig {
@@ -65,16 +65,16 @@ export interface ModelInfo {
 // Models available per provider with capabilities
 export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
   anthropic: [
-    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (défaut)', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet', capabilities: ['text', 'streaming', 'vision', 'tools'] },
-    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', capabilities: ['text', 'streaming', 'tools'] },
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (défaut)', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-opus-4-8', label: 'Claude Opus 4.8', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', capabilities: ['text', 'streaming', 'tools'] },
   ],
   gemini: [
     { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'gemini-2.5-flash-lite-preview-06-17', label: 'Gemini 2.5 Flash Lite', capabilities: ['text', 'streaming'] },
     { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', capabilities: ['text', 'streaming', 'tools'] },
-    { value: 'gemini-2.0-flash-exp-image-generation', label: 'Gemini 2.0 Flash Image', capabilities: ['image_generation'] },
+    { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image', capabilities: ['image_generation'] },
   ],
   openai: [
     { value: 'gpt-4o', label: 'GPT-4o', capabilities: ['text', 'streaming', 'vision', 'tools'] },
@@ -87,24 +87,18 @@ export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
 // Required capabilities per agent type
 export const AGENT_REQUIRED_CAPABILITIES: Record<AgentType, ModelCapability[]> = {
   chat: ['text', 'streaming', 'tools'],
-  create_recipe: ['text', 'streaming', 'tools'],
-  cooking: ['text', 'streaming', 'tools'],
-  edit_recipe: ['text', 'streaming', 'tools'],
+  analyze: ['text'],
   generate_image: ['image_generation'],
   parse_image: ['vision'],
-  
   webhook: ['text'],
 };
 
 // Agent display info with labels
 export const AGENT_LABELS: Record<AgentType, { name: string; icon: string; description: string }> = {
-  chat: { name: 'Chat principal', icon: '💬', description: 'Orchestration et conversation' },
-  create_recipe: { name: 'Création de recettes', icon: '🍳', description: 'Génération de nouvelles recettes' },
-  cooking: { name: 'Assistant cuisine', icon: '👨‍🍳', description: 'Guidage étape par étape' },
-  edit_recipe: { name: 'Modification', icon: '✏️', description: 'Adaptation et variantes' },
+  chat: { name: 'Chat principal', icon: '💬', description: 'Création, cuisine, édition, planning' },
+  analyze: { name: 'Analyse nutritionnelle', icon: '🥗', description: 'Tags et saison des recettes' },
   generate_image: { name: 'Génération d\'images', icon: '📸', description: 'Photos de plats' },
   parse_image: { name: 'Analyse d\'images', icon: '🔍', description: 'Extraction depuis photos' },
-  
   webhook: { name: 'Import webhook', icon: '🔗', description: 'Import externe' },
 };
 

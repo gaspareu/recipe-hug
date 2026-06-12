@@ -492,7 +492,7 @@ serve(async (req) => {
 
     const aiConfig = await resolveAIConfig(supabaseClient, userId, {
       agentType: "chat",
-      defaultModel: "google/gemini-3-flash-preview",
+      defaultModel: "claude-sonnet-4-6",
       requiredCapabilities: ["tools"],
     });
     console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
@@ -528,11 +528,14 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      if (response.status === 429) return new Response(JSON.stringify({ error: "Trop de requêtes." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (response.status === 402) return new Response(JSON.stringify({ error: "Crédits épuisés." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      const errorText = await response.text();
+      const errorText = await response.text().catch(() => "");
       console.error("AI error:", response.status, errorText);
-      return new Response(JSON.stringify({ error: "Erreur du service IA" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (response.status === 429) return new Response(JSON.stringify({ error: "Trop de requêtes, réessaie dans un instant." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Anthropic signale un solde insuffisant par un 400 invalid_request_error « credit balance ».
+      if (response.status === 402 || errorText.includes("credit balance")) {
+        return new Response(JSON.stringify({ error: "Crédits du fournisseur IA épuisés — recharger le compte API Anthropic (Console → Plans & Billing)." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: `Erreur du service IA (${response.status})` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     return new Response(response.body, {

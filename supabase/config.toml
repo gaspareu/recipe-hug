@@ -3,13 +3,7 @@ project_id = "ifpqsyyvytfpossqycpc"
 [functions.parse-recipe-image]
 verify_jwt = false
 
-[functions.generate-recipe]
-verify_jwt = false
-
 [functions.analyze-recipe]
-verify_jwt = false
-
-[functions.extract-user-preferences]
 verify_jwt = false
 
 [functions.home-assistant]

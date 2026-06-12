@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Ce projet est manipulé **principalement via Claude Code Web** : les sessions tournent dans des conteneurs cloud **éphémères**, avec un **clone neuf du repo** à chaque démarrage et aucune persistance entre sessions. Conséquence directe : **tout l'outillage agent doit être committé dans le repo** pour être disponible automatiquement — le configurer « localement » dans une session ne sert à rien (perdu au redémarrage). S'outiller « en accordance » signifie donc privilégier des artefacts versionnés :
 
 - **`.mcp.json`** (racine, committé) — déclare le serveur MCP **Supabase** (HTTP). L'intégration **GitHub** est fournie nativement par Claude Code Web (pas de `gh` CLI dans le conteneur).
-- **`.claude/settings.json`** (committé) — hook `SessionStart` exécutant `npm ci` (conteneur prêt dès l'ouverture de session) + permissions pré-accordées pour npm/git/deno (moins de prompts).
+- **`.claude/settings.json`** (committé) — hook `SessionStart` exécutant `npm ci` (conteneur prêt dès l'ouverture de session), hooks `PreToolUse`/`PostToolUse` (`.claude/hooks/git-guard.mjs` : blocage commit/push sur `main`, force push, édition des fichiers auto-générés ; rappel de redéploiement des edge functions) + permissions pré-accordées pour npm/git/deno (moins de prompts).
+- **`.claude/skills/git-github/`** (committé) — skill projet : bonnes pratiques git/GitHub (branches, commits conventionnels en français, validation avant push, PR, redéploiement edge functions). À consulter avant tout commit/push/PR.
 - **CI GitHub Actions** (`.github/workflows/ci.yml`) — tests + build + `deno test` ; c'est le **garde-fou de non-régression**, car la session web ne revalide pas tout automatiquement. `typecheck` et `lint` y tournent en mode informatif (non-bloquant) tant que la dette de types/lint préexistante n'est pas résorbée.
 - **`.github/dependabot.yml`** (committé) — PR hebdomadaires de mise à jour des dépendances npm et des GitHub Actions.
 
@@ -103,6 +104,7 @@ Migrations horodatées dans `supabase/migrations/` (appliquées dans l'ordre). T
 
 - **Vercel**, branche `main` → auto-deploy. `vercel.json` gère le routing SPA (rewrites → `index.html`).
 - **PWA** : configurée via `vite-plugin-pwa` (`vite.config.ts`) — `registerType: autoUpdate`, runtime caching (Google Fonts, API Supabase en NetworkFirst), manifest dans `public/`.
+- **Version visible** : `version` de `package.json` + SHA du commit + date de build, injectés à la compilation (`define` dans `vite.config.ts`, SHA fourni par `VERCEL_GIT_COMMIT_SHA` en prod) et affichés **en bas de la page Profil** (`src/lib/version.ts`). C'est la référence pour vérifier quel build front est réellement servi (le cache PWA peut retarder la mise à jour). Incrémenter `version` dans `package.json` à chaque évolution notable. Pour le backend, la version des edge functions se vérifie côté Supabase (`get_edge_function`).
 
 ## Variables d'environnement
 

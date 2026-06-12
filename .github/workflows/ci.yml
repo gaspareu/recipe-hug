@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # claude/** : les pushes du bot Claude Code ne déclenchent pas les
+    # évènements pull_request (synchronize) — on couvre via push.
+    branches: [main, "claude/**"]
   pull_request:
 
 # Moindre privilège pour le GITHUB_TOKEN (lecture seule du dépôt).

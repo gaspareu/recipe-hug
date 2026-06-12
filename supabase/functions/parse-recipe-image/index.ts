@@ -95,7 +95,8 @@ serve(async (req) => {
     // Resolve AI configuration
     const aiConfig = await resolveAIConfig(supabaseClient, userId, {
       agentType: "parse_image",
-      defaultModel: "google/gemini-2.5-pro",
+      // OCR de recettes (photos, manuscrits) : Sonnet pour la qualité vision.
+      defaultModel: "claude-sonnet-4-6",
       requiredCapabilities: ["vision"],
     });
     console.log(`Parsing recipe image for user ${userId} using ${aiConfig.provider}/${aiConfig.model}`);
