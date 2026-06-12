@@ -24,3 +24,14 @@ export const messageVariants = {
 } as const;
 
 export const messageTransition = { duration: 0.25, ease: easeStandard } as const;
+
+/** Variants d'apparition "fade + glissement vers le haut" pour sections/cartes. */
+export const fadeInUpVariants = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+} as const;
+
+/** Transition fade-in-up avec délai optionnel pour effet échelonné (ex: liste de cartes). */
+export function fadeInUpTransition(index = 0) {
+  return { duration: 0.25, ease: easeStandard, delay: index * 0.05 };
+}

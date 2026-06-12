@@ -149,9 +149,9 @@ export default function Profile() {
         </div>
 
         {/* Personal Information */}
-        <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+        <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm p-6">
           <div className="flex items-center gap-3 mb-6">
-            <span className="text-muted-foreground"><User className="h-5 w-5" /></span>
+            <span className="text-primary"><User className="h-5 w-5" /></span>
             <div>
               <h3 className="font-semibold leading-none tracking-tight">Informations personnelles</h3>
               <p className="text-sm text-muted-foreground mt-1">Personnalisez votre profil</p>
@@ -161,7 +161,7 @@ export default function Profile() {
             {/* Avatar */}
             <div className="flex flex-col items-center gap-4">
               <div className="relative">
-                <Avatar className="h-24 w-24">
+                <Avatar className="h-24 w-24 transition-transform duration-200 hover:scale-105">
                   <AvatarImage src={avatarUrl || undefined} alt="Avatar" />
                   <AvatarFallback className="text-lg">
                     {isLoading ? '...' : getInitials()}
@@ -222,9 +222,9 @@ export default function Profile() {
         </div>
 
         {/* Theme Selector */}
-        <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+        <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm p-6">
           <div className="flex items-center gap-3 mb-4">
-            <span className="text-muted-foreground"><Sun className="h-5 w-5" /></span>
+            <span className="text-primary"><Sun className="h-5 w-5" /></span>
             <div>
               <h3 className="font-semibold leading-none tracking-tight">Apparence</h3>
               <p className="text-sm text-muted-foreground mt-1">Choisissez le thème de l'application</p>
