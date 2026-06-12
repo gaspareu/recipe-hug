@@ -28,6 +28,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { IngredientEditor } from '@/components/recipes/IngredientEditor';
 import { StepsEditor } from '@/components/recipes/StepsEditor';
 import { useRecipe, useUpdateRecipe, useDeleteRecipe } from '@/hooks/useRecipes';
+import { motion, useReducedMotion } from 'framer-motion';
+import { CollapsibleSection } from '@/components/profile/CollapsibleSection';
+import { fadeInUpVariants, fadeInUpTransition } from '@/lib/motion';
 
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
@@ -46,6 +49,7 @@ export default function RecipeEdit() {
   const { data: recipe, isLoading } = useRecipe(id || '');
   const updateRecipe = useUpdateRecipe();
   const deleteRecipe = useDeleteRecipe();
+  const reduceMotion = useReducedMotion();
 
   const [title, setTitle] = useState('');
   const [servings, setServings] = useState<number | ''>('');
@@ -158,91 +162,107 @@ export default function RecipeEdit() {
           </Button>
         </div>
 
-        <form id="recipe-edit-form" onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="title">Titre *</Label>
-              <Input
-                id="title"
-                placeholder="Ex: Tarte aux pommes de mamie"
-                value={title}
-                onChange={(e) => { setTitle(e.target.value); setIsDirty(true); }}
-              />
-            </div>
+        <form
+          id="recipe-edit-form"
+          onSubmit={handleSubmit}
+          className="space-y-4"
+        >
+          <motion.div variants={fadeInUpVariants} transition={fadeInUpTransition(0)} initial={reduceMotion ? false : 'initial'} animate="animate">
+            <CollapsibleSection title="Informations générales" defaultOpen>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Titre *</Label>
+                  <Input
+                    id="title"
+                    placeholder="Ex: Tarte aux pommes de mamie"
+                    value={title}
+                    onChange={(e) => { setTitle(e.target.value); setIsDirty(true); }}
+                  />
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="servings">Portions</Label>
-                <Input
-                  id="servings"
-                  type="number"
-                  min="1"
-                  placeholder="4"
-                  value={servings}
-                  onChange={(e) => { setServings(e.target.value ? parseInt(e.target.value) : ''); setIsDirty(true); }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Statut</Label>
-                <Select value={status} onValueChange={(v) => { setStatus(v as RecipeStatus); setIsDirty(true); }}>
-                  <SelectTrigger id="status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Brouillon</SelectItem>
-                    <SelectItem value="tested">Testé</SelectItem>
-                    <SelectItem value="validated">Validé</SelectItem>
-                    <SelectItem value="archived">Archivé</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="servings">Portions</Label>
+                    <Input
+                      id="servings"
+                      type="number"
+                      min="1"
+                      placeholder="4"
+                      value={servings}
+                      onChange={(e) => { setServings(e.target.value ? parseInt(e.target.value) : ''); setIsDirty(true); }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="status">Statut</Label>
+                    <Select value={status} onValueChange={(v) => { setStatus(v as RecipeStatus); setIsDirty(true); }}>
+                      <SelectTrigger id="status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">Brouillon</SelectItem>
+                        <SelectItem value="tested">Testé</SelectItem>
+                        <SelectItem value="validated">Validé</SelectItem>
+                        <SelectItem value="archived">Archivé</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="season">Saison</Label>
-              <Select value={season || "none"} onValueChange={(v) => { setSeason(v === "none" ? "" : v); setIsDirty(true); }}>
-                <SelectTrigger id="season">
-                  <SelectValue placeholder="Sélectionner une saison" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Aucune</SelectItem>
-                  {SEASONS.map(s => (
-                    <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="season">Saison</Label>
+                  <Select value={season || "none"} onValueChange={(v) => { setSeason(v === "none" ? "" : v); setIsDirty(true); }}>
+                    <SelectTrigger id="season">
+                      <SelectValue placeholder="Sélectionner une saison" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Aucune</SelectItem>
+                      {SEASONS.map(s => (
+                        <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <Label>Tags nutritionnels (max 3)</Label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {nutritionTags.map(tag => (
-                  <Badge key={tag} variant="secondary" className="gap-1">
-                    {tag}
-                    <button type="button" onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-              {nutritionTags.length < 3 && (
-                <Select onValueChange={addTag} value="">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Ajouter un tag..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AVAILABLE_TAGS.filter(t => !nutritionTags.includes(t)).map(tag => (
-                      <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                <div className="space-y-2">
+                  <Label>Tags nutritionnels (max 3)</Label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {nutritionTags.map(tag => (
+                      <Badge key={tag} variant="secondary" className="gap-1">
+                        {tag}
+                        <button type="button" onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
                     ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-          </div>
+                  </div>
+                  {nutritionTags.length < 3 && (
+                    <Select onValueChange={addTag} value="">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Ajouter un tag..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AVAILABLE_TAGS.filter(t => !nutritionTags.includes(t)).map(tag => (
+                          <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+            </CollapsibleSection>
+          </motion.div>
 
-          <IngredientEditor ingredients={ingredients} onChange={(v) => { setIngredients(v); setIsDirty(true); }} />
+          <motion.div variants={fadeInUpVariants} transition={fadeInUpTransition(1)} initial={reduceMotion ? false : 'initial'} animate="animate">
+            <CollapsibleSection title="Ingrédients" defaultOpen>
+              <IngredientEditor ingredients={ingredients} onChange={(v) => { setIngredients(v); setIsDirty(true); }} />
+            </CollapsibleSection>
+          </motion.div>
 
-          <StepsEditor steps={steps} onChange={(v) => { setSteps(v); setIsDirty(true); }} />
+          <motion.div variants={fadeInUpVariants} transition={fadeInUpTransition(2)} initial={reduceMotion ? false : 'initial'} animate="animate">
+            <CollapsibleSection title="Étapes" defaultOpen>
+              <StepsEditor steps={steps} onChange={(v) => { setSteps(v); setIsDirty(true); }} />
+            </CollapsibleSection>
+          </motion.div>
 
           <div className="flex flex-col sm:flex-row gap-3">
             <Button type="submit" className="flex-1 min-w-0" disabled={updateRecipe.isPending}>
