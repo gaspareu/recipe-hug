@@ -39,9 +39,9 @@ function getDeleteButtons(): HTMLElement[] {
 // ──────────────────────────────────────────────────────────
 
 describe("StepsEditor — rendu", () => {
-  it("affiche le titre « Étapes »", () => {
+  it("affiche le bouton « Ajouter »", () => {
     setup([]);
-    expect(screen.getByText("Étapes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ajouter/ })).toBeInTheDocument();
   });
 
   it("affiche le message vide quand aucune étape", () => {

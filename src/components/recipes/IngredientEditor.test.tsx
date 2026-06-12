@@ -57,9 +57,9 @@ function getDeleteButtons(): HTMLElement[] {
 // ──────────────────────────────────────────────────────────
 
 describe("IngredientEditor — rendu", () => {
-  it("affiche le titre « Ingrédients »", () => {
+  it("affiche le bouton « Ajouter »", () => {
     setup([]);
-    expect(screen.getByText("Ingrédients")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ajouter/ })).toBeInTheDocument();
   });
 
   it("affiche le message vide quand aucun ingrédient", () => {

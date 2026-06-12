@@ -29,8 +29,8 @@ describe("RecipeNew", () => {
     fireEvent.click(screen.getByText("Saisir manuellement"));
 
     expect(screen.getByText("Informations générales")).toBeInTheDocument();
-    expect(screen.getAllByText("Ingrédients").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Étapes").length).toBeGreaterThan(0);
+    expect(screen.getByText("Ingrédients")).toBeInTheDocument();
+    expect(screen.getByText("Étapes")).toBeInTheDocument();
     expect(screen.getByLabelText(/Titre/)).toBeInTheDocument();
   });
 });
