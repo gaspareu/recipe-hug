@@ -225,35 +225,30 @@ export function useChatEngine(config: ChatEngineConfig) {
     return cleaned;
   }, []);
 
-  // Send a message
-  const sendMessage = useCallback(async (content: string, imageDataUrl?: string) => {
-    if ((!content.trim() && !imageDataUrl) || isStreaming) return;
+  // Convertit les messages du fil en messages au format attendu par l'API.
+  const toApiMessages = useCallback((chatMessages: ChatMessage[]): Array<{ role: string; content: MessageContent }> => {
+    return chatMessages.filter(m => m.id !== 'welcome').map(m => {
+      if (m.imageUrl) {
+        const parts: MessageContent = [];
+        if (m.content && m.content !== '📷 Image envoyée') parts.push({ type: 'text', text: m.content });
+        parts.push({ type: 'image_url', image_url: { url: m.imageUrl } });
+        return { role: m.role, content: parts };
+      }
+      return { role: m.role, content: m.content };
+    });
+  }, []);
 
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: content.trim() || (imageDataUrl ? '📷 Image envoyée' : ''),
-      imageUrl: imageDataUrl,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+  // Envoie la requête à l'assistant et stream la réponse dans un nouveau message.
+  const runAssistantRequest = useCallback(async (
+    apiMessages: Array<{ role: string; content: MessageContent }>,
+    lastUserContent: string,
+  ) => {
     setIsStreaming(true);
     setSearchResults([]);
 
     const assistantMessageId = `assistant-${Date.now()}`;
 
     try {
-      const apiMessages = [...messages.filter(m => m.id !== 'welcome'), userMessage].map(m => {
-        if (m.imageUrl) {
-          const parts: MessageContent = [];
-          if (m.content && m.content !== '📷 Image envoyée') parts.push({ type: 'text', text: m.content });
-          parts.push({ type: 'image_url', image_url: { url: m.imageUrl } });
-          return { role: m.role, content: parts };
-        }
-        return { role: m.role, content: m.content };
-      });
-
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Vous devez être connecté');
 
@@ -274,7 +269,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       setMessages(prev => [...prev, { id: assistantMessageId, role: 'assistant', content: '', timestamp: new Date() }]);
 
       const reader = response.body.getReader();
-      await parseSSEStream(reader, assistantMessageId, content);
+      await parseSSEStream(reader, assistantMessageId, lastUserContent);
     } catch (error) {
       console.error('Chat error:', error);
       // Affiche l'erreur dans le fil plutôt que de la masquer : l'utilisateur
@@ -287,7 +282,41 @@ export function useChatEngine(config: ChatEngineConfig) {
     } finally {
       setIsStreaming(false);
     }
-  }, [messages, isStreaming, activeRecipe, parseSSEStream]);
+  }, [activeRecipe, parseSSEStream]);
+
+  // Send a message
+  const sendMessage = useCallback(async (content: string, imageDataUrl?: string) => {
+    if ((!content.trim() && !imageDataUrl) || isStreaming) return;
+
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: content.trim() || (imageDataUrl ? '📷 Image envoyée' : ''),
+      imageUrl: imageDataUrl,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+
+    const apiMessages = toApiMessages([...messages.filter(m => m.id !== 'welcome'), userMessage]);
+    await runAssistantRequest(apiMessages, content);
+  }, [messages, isStreaming, toApiMessages, runAssistantRequest]);
+
+  // Relance la génération de la dernière réponse assistant : on retire les
+  // messages assistant qui suivent le dernier message utilisateur et on
+  // renvoie la même requête.
+  const regenerateResponse = useCallback(async () => {
+    if (isStreaming) return;
+
+    const lastUserIndex = messages.map(m => m.role).lastIndexOf('user');
+    if (lastUserIndex === -1) return;
+
+    const truncated = messages.slice(0, lastUserIndex + 1);
+    setMessages(truncated);
+
+    const apiMessages = toApiMessages(truncated);
+    await runAssistantRequest(apiMessages, truncated[lastUserIndex].content);
+  }, [messages, isStreaming, toApiMessages, runAssistantRequest]);
 
   const resetChat = useCallback(() => {
     setMessages([{ id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() }]);
@@ -299,6 +328,6 @@ export function useChatEngine(config: ChatEngineConfig) {
   return {
     messages, isStreaming, activeRecipe, pendingRecipe, searchResults,
     setActiveRecipe, setPendingRecipe, setSearchResults, setMessages,
-    sendMessage, resetChat,
+    sendMessage, resetChat, regenerateResponse,
   };
 }
