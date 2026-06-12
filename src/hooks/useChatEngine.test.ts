@@ -160,27 +160,30 @@ describe("sendMessage — streaming", () => {
     await act(() => result.current.sendMessage("Salut"));
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(result.current.messages).toHaveLength(2); // welcome + user
+    // welcome + user + message d'erreur affiché dans le fil
+    expect(result.current.messages).toHaveLength(3);
+    expect(result.current.messages[2].content).toBe("⚠️ Vous devez être connecté");
     expect(result.current.isStreaming).toBe(false);
   });
 
-  it("retire le message assistant en cas d'erreur HTTP", async () => {
+  it("affiche l'erreur dans le fil en cas d'erreur HTTP", async () => {
     fetchMock.mockResolvedValue(httpErrorResponse(500, { error: "boom" }));
     const { result } = setup();
 
     await act(() => result.current.sendMessage("Salut"));
 
-    expect(result.current.messages.map((m) => m.role)).toEqual(["assistant", "user"]);
+    expect(result.current.messages.map((m) => m.role)).toEqual(["assistant", "user", "assistant"]);
+    expect(result.current.messages[2].content).toBe("⚠️ boom");
     expect(result.current.isStreaming).toBe(false);
   });
 
-  it("ignore silencieusement un rate limit 429", async () => {
+  it("affiche un message générique si le corps d'erreur est vide (ex. 429)", async () => {
     fetchMock.mockResolvedValue(httpErrorResponse(429));
     const { result } = setup();
 
     await act(() => result.current.sendMessage("Salut"));
 
-    expect(result.current.messages).toHaveLength(2); // welcome + user, pas de message d'erreur
+    expect(result.current.messages[2].content).toBe("⚠️ Erreur de communication avec l'assistant");
     expect(result.current.isStreaming).toBe(false);
   });
 });

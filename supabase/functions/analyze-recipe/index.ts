@@ -59,7 +59,8 @@ serve(async (req) => {
 
     const aiConfig = await resolveAIConfig(supabaseClient, userId, {
       agentType: "analyze",
-      defaultModel: "google/gemini-2.5-flash",
+      // Extraction simple : Haiku suffit et coûte ~3x moins cher que Sonnet.
+      defaultModel: "claude-haiku-4-5",
     });
     console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
 
