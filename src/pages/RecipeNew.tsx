@@ -16,6 +16,9 @@ import {
 import { IngredientEditor } from '@/components/recipes/IngredientEditor';
 import { StepsEditor } from '@/components/recipes/StepsEditor';
 import { ImageUploader } from '@/components/recipes/ImageUploader';
+import { motion, useReducedMotion } from 'framer-motion';
+import { CollapsibleSection } from '@/components/profile/CollapsibleSection';
+import { fadeInUpVariants, fadeInUpTransition } from '@/lib/motion';
 import { useCreateRecipe } from '@/hooks/useRecipes';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -74,6 +77,7 @@ async function parseImageWithAI(
 export default function RecipeNew() {
   const navigate = useNavigate();
   const createRecipe = useCreateRecipe();
+  const reduceMotion = useReducedMotion();
 
   const [mode, setMode] = useState<CreationMode>('choose');
 
@@ -184,10 +188,10 @@ export default function RecipeNew() {
             <button
               type="button"
               onClick={() => setMode('manual')}
-              className="flex flex-col items-center gap-4 rounded-xl border-2 border-border hover:border-primary/60 bg-card p-8 transition-colors cursor-pointer text-left"
+              className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-sm transition-all hover:border-primary/50 hover:shadow-md cursor-pointer text-left"
             >
-              <div className="rounded-full bg-muted p-4">
-                <PenLine className="h-8 w-8 text-muted-foreground" />
+              <div className="rounded-full bg-primary/10 p-4">
+                <PenLine className="h-8 w-8 text-primary" />
               </div>
               <div>
                 <p className="font-semibold text-foreground">Saisir manuellement</p>
@@ -200,10 +204,10 @@ export default function RecipeNew() {
             <button
               type="button"
               onClick={() => setMode('photo')}
-              className="flex flex-col items-center gap-4 rounded-xl border-2 border-border hover:border-primary/60 bg-card p-8 transition-colors cursor-pointer text-left"
+              className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-sm transition-all hover:border-primary/50 hover:shadow-md cursor-pointer text-left"
             >
-              <div className="rounded-full bg-muted p-4">
-                <Camera className="h-8 w-8 text-muted-foreground" />
+              <div className="rounded-full bg-primary/10 p-4">
+                <Camera className="h-8 w-8 text-primary" />
               </div>
               <div>
                 <p className="font-semibold text-foreground">Créer depuis une photo</p>
@@ -285,96 +289,113 @@ export default function RecipeNew() {
 
         {/* Form */}
         {showForm && (
-          <form id="recipe-new-form" onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Titre *</Label>
-                <Input
-                  id="title"
-                  placeholder="Ex: Tarte aux pommes de mamie"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  disabled={isAnalyzing}
-                />
-              </div>
+          <form
+            id="recipe-new-form"
+            onSubmit={handleSubmit}
+            className="space-y-4"
+          >
+            <motion.div variants={fadeInUpVariants} transition={fadeInUpTransition(0)} initial={reduceMotion ? false : 'initial'} animate="animate">
+              <CollapsibleSection title="Informations générales" defaultOpen>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Titre *</Label>
+                    <Input
+                      id="title"
+                      placeholder="Ex: Tarte aux pommes de mamie"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      disabled={isAnalyzing}
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="servings">Portions</Label>
-                  <Input
-                    id="servings"
-                    type="number"
-                    min="1"
-                    placeholder="4"
-                    value={servings}
-                    onChange={(e) => setServings(e.target.value ? parseInt(e.target.value) : '')}
-                    disabled={isAnalyzing}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">Statut</Label>
-                  <Select value={status} onValueChange={(v) => setStatus(v as RecipeStatus)} disabled={isAnalyzing}>
-                    <SelectTrigger id="status">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">Brouillon</SelectItem>
-                      <SelectItem value="tested">Testé</SelectItem>
-                      <SelectItem value="validated">Validé</SelectItem>
-                      <SelectItem value="archived">Archivé</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="servings">Portions</Label>
+                      <Input
+                        id="servings"
+                        type="number"
+                        min="1"
+                        placeholder="4"
+                        value={servings}
+                        onChange={(e) => setServings(e.target.value ? parseInt(e.target.value) : '')}
+                        disabled={isAnalyzing}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="status">Statut</Label>
+                      <Select value={status} onValueChange={(v) => setStatus(v as RecipeStatus)} disabled={isAnalyzing}>
+                        <SelectTrigger id="status">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="draft">Brouillon</SelectItem>
+                          <SelectItem value="tested">Testé</SelectItem>
+                          <SelectItem value="validated">Validé</SelectItem>
+                          <SelectItem value="archived">Archivé</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="season">Saison</Label>
-                <Select
-                  value={season || 'none'}
-                  onValueChange={(v) => setSeason(v === 'none' ? '' : v)}
-                  disabled={isAnalyzing}
-                >
-                  <SelectTrigger id="season">
-                    <SelectValue placeholder="Sélectionner une saison" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Aucune</SelectItem>
-                    {SEASONS.map(s => (
-                      <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="season">Saison</Label>
+                    <Select
+                      value={season || 'none'}
+                      onValueChange={(v) => setSeason(v === 'none' ? '' : v)}
+                      disabled={isAnalyzing}
+                    >
+                      <SelectTrigger id="season">
+                        <SelectValue placeholder="Sélectionner une saison" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Aucune</SelectItem>
+                        {SEASONS.map(s => (
+                          <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="space-y-2">
-                <Label>Tags nutritionnels (max 3)</Label>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {nutritionTags.map(tag => (
-                    <Badge key={tag} variant="secondary" className="gap-1">
-                      {tag}
-                      <button type="button" onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-                {nutritionTags.length < 3 && (
-                  <Select onValueChange={addTag} value="" disabled={isAnalyzing}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Ajouter un tag..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_TAGS.filter(t => !nutritionTags.includes(t)).map(tag => (
-                        <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                  <div className="space-y-2">
+                    <Label>Tags nutritionnels (max 3)</Label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {nutritionTags.map(tag => (
+                        <Badge key={tag} variant="secondary" className="gap-1">
+                          {tag}
+                          <button type="button" onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
                       ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            </div>
+                    </div>
+                    {nutritionTags.length < 3 && (
+                      <Select onValueChange={addTag} value="" disabled={isAnalyzing}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Ajouter un tag..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AVAILABLE_TAGS.filter(t => !nutritionTags.includes(t)).map(tag => (
+                            <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </div>
+              </CollapsibleSection>
+            </motion.div>
 
-            <IngredientEditor ingredients={ingredients} onChange={setIngredients} />
-            <StepsEditor steps={steps} onChange={setSteps} />
+            <motion.div variants={fadeInUpVariants} transition={fadeInUpTransition(1)} initial={reduceMotion ? false : 'initial'} animate="animate">
+              <CollapsibleSection title="Ingrédients" defaultOpen>
+                <IngredientEditor ingredients={ingredients} onChange={setIngredients} />
+              </CollapsibleSection>
+            </motion.div>
+
+            <motion.div variants={fadeInUpVariants} transition={fadeInUpTransition(2)} initial={reduceMotion ? false : 'initial'} animate="animate">
+              <CollapsibleSection title="Étapes" defaultOpen>
+                <StepsEditor steps={steps} onChange={setSteps} />
+              </CollapsibleSection>
+            </motion.div>
 
             <Button
               type="submit"
