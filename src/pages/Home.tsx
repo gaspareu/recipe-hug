@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, User, CalendarDays } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
@@ -68,13 +69,20 @@ export default function Home() {
           showWelcomeScreen={true}
           skipFirstMessage={true}
           welcomeContent={
-            <div className="flex-1 flex flex-col items-center justify-center px-4 -mt-24">
-              <h1 className="text-3xl md:text-4xl font-display text-foreground text-center mb-2">
-                Toujours prêt à cuisiner.
-              </h1>
-              <p className="text-muted-foreground text-center text-sm md:text-base">
-                Chef, votre assistant culinaire personnel
-              </p>
+            <div className="flex-1 flex flex-col items-center justify-center px-4">
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                className="flex flex-col items-center"
+              >
+                <h1 className="text-3xl md:text-4xl font-solitreo text-foreground text-center mb-2">
+                  Toujours prêt à cuisiner.
+                </h1>
+                <p className="text-muted-foreground text-center text-sm md:text-base">
+                  Chef, votre assistant culinaire personnel
+                </p>
+              </motion.div>
             </div>
           }
         />

@@ -15,11 +15,11 @@ export default {
   	extend: {
   		fontFamily: {
   			solitreo: [
-  				'Solitreo"',
+  				'Solitreo',
   				'cursive'
   			],
   			crimson: [
-  				'Crimson Text"',
+  				'Crimson Text',
   				'serif'
   			],
   			sans: [
@@ -184,6 +184,30 @@ export default {
 				'50%': {
 					height: '100%'
 				}
+			},
+			'like-burst': {
+				'0%': {
+					opacity: '0',
+					transform: 'scale(0)'
+				},
+				'15%': {
+					opacity: '1',
+					transform: 'scale(1.2)'
+				},
+				'30%': {
+					transform: 'scale(0.95)'
+				},
+				'45%': {
+					transform: 'scale(1.05)'
+				},
+				'70%': {
+					opacity: '1',
+					transform: 'scale(1)'
+				},
+				'100%': {
+					opacity: '0',
+					transform: 'scale(1.1)'
+				}
 			}
   		},
 		animation: {
@@ -194,7 +218,8 @@ export default {
 			'heart-pulse': 'heart-pulse 0.4s ease-out',
 			'favorite-pop': 'favorite-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
 			'shimmer': 'shimmer 2s infinite linear',
-			'sound-wave': 'sound-wave 0.8s ease-in-out infinite'
+			'sound-wave': 'sound-wave 0.8s ease-in-out infinite',
+			'like-burst': 'like-burst 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards'
 		}
   	}
   },

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, BookOpen } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -94,7 +94,7 @@ export default function Dashboard() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-playfair font-bold text-foreground">Mes Recettes</h1>
+            <h1 className="text-2xl font-solitreo font-bold text-foreground">Mes Recettes</h1>
             <p className="text-muted-foreground">
               {filteredRecipes.length} sur {recipes?.length || 0} recette{(recipes?.length || 0) !== 1 ? 's' : ''}
             </p>
@@ -169,24 +169,26 @@ export default function Dashboard() {
         )}
 
         {isLoading ? (
-          <div className="flex gap-0.5">
-            {[0, 1, 2].map((col) => (
-              <div key={col} className="flex flex-1 flex-col gap-0.5">
-                {[1, 2].map((i) => (
-                  <Skeleton key={i} className="aspect-square rounded-none" />
-                ))}
-              </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:gap-3 lg:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="aspect-square rounded-xl" />
             ))}
           </div>
         ) : filteredRecipes.length === 0 ? (
-          <div className="text-center py-12 animate-fade-in-up">
-            <p className="text-muted-foreground">
+          <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in-up">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+              <BookOpen className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <h2 className="font-solitreo text-lg font-semibold text-foreground">
+              {recipes?.length === 0 ? 'Votre livre est vide' : 'Aucun résultat'}
+            </h2>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">
               {recipes?.length === 0
-                ? "Aucune recette pour l'instant. Créez votre première recette !"
-                : 'Aucune recette ne correspond à vos filtres.'}
+                ? 'Discutez avec Chef pour créer votre première recette.'
+                : 'Aucune recette ne correspond à vos filtres. Essayez d’en retirer un.'}
             </p>
             {recipes?.length === 0 && (
-              <Button asChild className="mt-4">
+              <Button asChild className="mt-5">
                 <Link to="/home">
                   <Plus className="mr-2 h-4 w-4" />
                   Créer une recette

@@ -30,7 +30,7 @@ export function RecipeGridItem({
 
       {/* Titre centré avec ombre pour lisibilité */}
       <div className="absolute inset-0 flex items-center justify-center p-3">
-        <h3 className="text-center font-playfair sm:text-base leading-tight line-clamp-3 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white text-base font-extrabold">
+        <h3 className="text-center font-solitreo sm:text-base leading-tight line-clamp-3 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white text-base font-extrabold">
           {recipe.title}
         </h3>
       </div>
