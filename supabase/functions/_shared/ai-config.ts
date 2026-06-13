@@ -1,5 +1,6 @@
 // ===== Shared AI Configuration Resolution =====
 
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import {
   AIConfig,
   AISettings,
@@ -22,7 +23,7 @@ export function getApiKeyForProvider(settings: AISettings, provider: string): st
 }
 
 /** Fetch user AI settings from the database */
-export async function getUserAISettings(supabaseClient: any, userId: string): Promise<AISettings> {
+export async function getUserAISettings(supabaseClient: SupabaseClient, userId: string): Promise<AISettings> {
   try {
     const { data, error } = await supabaseClient
       .from("user_ai_settings")
@@ -59,7 +60,7 @@ export interface ResolveOptions {
  * Validates required capabilities and falls back to default if not met.
  */
 export async function resolveAIConfig(
-  supabaseClient: any,
+  supabaseClient: SupabaseClient,
   userId: string,
   options: ResolveOptions
 ): Promise<AIConfig> {

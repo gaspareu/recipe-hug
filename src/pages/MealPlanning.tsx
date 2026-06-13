@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useRecipes } from '@/hooks/useRecipes';
+import type { Ingredient } from '@/types/recipe';
 import { GroceryListSheet } from '@/components/meal-planning/GroceryListSheet';
 import { toast } from '@/components/ui/sonner';
 
@@ -38,7 +39,7 @@ interface MealPlanEntry {
 interface RecipeWithIngredients {
   id: string;
   title: string;
-  ingredients: any[];
+  ingredients: Ingredient[];
 }
 
 interface AddingMeal {
@@ -64,7 +65,7 @@ function useMealPlans(weekStart: string) {
           .select('id, title, ingredients')
           .in('id', recipeIds);
         if (recipes) {
-          recipesMap = Object.fromEntries(recipes.map(r => [r.id, r as RecipeWithIngredients]));
+          recipesMap = Object.fromEntries(recipes.map(r => [r.id, r as unknown as RecipeWithIngredients]));
         }
       }
 
@@ -91,8 +92,8 @@ export default function MealPlanning() {
   }, [currentDate]);
 
   const { data, isLoading } = useMealPlans(weekStart);
-  const meals = data?.entries ?? [];
-  const recipesMap = data?.recipesMap ?? {};
+  const meals = useMemo(() => data?.entries ?? [], [data]);
+  const recipesMap = useMemo(() => data?.recipesMap ?? {}, [data]);
 
   const { data: allRecipes = [] } = useRecipes();
 

@@ -52,14 +52,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
       try {
         const { data, error } = await supabase
-          .from('profiles_safe' as any)
+          .from('profiles_safe')
           .select('theme')
           .eq('id', user.id)
           .maybeSingle();
 
         if (error) throw error;
 
-        const userTheme = ((data as any)?.theme as Theme) || 'system';
+        const userTheme = (data?.theme as Theme) || 'system';
         setThemeState(userTheme);
         applyTheme(userTheme);
       } catch (error) {
@@ -111,6 +111,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook compagnon du ThemeProvider, co-localisation volontaire
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (context === undefined) {

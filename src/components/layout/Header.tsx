@@ -20,12 +20,12 @@ export function Header() {
   useEffect(() => {
     if (user) {
       supabase
-        .from('profiles_safe' as any)
+        .from('profiles_safe')
         .select('display_name, avatar_url')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => {
-          if (data) setProfile(data as any);
+          if (data) setProfile(data);
         });
     }
   }, [user]);

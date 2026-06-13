@@ -24,7 +24,7 @@ export interface MapOptions {
   hints?: string;
 }
 
-/** « 200 g de farine » → "200 g de farine" ; gère quantité/​unité absentes. */
+/** « 200 g de farine » → "200 g de farine" ; gère quantité/unité absentes. */
 export function formatIngredient(ing: Ingredient): string {
   const qty =
     ing.quantity === null || ing.quantity === undefined || Number.isNaN(ing.quantity)

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Camera, User, Sun, ChefHat, Webhook, Cpu, UtensilsCrossed } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -28,18 +28,12 @@ export default function Profile() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      fetchProfile();
-    }
-  }, [user]);
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
-        .from('profiles_safe' as any)
+        .from('profiles_safe')
         .select('display_name, avatar_url')
         .eq('id', user.id)
         .maybeSingle();
@@ -47,16 +41,21 @@ export default function Profile() {
       if (error) throw error;
 
       if (data) {
-        const row = data as any;
-        setDisplayName(row.display_name || '');
-        setAvatarUrl(row.avatar_url);
+        setDisplayName(data.display_name || '');
+        setAvatarUrl(data.avatar_url);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+    }
+  }, [user, fetchProfile]);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

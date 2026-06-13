@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { useRecipes } from './useRecipes';
 import { useUserPreferences, UserCulinaryPreferences } from './useUserPreferences';
 import { supabase } from '@/integrations/supabase/client';
-import { useChatEngine, ActiveRecipeData, PendingRecipe, ToolCallAction } from './useChatEngine';
+import { useChatEngine, ActiveRecipeData, ChatEngineConfig, PendingRecipe, ToolCallAction } from './useChatEngine';
 import type { Ingredient } from '@/types/recipe';
+import type { Json } from '@/integrations/supabase/types';
 
 // Re-export types
 export type { ChatMessage, MessageContent, PendingRecipe, ActiveRecipeData } from './useChatEngine';
@@ -15,7 +16,7 @@ const WELCOME_MESSAGE = "Salut ! Je suis Chef, ton assistant culinaire. 👨‍�
 // Background image generation function (fire and forget)
 async function triggerBackgroundImageGeneration(
   recipeId: string, title: string, ingredients: Ingredient[],
-  accessToken: string, refetchRecipes: () => Promise<any>,
+  accessToken: string, refetchRecipes: () => Promise<unknown>,
 ) {
   try {
     const response = await fetch(
@@ -32,7 +33,7 @@ export function useHomeChat() {
   const { data: recipes = [], refetch: refetchRecipes } = useRecipes();
   const { preferences, updatePreferences } = useUserPreferences();
 
-  const handleToolCall = useCallback(async (action: ToolCallAction): Promise<any> => {
+  const handleToolCall = useCallback(async (action: ToolCallAction): Promise<unknown> => {
     console.log('Tool call:', action.type, action.data);
 
     switch (action.type) {
@@ -41,7 +42,7 @@ export function useHomeChat() {
         const query = rawQuery === 'all' ? '' : rawQuery;
         const statusFilter = action.data.status_filter as string;
         const favoritesOnly = action.data.favorites_only as boolean;
-        let results = recipes.filter(r => {
+        const results = recipes.filter(r => {
           const matchesQuery = !query || r.title.toLowerCase().includes(query) || r.ingredients.some(i => i.name.toLowerCase().includes(query));
           const matchesStatus = !statusFilter || statusFilter === 'all' || r.status === statusFilter;
           const matchesFavorite = !favoritesOnly || r.is_favorite;
@@ -111,7 +112,7 @@ export function useHomeChat() {
         if (!preferences) { console.error('Impossible de charger les préférences'); return { error: 'No preferences loaded' }; }
         const updatedPrefs = JSON.parse(JSON.stringify(preferences)) as UserCulinaryPreferences;
         for (const op of operations) {
-          const category = (updatedPrefs as any)[op.category];
+          const category = updatedPrefs[op.category] as unknown as Record<string, string[] | string | null>;
           if (!category) continue;
           if (op.operation === 'add' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = [...new Set([...c, ...op.values])]; }
           else if (op.operation === 'remove' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = c.filter((v: string) => !op.values!.includes(v)); }
@@ -133,9 +134,10 @@ export function useHomeChat() {
 
       default: console.log('Unknown tool call:', action.type); return null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables et `engine.activeRecipe` est lu via closure au moment de l'appel
   }, [recipes, navigate, preferences, updatePreferences]);
 
-  const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: any) => {
+  const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
     const recipeSummaries = recipes.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
     return {
       endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`,
@@ -161,14 +163,14 @@ export function useHomeChat() {
       if (pending.isUpdate && pending.originalRecipeId) {
         const { error } = await supabase.from('recipes').update({
           title: pending.title, servings: pending.servings,
-          ingredients: pending.ingredients as any, steps: pending.steps as any,
+          ingredients: pending.ingredients as unknown as Json, steps: pending.steps as unknown as Json,
           updated_at: new Date().toISOString(),
         }).eq('id', pending.originalRecipeId);
         if (error) throw error;
       } else {
         const { data: newRecipe, error } = await supabase.from('recipes').insert({
           user_id: session.user.id, title: pending.title, servings: pending.servings,
-          ingredients: pending.ingredients as any, steps: pending.steps as any,
+          ingredients: pending.ingredients as unknown as Json, steps: pending.steps as unknown as Json,
           source_type: 'ai', status: 'draft',
         }).select('id').single();
         if (error) throw error;
@@ -188,6 +190,7 @@ export function useHomeChat() {
         timestamp: new Date(),
       }]);
     } catch (error) { console.error('Error saving recipe:', error); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
   }, [engine.pendingRecipe, refetchRecipes]);
 
   const cancelPendingRecipe = useCallback(() => {
@@ -197,6 +200,7 @@ export function useHomeChat() {
       content: "D'accord, on continue la discussion. Qu'est-ce que tu aimerais modifier ?",
       timestamp: new Date(),
     }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
   }, []);
 
   return {

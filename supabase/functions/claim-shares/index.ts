@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     const userPhone = userData.user.phone;
 
     // Find pending shares matching email or phone
-    let query = adminClient
+    const query = adminClient
       .from("recipe_shares")
       .select("*")
       .eq("status", "pending");

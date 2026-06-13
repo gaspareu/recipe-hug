@@ -374,8 +374,32 @@ Exemples :
 - Apres une recherche : [suggestions]["Cuisiner la premiere","Voir le detail","Autre recherche"][/suggestions]
 - Apres un conseil : [suggestions]["Etape suivante","Temps de cuisson","Conseil texture"][/suggestions]`;
 
+interface UserPreferences {
+  taste_preferences?: {
+    liked_flavors?: string[];
+    disliked_flavors?: string[];
+    liked_ingredients?: string[];
+    disliked_ingredients?: string[];
+    special_ingredients?: string[];
+  };
+  dietary_constraints?: {
+    allergies?: string[];
+    diets?: string[];
+    restrictions?: string[];
+  };
+  kitchen_equipment?: {
+    available?: string[];
+    unavailable?: string[];
+  };
+  culinary_style?: {
+    favorite_cuisines?: string[];
+    favorite_techniques?: string[];
+    preferred_difficulty?: string;
+  };
+}
+
 // Format user preferences for context
-function formatPreferencesContext(prefs: any): string {
+function formatPreferencesContext(prefs: UserPreferences | null | undefined): string {
   if (!prefs) return "";
   const sections: string[] = [];
 
@@ -407,8 +431,18 @@ ${sections.join("\n")}
 --- FIN PROFIL ---`;
 }
 
+interface ActiveRecipeContext {
+  id: string;
+  title: string;
+  servings?: number;
+  season?: string;
+  ingredients?: Array<{ quantity?: string | number; unit?: string; name: string; category?: string }>;
+  steps?: Array<{ order: number; text: string; completed?: boolean }>;
+  completedSteps?: number[];
+}
+
 // Format active recipe context
-function formatRecipeContext(recipe: any): string {
+function formatRecipeContext(recipe: ActiveRecipeContext | null | undefined): string {
   if (!recipe) return "";
 
   let context = `\n\n--- RECETTE EN CONTEXTE ---\n`;
@@ -428,7 +462,7 @@ function formatRecipeContext(recipe: any): string {
 
   if (recipe.steps?.length > 0) {
     context += `\nÉtapes :\n`;
-    const sortedSteps = [...recipe.steps].sort((a: any, b: any) => a.order - b.order);
+    const sortedSteps = [...recipe.steps].sort((a, b) => a.order - b.order);
     const completedSet = new Set(recipe.completedSteps || []);
     for (const step of sortedSteps) {
       const isDone = step.completed || completedSet.has(step.order);

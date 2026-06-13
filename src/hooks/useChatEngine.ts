@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 
 import { supabase } from '@/integrations/supabase/client';
+import type { Ingredient, Step } from '@/types/recipe';
 
 export interface ChatMessage {
   id: string;
@@ -29,8 +30,8 @@ export interface SearchResult {
 export interface PendingRecipe {
   title: string;
   servings: number;
-  ingredients: any[];
-  steps: any[];
+  ingredients: Ingredient[];
+  steps: Step[];
   isUpdate?: boolean;
   originalRecipeId?: string;
   relationToOriginal?: string;
@@ -41,8 +42,8 @@ export interface ActiveRecipeData {
   title: string;
   servings?: number | null;
   season?: string | null;
-  ingredients?: any[];
-  steps?: any[];
+  ingredients?: Ingredient[];
+  steps?: Step[];
   completedSteps?: number[];
 }
 
@@ -50,12 +51,12 @@ export interface ChatEngineConfig {
   welcomeMessage: string;
   initialActiveRecipe: ActiveRecipeData | null;
   /** Handle a tool call */
-  onToolCall: (action: ToolCallAction) => Promise<any>;
+  onToolCall: (action: ToolCallAction) => Promise<unknown>;
   /** Build request body for the send */
   buildRequest: (params: {
     apiMessages: Array<{ role: string; content: MessageContent }>;
     activeRecipe: ActiveRecipeData | null;
-  }) => Promise<{ endpoint: string; body: Record<string, any> }>;
+  }) => Promise<{ endpoint: string; body: Record<string, unknown> }>;
   /** Called when activeRecipe changes */
   onActiveRecipeChange?: (recipe: ActiveRecipeData | null) => void;
   /** Called when pendingRecipe changes */
@@ -82,6 +83,76 @@ export function useChatEngine(config: ChatEngineConfig) {
   // Keep mutable refs for state that needs to be read during streaming
   const activeRecipeRef = useRef(activeRecipe);
   activeRecipeRef.current = activeRecipe;
+
+  // Exécute un tool call et retourne le contenu (éventuellement enrichi) du
+  // message assistant. Le contenu courant est passé par le parser : le relire
+  // via un updater setMessages à effet de bord n'est pas fiable (React peut
+  // différer son exécution et le batch écraserait alors le contenu ajouté).
+  const executeToolCall = useCallback(async (
+    name: string,
+    argsStr: string,
+    assistantMessageId: string,
+    currentContent: string,
+  ): Promise<string> => {
+    try {
+      const args = JSON.parse(argsStr);
+      const result = await onToolCallRef.current({ type: name, data: args });
+
+      // Handle search results
+      if (name === 'search_recipes' && result) {
+        const list = result as SearchResult[];
+        let content = currentContent;
+
+        if (list.length === 0) {
+          content += "\n\nJe n'ai trouvé aucune recette correspondante. Tu veux que je t'en crée une nouvelle ?";
+        } else {
+          content += '\n\n**Résultats trouvés :**\n';
+          list.forEach((r, i) => {
+            const statusLabel = { draft: '📝 brouillon', tested: '🧪 testée', validated: '✅ validée', archived: '📦 archivée' }[r.status] || r.status;
+            content += `${i + 1}. **${r.title}** - ${statusLabel}${r.is_favorite ? ' ⭐' : ''}\n`;
+          });
+          content += '\nDis-moi laquelle tu veux ouvrir, cuisiner ou modifier !';
+        }
+        setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content } : m));
+        return content;
+      }
+    } catch (e) {
+      console.error('Failed to parse/execute tool call:', e, argsStr);
+    }
+    return currentContent;
+  }, []);
+
+  const parseTextActions = useCallback((content: string, assistantMessageId: string): string => {
+    const actionRegex = /\{\s*"action"\s*:\s*"([^"]+)"\s*,\s*"parameters"\s*:\s*(\{[^}]*\})\s*\}/g;
+    let match;
+    let cleaned = content;
+
+    while ((match = actionRegex.exec(content)) !== null) {
+      const actionType = match[1];
+      try {
+        const parameters = JSON.parse(match[2]);
+        const actionMap: Record<string, string> = {
+          search_recipes: 'search_recipes', open_recipe: 'open_recipe',
+          navigate: 'navigate', save_recipe: 'save_recipe',
+          extract_modified_recipe: 'extract_modified_recipe',
+          create_new_recipe: 'create_new_recipe',
+          get_preferences: 'get_preferences', update_preferences: 'update_preferences',
+        };
+        const toolType = actionMap[actionType];
+        if (toolType) {
+          onToolCallRef.current({ type: toolType, data: { ...parameters } });
+        }
+        cleaned = cleaned.replace(match[0], '').trim();
+      } catch (e) {
+        console.error('Failed to parse fallback action:', e);
+      }
+    }
+
+    if (cleaned !== content) {
+      setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: cleaned } : m));
+    }
+    return cleaned;
+  }, []);
 
   // --- SSE streaming parser ---
   const parseSSEStream = useCallback(async (
@@ -153,77 +224,7 @@ export function useChatEngine(config: ChatEngineConfig) {
     assistantContent = parseTextActions(assistantContent, assistantMessageId);
 
     return assistantContent;
-  }, []);
-
-  // Exécute un tool call et retourne le contenu (éventuellement enrichi) du
-  // message assistant. Le contenu courant est passé par le parser : le relire
-  // via un updater setMessages à effet de bord n'est pas fiable (React peut
-  // différer son exécution et le batch écraserait alors le contenu ajouté).
-  const executeToolCall = useCallback(async (
-    name: string,
-    argsStr: string,
-    assistantMessageId: string,
-    currentContent: string,
-  ): Promise<string> => {
-    try {
-      const args = JSON.parse(argsStr);
-      const result = await onToolCallRef.current({ type: name, data: args });
-
-      // Handle search results
-      if (name === 'search_recipes' && result) {
-        const list = result as SearchResult[];
-        let content = currentContent;
-
-        if (list.length === 0) {
-          content += "\n\nJe n'ai trouvé aucune recette correspondante. Tu veux que je t'en crée une nouvelle ?";
-        } else {
-          content += '\n\n**Résultats trouvés :**\n';
-          list.forEach((r, i) => {
-            const statusLabel = { draft: '📝 brouillon', tested: '🧪 testée', validated: '✅ validée', archived: '📦 archivée' }[r.status] || r.status;
-            content += `${i + 1}. **${r.title}** - ${statusLabel}${r.is_favorite ? ' ⭐' : ''}\n`;
-          });
-          content += '\nDis-moi laquelle tu veux ouvrir, cuisiner ou modifier !';
-        }
-        setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content } : m));
-        return content;
-      }
-    } catch (e) {
-      console.error('Failed to parse/execute tool call:', e, argsStr);
-    }
-    return currentContent;
-  }, []);
-
-  const parseTextActions = useCallback((content: string, assistantMessageId: string): string => {
-    const actionRegex = /\{\s*"action"\s*:\s*"([^"]+)"\s*,\s*"parameters"\s*:\s*(\{[^}]*\})\s*\}/g;
-    let match;
-    let cleaned = content;
-
-    while ((match = actionRegex.exec(content)) !== null) {
-      const actionType = match[1];
-      try {
-        const parameters = JSON.parse(match[2]);
-        const actionMap: Record<string, string> = {
-          search_recipes: 'search_recipes', open_recipe: 'open_recipe',
-          navigate: 'navigate', save_recipe: 'save_recipe',
-          extract_modified_recipe: 'extract_modified_recipe',
-          create_new_recipe: 'create_new_recipe',
-          get_preferences: 'get_preferences', update_preferences: 'update_preferences',
-        };
-        const toolType = actionMap[actionType];
-        if (toolType) {
-          onToolCallRef.current({ type: toolType, data: { ...parameters } });
-        }
-        cleaned = cleaned.replace(match[0], '').trim();
-      } catch (e) {
-        console.error('Failed to parse fallback action:', e);
-      }
-    }
-
-    if (cleaned !== content) {
-      setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: cleaned } : m));
-    }
-    return cleaned;
-  }, []);
+  }, [executeToolCall, parseTextActions]);
 
   // Convertit les messages du fil en messages au format attendu par l'API.
   const toApiMessages = useCallback((chatMessages: ChatMessage[]): Array<{ role: string; content: MessageContent }> => {

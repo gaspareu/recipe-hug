@@ -20,6 +20,7 @@ interface CheckedState {
 }
 
 // Hook for managing checklist state
+// eslint-disable-next-line react-refresh/only-export-components -- hook compagnon des composants du fichier, co-localisation volontaire
 export function useIngredientChecklist(ingredients: Ingredient[], recipeId?: string) {
   const storageKey = recipeId ? `recipe-${recipeId}-checklist` : null;
 
@@ -117,17 +118,17 @@ function useCategoryState(categories: string[]) {
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    const initial: Record<string, boolean> = {};
-    let hasNew = false;
-    categories.forEach(category => {
-      if (openCategories[category] === undefined) {
-        initial[category] = true;
-        hasNew = true;
-      }
+    setOpenCategories(prev => {
+      const initial: Record<string, boolean> = {};
+      let hasNew = false;
+      categories.forEach(category => {
+        if (prev[category] === undefined) {
+          initial[category] = true;
+          hasNew = true;
+        }
+      });
+      return hasNew ? { ...initial, ...prev } : prev;
     });
-    if (hasNew) {
-      setOpenCategories(prev => ({ ...initial, ...prev }));
-    }
   }, [categories]);
 
   const toggleCategory = (category: string) => {

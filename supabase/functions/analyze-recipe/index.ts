@@ -64,8 +64,8 @@ serve(async (req) => {
     });
     console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
 
-    const ingredientsList = ingredients.map((i: any) => `${i.quantity || ""} ${i.unit || ""} ${i.name}`.trim()).join(", ");
-    const stepsList = steps?.map((s: any) => s.text).join(" ") || "";
+    const ingredientsList = ingredients.map((i) => `${i.quantity || ""} ${i.unit || ""} ${i.name}`.trim()).join(", ");
+    const stepsList = steps?.map((s) => s.text).join(" ") || "";
 
     const prompt = `Analyse cette recette et génère un résumé descriptif, des tags nutritionnels et la saison idéale.
 

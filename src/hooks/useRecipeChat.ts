@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 
 import { useRecipes } from './useRecipes';
 import { useUserPreferences, UserCulinaryPreferences } from './useUserPreferences';
-import { useChatEngine, ActiveRecipeData, PendingRecipe, ToolCallAction } from './useChatEngine';
+import { useChatEngine, ActiveRecipeData, ChatEngineConfig, PendingRecipe, ToolCallAction } from './useChatEngine';
 import type { Recipe } from '@/types/recipe';
 
 // Re-export types
@@ -19,7 +19,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
   const { data: recipes = [] } = useRecipes();
   const { preferences, updatePreferences } = useUserPreferences();
 
-  const welcomeMessage = `Salut ! 👨‍🍳 Je suis prêt à t'accompagner pour \"**${recipe.title}**\".\n\nJe peux te guider en cuisine, modifier la recette ou répondre à tes questions. Que veux-tu faire ?`;
+  const welcomeMessage = `Salut ! 👨‍🍳 Je suis prêt à t'accompagner pour "**${recipe.title}**".\n\nJe peux te guider en cuisine, modifier la recette ou répondre à tes questions. Que veux-tu faire ?`;
 
   const initialActiveRecipe: ActiveRecipeData = {
     id: recipe.id, title: recipe.title, servings: recipe.servings,
@@ -28,7 +28,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
   const activeRecipeRef = useRef(initialActiveRecipe);
 
-  const handleToolCall = useCallback(async (action: ToolCallAction): Promise<any> => {
+  const handleToolCall = useCallback(async (action: ToolCallAction): Promise<unknown> => {
     console.log('Recipe chat tool call:', action.type, action.data);
 
     switch (action.type) {
@@ -56,7 +56,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
         if (!preferences) return { error: 'No preferences loaded' };
         const updatedPrefs = JSON.parse(JSON.stringify(preferences)) as UserCulinaryPreferences;
         for (const op of operations) {
-          const category = (updatedPrefs as any)[op.category];
+          const category = updatedPrefs[op.category] as unknown as Record<string, string[] | string | null>;
           if (!category) continue;
           if (op.operation === 'add' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = [...new Set([...c, ...op.values])]; }
           else if (op.operation === 'remove' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = c.filter((v: string) => !op.values!.includes(v)); }
@@ -78,9 +78,10 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
       default: console.log('Unknown tool call:', action.type); return null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables et `engine.activeRecipe` est lu via closure au moment de l'appel
   }, [recipes, preferences, updatePreferences]);
 
-  const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: any) => {
+  const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
     const recipeSummaries = recipes.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
     const activeWithSteps = activeRecipe ? { ...activeRecipe, completedSteps: Array.from(completedSteps) } : null;
     return {
@@ -108,10 +109,11 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
       engine.setPendingRecipe(null);
       engine.setMessages(prev => [...prev, {
         id: `assistant-${Date.now()}`, role: 'assistant',
-        content: pending.isUpdate ? `✅ Recette \"${pending.title}\" mise à jour !` : `✅ Nouvelle recette \"${pending.title}\" créée !`,
+        content: pending.isUpdate ? `✅ Recette "${pending.title}" mise à jour !` : `✅ Nouvelle recette "${pending.title}" créée !`,
         timestamp: new Date(),
       }]);
     } catch (error) { console.error('Error saving recipe:', error); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
   }, [engine.pendingRecipe, onRecipeUpdate, onRecipeCreate]);
 
   const cancelPendingRecipe = useCallback(() => {
@@ -121,6 +123,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
       content: "D'accord, on continue la discussion. Qu'est-ce que tu aimerais modifier ?",
       timestamp: new Date(),
     }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
   }, []);
 
   return {

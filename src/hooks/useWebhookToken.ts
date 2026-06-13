@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -9,13 +9,7 @@ export function useWebhookToken() {
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      fetchToken();
-    }
-  }, [user]);
-
-  const fetchToken = async () => {
+  const fetchToken = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -29,7 +23,13 @@ export function useWebhookToken() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchToken();
+    }
+  }, [user, fetchToken]);
 
   const generateToken = async () => {
     if (!user) return;
