@@ -9,8 +9,15 @@ function anthropicSSE(events: object[]): Response {
   });
 }
 
+interface OpenAIChunk {
+  choices: Array<{
+    delta: { content?: string; tool_calls?: Array<{ function?: { name?: string; arguments?: string } }> };
+    finish_reason?: string;
+  }>;
+}
+
 /** Lit tous les chunks `data: {...}` émis par le flux transformé (hors [DONE]). */
-async function readOpenAIChunks(res: Response): Promise<any[]> {
+async function readOpenAIChunks(res: Response): Promise<OpenAIChunk[]> {
   const text = await res.text();
   return text
     .split("\n")
@@ -43,11 +50,11 @@ Deno.test("transform: un bloc tool_use émet nom, arguments accumulés et finish
   const chunks = await readOpenAIChunks(res);
 
   // Le nom de l'outil est émis une fois.
-  const names = chunks.flatMap((c) => c.choices[0].delta.tool_calls ?? []).map((t: any) => t.function?.name).filter(Boolean);
+  const names = chunks.flatMap((c) => c.choices[0].delta.tool_calls ?? []).map((t) => t.function?.name).filter(Boolean);
   assertEquals(names, ["save_recipe"]);
 
   // Les arguments JSON se reconstituent à l'identique.
-  const args = chunks.flatMap((c) => c.choices[0].delta.tool_calls ?? []).map((t: any) => t.function?.arguments ?? "").join("");
+  const args = chunks.flatMap((c) => c.choices[0].delta.tool_calls ?? []).map((t) => t.function?.arguments ?? "").join("");
   assertEquals(JSON.parse(args), { title: "Tarte", servings: 4 });
 
   // Le front s'appuie sur finish_reason === "tool_calls" pour exécuter l'outil.
@@ -75,7 +82,7 @@ Deno.test("transform: le texte et un tool_use successifs coexistent dans le flux
 
   const chunks = await readOpenAIChunks(res);
   const content = chunks.map((c) => c.choices[0].delta.content).filter(Boolean).join("");
-  const args = chunks.flatMap((c) => c.choices[0].delta.tool_calls ?? []).map((t: any) => t.function?.arguments ?? "").join("");
+  const args = chunks.flatMap((c) => c.choices[0].delta.tool_calls ?? []).map((t) => t.function?.arguments ?? "").join("");
   assertEquals(content, "Je prépare ça.");
   assertEquals(JSON.parse(args), { destination: "profile" });
 });

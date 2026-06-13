@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
@@ -28,10 +28,10 @@ const ExtractedRecipeSchema = z.object({
 
 // Background image generation function (source unique : _shared/generate-image.ts)
 async function triggerImageGeneration(
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseClient,
   recipeId: string,
   title: string,
-  ingredients: any[],
+  ingredients: Array<{ name: string; quantity?: number | null; unit?: string | null }>,
   userId: string
 ) {
   try {
@@ -207,14 +207,15 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
 
     // Normalize steps
     if (Array.isArray(extractedRecipe.steps)) {
-      extractedRecipe.steps = extractedRecipe.steps.map((step: any, index: number) => {
+      extractedRecipe.steps = extractedRecipe.steps.map((step: unknown, index: number) => {
         if (typeof step === "string") {
           return { order: index + 1, text: step };
         }
-        if (step.instruction && !step.text) {
-          return { order: step.order || index + 1, text: step.instruction };
+        const s = step as { order?: number; text?: string; instruction?: string };
+        if (s.instruction && !s.text) {
+          return { order: s.order || index + 1, text: s.instruction };
         }
-        return { order: step.order || index + 1, text: step.text || "" };
+        return { order: s.order || index + 1, text: s.text || "" };
       });
     }
 

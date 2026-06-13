@@ -5,11 +5,14 @@
 // ⚠️ Gemini : utiliser l'API NATIVE (`:generateContent` + responseModalities),
 // PAS l'endpoint OpenAI-compat — voir supabase/functions/CLAUDE.md.
 
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { AIConfig } from "./ai-types.ts";
 
 export function buildRecipeImagePrompt(title: string, ingredients: unknown): string {
   const ingredientsList = Array.isArray(ingredients)
-    ? ingredients.slice(0, 8).map((i: any) => i.name || i).join(", ")
+    ? ingredients.slice(0, 8).map((i: unknown) =>
+        typeof i === "object" && i !== null && "name" in i ? String((i as { name: unknown }).name) : String(i)
+      ).join(", ")
     : "";
   return `Professional food photography of "${title}". ${
     ingredientsList ? `Main ingredients: ${ingredientsList}.` : ""
@@ -66,7 +69,7 @@ export async function generateImage(config: AIConfig, prompt: string): Promise<G
     }
 
     const data = await response.json();
-    const part = data.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.data);
+    const part = data.candidates?.[0]?.content?.parts?.find((p: { inlineData?: { data?: string } }) => p.inlineData?.data);
     if (!part) {
       console.error("No image in Gemini response:", JSON.stringify(data).slice(0, 500));
       throw new Error("No image generated");
@@ -83,7 +86,7 @@ export async function generateImage(config: AIConfig, prompt: string): Promise<G
  * l'appelant décide (réponse HTTP ou simple warn en tâche de fond).
  */
 export async function generateAndStoreRecipeImage(
-  supabase: any,
+  supabase: SupabaseClient,
   config: AIConfig,
   params: { userId: string; recipeId: string; title: string; ingredients: unknown }
 ): Promise<string> {

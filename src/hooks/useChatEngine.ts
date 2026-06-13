@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 
 import { supabase } from '@/integrations/supabase/client';
+import type { Ingredient, Step } from '@/types/recipe';
 
 export interface ChatMessage {
   id: string;
@@ -29,8 +30,8 @@ export interface SearchResult {
 export interface PendingRecipe {
   title: string;
   servings: number;
-  ingredients: any[];
-  steps: any[];
+  ingredients: Ingredient[];
+  steps: Step[];
   isUpdate?: boolean;
   originalRecipeId?: string;
   relationToOriginal?: string;
@@ -41,8 +42,8 @@ export interface ActiveRecipeData {
   title: string;
   servings?: number | null;
   season?: string | null;
-  ingredients?: any[];
-  steps?: any[];
+  ingredients?: Ingredient[];
+  steps?: Step[];
   completedSteps?: number[];
 }
 
@@ -50,12 +51,12 @@ export interface ChatEngineConfig {
   welcomeMessage: string;
   initialActiveRecipe: ActiveRecipeData | null;
   /** Handle a tool call */
-  onToolCall: (action: ToolCallAction) => Promise<any>;
+  onToolCall: (action: ToolCallAction) => Promise<unknown>;
   /** Build request body for the send */
   buildRequest: (params: {
     apiMessages: Array<{ role: string; content: MessageContent }>;
     activeRecipe: ActiveRecipeData | null;
-  }) => Promise<{ endpoint: string; body: Record<string, any> }>;
+  }) => Promise<{ endpoint: string; body: Record<string, unknown> }>;
   /** Called when activeRecipe changes */
   onActiveRecipeChange?: (recipe: ActiveRecipeData | null) => void;
   /** Called when pendingRecipe changes */

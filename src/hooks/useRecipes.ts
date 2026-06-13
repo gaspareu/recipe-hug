@@ -4,12 +4,12 @@ import type { Recipe, RecipeFormData, Ingredient, Step } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
 
 // Helper pour parser les données Supabase vers notre type Recipe
-export function parseRecipe(data: any): Recipe {
+export function parseRecipe(data: Record<string, unknown>): Recipe {
   return {
     ...data,
     ingredients: (data.ingredients as Ingredient[]) || [],
     steps: (data.steps as Step[]) || [],
-  };
+  } as Recipe;
 }
 
 export function useRecipes() {

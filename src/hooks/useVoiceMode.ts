@@ -122,7 +122,8 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
     const cleanText = text
       .replace(/[#*_`~]/g, '')
       .replace(/\n+/g, '. ')
-      .replace(/[👨‍🍳✨🎉🍽️🥗🍝🥘]/g, '')
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+      .replace(/[\u{FE0F}\u{200D}]/gu, '')
       .trim();
 
     if (!cleanText) return;
@@ -192,9 +193,9 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       });
 
       setIsListening(true);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to start listening:', error);
-      console.warn('Microphone error:', error.name);
+      console.warn('Microphone error:', error instanceof Error ? error.name : error);
     } finally {
       setIsConnecting(false);
     }

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import type { TablesUpdate, TablesInsert } from '@/integrations/supabase/types';
 
 export interface TastePreferences {
   liked_flavors: string[];
@@ -109,13 +110,13 @@ export function useUserPreferences() {
       if (existing) {
         const { error } = await supabase
           .from('user_culinary_preferences')
-          .update(preferences as any)
+          .update(preferences as unknown as TablesUpdate<'user_culinary_preferences'>)
           .eq('user_id', user.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('user_culinary_preferences')
-          .insert({ user_id: user.id, ...DEFAULT_PREFERENCES, ...preferences } as any);
+          .insert({ user_id: user.id, ...DEFAULT_PREFERENCES, ...preferences } as unknown as TablesInsert<'user_culinary_preferences'>);
         if (error) throw error;
       }
     },

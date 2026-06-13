@@ -2,12 +2,46 @@
 
 import { AIConfig } from "./ai-types.ts";
 
+export type MessageContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+export interface ChatMessage {
+  role: string;
+  content: string | MessageContentPart[];
+}
+
+export interface ToolDefinition {
+  type?: string;
+  function: {
+    name: string;
+    description?: string;
+    parameters?: unknown;
+  };
+}
+
+interface ToolCall {
+  id?: string;
+  type?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+interface AIResponse {
+  choices?: Array<{ message?: { content?: string; tool_calls?: ToolCall[] } }>;
+  content?: Array<{ type: string; text?: string; input?: unknown }>;
+}
+
+interface StreamCallOptions {
+  tools?: ToolDefinition[];
+  stream?: boolean;
+}
+
 // ============================================================
 // NON-STREAMING CALLS
 // ============================================================
 
 /** Call AI (non-streaming) and return the text content */
-export async function callAINonStreaming(config: AIConfig, messages: any[]): Promise<string> {
+export async function callAINonStreaming(config: AIConfig, messages: ChatMessage[]): Promise<string> {
   if (config.provider === "anthropic") {
     return callAnthropicNonStreaming(config, messages);
   }
@@ -24,13 +58,13 @@ export async function callAINonStreaming(config: AIConfig, messages: any[]): Pro
   return data.choices?.[0]?.message?.content;
 }
 
-async function callAnthropicNonStreaming(config: AIConfig, messages: any[]): Promise<string> {
-  const systemMessage = messages.find((m: any) => m.role === "system")?.content || "";
+async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage[]): Promise<string> {
+  const systemMessage = messages.find((m) => m.role === "system")?.content || "";
   const chatMessages = messages
-    .filter((m: any) => m.role !== "system")
-    .map((msg: any) => ({ role: msg.role, content: msg.content }));
+    .filter((m) => m.role !== "system")
+    .map((msg) => ({ role: msg.role, content: msg.content }));
 
-  const body: any = { model: config.model, max_tokens: 8192, messages: chatMessages };
+  const body: Record<string, unknown> = { model: config.model, max_tokens: 8192, messages: chatMessages };
   if (systemMessage) body.system = systemMessage;
 
   const response = await fetch(config.endpoint, {
@@ -51,8 +85,8 @@ async function callAnthropicNonStreaming(config: AIConfig, messages: any[]): Pro
 /** Call AI (streaming) and return a Response (SSE-compatible) */
 export async function callAIStreaming(
   config: AIConfig,
-  messages: any[],
-  options: { tools?: any[]; stream?: boolean } = {}
+  messages: ChatMessage[],
+  options: StreamCallOptions = {}
 ): Promise<Response> {
   const stream = options.stream ?? true;
 
@@ -67,8 +101,8 @@ export async function callAIStreaming(
   }
 }
 
-async function callOpenAICompatStreaming(config: AIConfig, messages: any[], options: any): Promise<Response> {
-  const body: any = { model: config.model, messages, stream: options.stream ?? true };
+async function callOpenAICompatStreaming(config: AIConfig, messages: ChatMessage[], options: StreamCallOptions): Promise<Response> {
+  const body: Record<string, unknown> = { model: config.model, messages, stream: options.stream ?? true };
   if (options.tools?.length) body.tools = options.tools;
 
   return fetch(config.endpoint, {
@@ -78,9 +112,19 @@ async function callOpenAICompatStreaming(config: AIConfig, messages: any[], opti
   });
 }
 
-async function callGeminiStreaming(config: AIConfig, messages: any[], options: any): Promise<Response> {
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType: string; data: string };
+}
+
+interface GeminiMessage {
+  role: string;
+  parts: GeminiPart[];
+}
+
+async function callGeminiStreaming(config: AIConfig, messages: ChatMessage[], options: StreamCallOptions): Promise<Response> {
   // Convert to Gemini native format
-  const geminiMessages = messages.map((msg: any) => {
+  const geminiMessages: GeminiMessage[] = messages.map((msg) => {
     if (msg.role === "system") {
       return { role: "user", parts: [{ text: `[System]: ${msg.content}` }] };
     }
@@ -88,7 +132,7 @@ async function callGeminiStreaming(config: AIConfig, messages: any[], options: a
       role: msg.role === "assistant" ? "model" : "user",
       parts: typeof msg.content === "string"
         ? [{ text: msg.content }]
-        : msg.content.map((c: any) =>
+        : msg.content.map((c) =>
             c.type === "text"
               ? { text: c.text }
               : { inlineData: { mimeType: "image/jpeg", data: c.image_url.url.split(",")[1] } }
@@ -97,7 +141,7 @@ async function callGeminiStreaming(config: AIConfig, messages: any[], options: a
   });
 
   // Merge consecutive same-role messages (Gemini requirement)
-  const mergedMessages: any[] = [];
+  const mergedMessages: GeminiMessage[] = [];
   for (const msg of geminiMessages) {
     if (mergedMessages.length > 0 && mergedMessages[mergedMessages.length - 1].role === msg.role) {
       mergedMessages[mergedMessages.length - 1].parts.push(...msg.parts);
@@ -106,10 +150,10 @@ async function callGeminiStreaming(config: AIConfig, messages: any[], options: a
     }
   }
 
-  const body: any = { contents: mergedMessages, generationConfig: { temperature: 0.7, maxOutputTokens: 8192 } };
+  const body: Record<string, unknown> = { contents: mergedMessages, generationConfig: { temperature: 0.7, maxOutputTokens: 8192 } };
   if (options.tools?.length) {
     body.tools = [{
-      functionDeclarations: options.tools.map((t: any) => ({
+      functionDeclarations: options.tools.map((t) => ({
         name: t.function.name,
         description: t.function.description,
         parameters: t.function.parameters,
@@ -132,20 +176,20 @@ async function callGeminiStreaming(config: AIConfig, messages: any[], options: a
   return response;
 }
 
-async function callAnthropicStreaming(config: AIConfig, messages: any[], options: any): Promise<Response> {
-  const systemMessage = messages.find((m: any) => m.role === "system")?.content || "";
-  const chatMessages = messages.filter((m: any) => m.role !== "system").map((msg: any) => ({
+async function callAnthropicStreaming(config: AIConfig, messages: ChatMessage[], options: StreamCallOptions): Promise<Response> {
+  const systemMessage = messages.find((m) => m.role === "system")?.content || "";
+  const chatMessages = messages.filter((m) => m.role !== "system").map((msg) => ({
     role: msg.role,
     content: typeof msg.content === "string"
       ? msg.content
-      : msg.content.map((c: any) =>
+      : msg.content.map((c) =>
           c.type === "text"
             ? { type: "text", text: c.text }
             : { type: "image", source: { type: "base64", media_type: "image/jpeg", data: c.image_url.url.split(",")[1] } }
         ),
   }));
 
-  const body: any = { model: config.model, max_tokens: 8192, messages: chatMessages };
+  const body: Record<string, unknown> = { model: config.model, max_tokens: 8192, messages: chatMessages };
   // Prompt caching : le prompt système (volumineux : persona + préférences +
   // liste des recettes) et les définitions d'outils sont stables au sein d'une
   // conversation. Un cache_control sur le bloc système met en cache tout le
@@ -155,7 +199,7 @@ async function callAnthropicStreaming(config: AIConfig, messages: any[], options
     body.system = [{ type: "text", text: systemMessage, cache_control: { type: "ephemeral" } }];
   }
   if (options.tools?.length) {
-    body.tools = options.tools.map((t: any) => ({
+    body.tools = options.tools.map((t) => ({
       name: t.function.name,
       description: t.function.description,
       input_schema: t.function.parameters,
@@ -196,7 +240,8 @@ function transformGeminiStreamToOpenAI(response: Response): Response {
             for (const chunk of chunks) {
               const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text || "";
               const toolCalls = chunk.candidates?.[0]?.content?.parts?.[0]?.functionCall;
-              const openAIChunk: any = { choices: [{ delta: {}, index: 0 }] };
+              const openAIChunk: { choices: Array<{ delta: { content?: string; tool_calls?: ToolCall[] }; index: number }> } =
+                { choices: [{ delta: {}, index: 0 }] };
               if (text) openAIChunk.choices[0].delta.content = text;
               if (toolCalls) {
                 openAIChunk.choices[0].delta.tool_calls = [{
@@ -286,9 +331,9 @@ export function buildToolCallRequest(
   config: AIConfig,
   systemPrompt: string,
   userPrompt: string,
-  tools: any[],
+  tools: ToolDefinition[],
   forcedToolName?: string
-): { headers: Record<string, string>; body: any } {
+): { headers: Record<string, string>; body: Record<string, unknown> } {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
   if (config.provider === "anthropic") {
@@ -327,9 +372,9 @@ export function buildToolCallRequest(
 }
 
 /** Extract the tool call result from any provider's response */
-export function extractToolCallResult(config: AIConfig, response: any): any {
+export function extractToolCallResult(config: AIConfig, response: AIResponse): unknown {
   if (config.provider === "anthropic") {
-    const toolUse = response.content?.find((c: any) => c.type === "tool_use");
+    const toolUse = response.content?.find((c) => c.type === "tool_use");
     return toolUse?.input;
   }
   const toolCall = response.choices?.[0]?.message?.tool_calls?.[0];
@@ -341,7 +386,7 @@ export function extractToolCallResult(config: AIConfig, response: any): any {
 // ============================================================
 
 /** Build a vision request body for any provider */
-export function buildVisionRequest(config: AIConfig, systemPrompt: string, imageUrl: string, userPrompt: string): any {
+export function buildVisionRequest(config: AIConfig, systemPrompt: string, imageUrl: string, userPrompt: string): Record<string, unknown> {
   if (config.provider === "anthropic") {
     return {
       model: config.model,
@@ -385,7 +430,7 @@ export function buildRequestHeaders(config: AIConfig): Record<string, string> {
 }
 
 /** Extract text content from any provider's response */
-export function extractContentFromResponse(config: AIConfig, response: any): string | null {
+export function extractContentFromResponse(config: AIConfig, response: AIResponse): string | null {
   if (config.provider === "anthropic") {
     return response.content?.[0]?.text || null;
   }
@@ -397,8 +442,8 @@ export function buildSimpleRequest(
   config: AIConfig,
   systemPrompt: string,
   userPrompt: string,
-  extraOptions?: Record<string, any>
-): { headers: Record<string, string>; body: any } {
+  extraOptions?: Record<string, unknown>
+): { headers: Record<string, string>; body: Record<string, unknown> } {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
   if (config.provider === "anthropic") {

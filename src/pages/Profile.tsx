@@ -39,7 +39,7 @@ export default function Profile() {
     
     try {
       const { data, error } = await supabase
-        .from('profiles_safe' as any)
+        .from('profiles_safe')
         .select('display_name, avatar_url')
         .eq('id', user.id)
         .maybeSingle();
@@ -47,9 +47,8 @@ export default function Profile() {
       if (error) throw error;
 
       if (data) {
-        const row = data as any;
-        setDisplayName(row.display_name || '');
-        setAvatarUrl(row.avatar_url);
+        setDisplayName(data.display_name || '');
+        setAvatarUrl(data.avatar_url);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
