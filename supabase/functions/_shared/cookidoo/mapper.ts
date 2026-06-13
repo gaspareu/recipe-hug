@@ -77,7 +77,9 @@ function extractVaroma(text: string): Found | null {
 
 /**
  * Construit les annotations machine d'une étape.
- * Regroupe temps/vitesse/température dans un seul empan (TTS), ou STEAMING si « Varoma ».
+ * Regroupe temps/vitesse/température dans un seul empan (TTS). Si « Varoma »,
+ * l'annotation reste de type TTS avec `temperature: { value: "varoma" }`
+ * (format observé sur les recettes Cookidoo officielles, pas de type MODE/STEAMING).
  */
 export function parseStepAnnotations(text: string): Annotation[] {
   const time = extractTime(text);
@@ -95,10 +97,10 @@ export function parseStepAnnotations(text: string): Annotation[] {
   const position = { offset: start, length: end - start };
 
   if (varoma) {
-    const data: Record<string, unknown> = { direction: "CW", accessory: "Varoma" };
+    const data: Record<string, unknown> = { temperature: { value: "varoma" } };
     if (time) data.time = time.seconds;
     if (speed) data.speed = speed.speed;
-    return [{ type: "MODE", name: "STEAMING", data, position }];
+    return [{ type: "TTS", data, position }];
   }
 
   const data: Record<string, unknown> = {};

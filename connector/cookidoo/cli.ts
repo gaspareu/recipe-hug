@@ -29,8 +29,8 @@ import { login, countryToLang, type CookieJar } from "../../supabase/functions/_
 import {
   createRecipe,
   deleteRecipe,
+  fillRecipe,
   getRecipe,
-  patchRecipe,
   recipeWebUrl,
   type ClientCtx,
 } from "../../supabase/functions/_shared/cookidoo/client.ts";
@@ -125,7 +125,7 @@ async function main() {
   const id = await createRecipe(ctx, payload.name);
   console.log(`✅ Recette créée : ${id} — remplissage dans 5 s…`);
   await sleep(5000);
-  await patchRecipe(ctx, id, payload);
+  await fillRecipe(ctx, id, payload);
 
   console.log(`\n🎉 Envoyée. Vérifiez dans Cookidoo → « Mes recettes créées ».`);
   console.log(`   URL : ${recipeWebUrl(ctx, id)}`);

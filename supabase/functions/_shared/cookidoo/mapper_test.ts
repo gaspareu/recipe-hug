@@ -29,12 +29,13 @@ Deno.test("parseStepAnnotations: TTS temps/vitesse/température", () => {
   assertEquals(ann[0].data.temperature, { value: "100", unit: "C" });
 });
 
-Deno.test("parseStepAnnotations: Varoma → MODE STEAMING", () => {
+Deno.test("parseStepAnnotations: Varoma → TTS avec temperature varoma", () => {
   const ann = parseStepAnnotations("Cuire 15 min/Varoma/vitesse 1.");
   assertEquals(ann.length, 1);
-  assertEquals(ann[0].type, "MODE");
-  assertEquals(ann[0].name, "STEAMING");
-  assertEquals(ann[0].data.accessory, "Varoma");
+  assertEquals(ann[0].type, "TTS");
+  assertEquals(ann[0].data.temperature, { value: "varoma" });
+  assertEquals(ann[0].data.time, 900);
+  assertEquals(ann[0].data.speed, "1");
 });
 
 Deno.test("parseStepAnnotations: texte simple → aucune annotation", () => {
