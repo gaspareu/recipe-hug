@@ -128,6 +128,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
     activeRecipe: engine.activeRecipe, pendingRecipe: engine.pendingRecipe,
     searchResults: engine.searchResults,
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
+    regenerateResponse: engine.regenerateResponse,
     savePendingRecipe, cancelPendingRecipe,
   };
 }

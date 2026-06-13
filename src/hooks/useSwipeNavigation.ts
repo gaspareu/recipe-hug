@@ -19,6 +19,14 @@ export function useSwipeNavigation({
   const [translateX, setTranslateX] = useState(0);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Ignore les touchers démarrant dans une zone avec son propre scroll horizontal
+    if ((e.target as HTMLElement).closest('[data-no-swipe-nav]')) {
+      touchStartX.current = null;
+      touchStartY.current = null;
+      isHorizontalSwipe.current = null;
+      return;
+    }
+
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
     isHorizontalSwipe.current = null;

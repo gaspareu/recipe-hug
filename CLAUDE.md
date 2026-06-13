@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **recipe-hug** — Application PWA de gestion de recettes avec assistant IA conversationnel (chat streaming, vision, génération d'images), planification de repas et préférences culinaires personnalisées. Déployé sur Vercel.
 
-## Environnement de développement (Claude Code Web)
+## Environnement de développement 
 
-Ce projet est manipulé **principalement via Claude Code Web** : les sessions tournent dans des conteneurs cloud **éphémères**, avec un **clone neuf du repo** à chaque démarrage et aucune persistance entre sessions. Conséquence directe : **tout l'outillage agent doit être committé dans le repo** pour être disponible automatiquement — le configurer « localement » dans une session ne sert à rien (perdu au redémarrage). S'outiller « en accordance » signifie donc privilégier des artefacts versionnés :
+**tout l'outillage agent doit être committé dans le repo** pour être disponible automatiquement. Privilégier des artefacts versionnés :
 
 - **`.mcp.json`** (racine, committé) — déclare le serveur MCP **Supabase** (HTTP). L'intégration **GitHub** est fournie nativement par Claude Code Web (pas de `gh` CLI dans le conteneur).
 - **`.claude/settings.json`** (committé) — hook `SessionStart` exécutant `npm ci` (conteneur prêt dès l'ouverture de session), hooks `PreToolUse`/`PostToolUse` (`.claude/hooks/git-guard.mjs` : blocage commit/push sur `main`, force push, édition des fichiers auto-générés ; rappel de redéploiement des edge functions) + permissions pré-accordées pour npm/git/deno (moins de prompts).
