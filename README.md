@@ -63,3 +63,4 @@ Déployé sur **Vercel** (branche `main` → auto-deploy). `vercel.json` gère l
 - `CLAUDE.md` — guide pour les assistants IA travaillant sur le dépôt
 - `EDGE_FUNCTIONS.md` — référentiel des edge functions et du pattern IA partagé
 - `docs/CODEMAPS/` — cartes du code (architecture, frontend, backend, data, dependencies)
+- `docs/BACKLOG.md` - liste des améliorations à réaliser; 

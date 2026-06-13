@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check } from 'lucide-react';
+import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check, Copy, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TextShimmer } from '@/components/ui/text-shimmer';
+import { toast } from '@/components/ui/sonner';
 import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { messageVariants, messageTransition } from '@/lib/motion';
@@ -20,6 +21,7 @@ interface ChatInterfaceProps {
   sendMessage: (content: string, imageDataUrl?: string) => void;
   savePendingRecipe: () => void;
   cancelPendingRecipe: () => void;
+  regenerateResponse?: () => void;
   suggestions: string[];
   placeholder?: string;
   showWelcomeScreen?: boolean;
@@ -37,6 +39,7 @@ export function ChatInterface({
   sendMessage,
   savePendingRecipe,
   cancelPendingRecipe,
+  regenerateResponse,
   suggestions,
   placeholder = 'Poser une question',
   showWelcomeScreen = false,
@@ -100,6 +103,15 @@ export function ChatInterface({
     e.target.value = '';
   };
 
+  const handleCopy = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast('Message copié');
+    } catch {
+      toast('Impossible de copier le message');
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
   };
@@ -138,6 +150,7 @@ export function ChatInterface({
               }
               const isLast = message.id === messages[messages.length - 1]?.id;
               const showCaret = isStreaming && isLast && message.role === 'assistant' && displayContent !== '';
+              const showActions = message.role === 'assistant' && displayContent !== '' && !(isStreaming && isLast);
               return (
                 <motion.div
                   key={message.id}
@@ -162,6 +175,31 @@ export function ChatInterface({
                       </div>
                     ) : message.content && message.content !== '📷 Image envoyée' && (
                       <p className="text-sm whitespace-pre-wrap text-foreground">{message.content}</p>
+                    )}
+                    {showActions && (
+                      <div className="flex items-center gap-1 mt-1 -ml-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleCopy(displayContent)}
+                          title="Copier le message"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        {isLast && regenerateResponse && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={regenerateResponse}
+                            disabled={isStreaming}
+                            title="Relancer la réponse"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          >
+                            <RotateCw className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </motion.div>
@@ -217,7 +255,7 @@ export function ChatInterface({
       <div className="shrink-0 p-4 space-y-4">
         {/* Quick suggestions */}
         {!pendingRecipe && activeSuggestions.length > 0 && (
-          <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
+          <div className="overflow-x-auto scrollbar-none -mx-4 px-4" data-no-swipe-nav>
             <div className="flex gap-2 w-max">
               {activeSuggestions.map((suggestion, i) => (
                 <Button
