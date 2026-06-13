@@ -542,7 +542,7 @@ export function AIProviderSettings() {
     if (models.length > 0 && !models.find(m => m.value === selectedModel)) {
       setSelectedModel(models[0].value);
     }
-  }, [selectedProvider]);
+  }, [selectedProvider, selectedModel]);
 
   const handleApiKeyChange = (provider: Exclude<AIProvider, 'anthropic'>, key: string) => {
     setProviderApiKeys(prev => ({

@@ -24,4 +24,5 @@ const Toaster = ({ ...props }: ToasterProps) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- toast est ré-exporté pour un import unique avec Toaster
 export { Toaster, toast };

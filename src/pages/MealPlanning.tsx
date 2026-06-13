@@ -92,8 +92,8 @@ export default function MealPlanning() {
   }, [currentDate]);
 
   const { data, isLoading } = useMealPlans(weekStart);
-  const meals = data?.entries ?? [];
-  const recipesMap = data?.recipesMap ?? {};
+  const meals = useMemo(() => data?.entries ?? [], [data]);
+  const recipesMap = useMemo(() => data?.recipesMap ?? {}, [data]);
 
   const { data: allRecipes = [] } = useRecipes();
 

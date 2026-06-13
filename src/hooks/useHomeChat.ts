@@ -134,6 +134,7 @@ export function useHomeChat() {
 
       default: console.log('Unknown tool call:', action.type); return null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables et `engine.activeRecipe` est lu via closure au moment de l'appel
   }, [recipes, navigate, preferences, updatePreferences]);
 
   const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
@@ -189,6 +190,7 @@ export function useHomeChat() {
         timestamp: new Date(),
       }]);
     } catch (error) { console.error('Error saving recipe:', error); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
   }, [engine.pendingRecipe, refetchRecipes]);
 
   const cancelPendingRecipe = useCallback(() => {
@@ -198,6 +200,7 @@ export function useHomeChat() {
       content: "D'accord, on continue la discussion. Qu'est-ce que tu aimerais modifier ?",
       timestamp: new Date(),
     }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
   }, []);
 
   return {
