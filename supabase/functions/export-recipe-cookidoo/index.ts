@@ -14,7 +14,7 @@ import { decryptValue } from "../_shared/decrypt-keys.ts";
 import { login, countryToLang } from "../_shared/cookidoo/auth.ts";
 import {
   createRecipe,
-  patchRecipe,
+  fillRecipe,
   recipeWebUrl,
   type ClientCtx,
 } from "../_shared/cookidoo/client.ts";
@@ -142,8 +142,8 @@ serve(async (req) => {
       const ctx: ClientCtx = { cookieHeader: jar.headerForUrl("https://cookidoo.fr"), lang };
 
       const id = await createRecipe(ctx, payload.name);
-      await sleep(5000); // Cookidoo exige un délai avant le PATCH de remplissage
-      await patchRecipe(ctx, id, payload);
+      await sleep(5000); // Cookidoo exige un délai avant les PATCH de remplissage
+      await fillRecipe(ctx, id, payload);
 
       return json({
         ok: true,

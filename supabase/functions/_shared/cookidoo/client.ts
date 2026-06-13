@@ -56,13 +56,37 @@ export async function createRecipe(ctx: ClientCtx, name: string): Promise<string
   return id;
 }
 
-/** Remplit une recette existante avec le payload complet. */
-export function patchRecipe(
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function patchFields(ctx: ClientCtx, id: string, fields: Record<string, unknown>): Promise<unknown> {
+  return request(ctx, "PATCH", `/created-recipes/${ctx.lang}/${id}`, fields);
+}
+
+/**
+ * Remplit une recette existante avec le payload complet, en plusieurs PATCH successifs
+ * (ingrédients, puis étapes, puis métadonnées). Un PATCH unique combinant tous les champs
+ * n'est pas appliqué de façon fiable par l'API Cookidoo (observé : ingrédients/étapes
+ * absents ou partiels) — on suit ici le découpage utilisé par les clients connus.
+ */
+export async function fillRecipe(
   ctx: ClientCtx,
   id: string,
   payload: CookidooRecipePayload,
-): Promise<unknown> {
-  return request(ctx, "PATCH", `/created-recipes/${ctx.lang}/${id}`, payload);
+): Promise<void> {
+  await patchFields(ctx, id, { ingredients: payload.ingredients });
+  await sleep(2000);
+  await patchFields(ctx, id, { instructions: payload.instructions });
+  await sleep(2000);
+  await patchFields(ctx, id, {
+    tools: payload.tools,
+    yield: payload.yield,
+    prepTime: payload.prepTime,
+    cookTime: payload.cookTime,
+    totalTime: payload.totalTime,
+    hints: payload.hints,
+    workStatus: payload.workStatus,
+    recipeMetadata: payload.recipeMetadata,
+  });
 }
 
 export function getRecipe(ctx: ClientCtx, id: string): Promise<unknown> {

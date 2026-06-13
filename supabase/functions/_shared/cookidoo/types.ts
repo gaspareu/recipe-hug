@@ -41,9 +41,7 @@ export interface CookidooIngredient {
 
 /** Annotation d'étape : c'est ce qui rend une étape « guided cooking » sur le TM7. */
 export interface Annotation {
-  type: "TTS" | "MODE" | "INGREDIENT";
-  /** Pour les actions MODE uniquement. */
-  name?: "STEAMING" | "BROWNING";
+  type: "TTS" | "INGREDIENT";
   data: Record<string, unknown>;
   /** Empan de caractères annoté dans le texte de l'étape. */
   position: { offset: number; length: number };
