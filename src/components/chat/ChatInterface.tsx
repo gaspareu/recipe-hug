@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check, Copy, RotateCw } from 'lucide-react';
+import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check, Copy, RotateCw, Loader2, ChefHat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -11,6 +11,7 @@ import { toast } from '@/components/ui/sonner';
 import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { messageVariants, messageTransition } from '@/lib/motion';
+import { useNavigate } from 'react-router-dom';
 
 import type { ChatMessage, PendingRecipe } from '@/hooks/useChatEngine';
 
@@ -18,6 +19,7 @@ interface ChatInterfaceProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   pendingRecipe: PendingRecipe | null;
+  isSavingRecipe?: boolean;
   sendMessage: (content: string, imageDataUrl?: string) => void;
   savePendingRecipe: () => void;
   cancelPendingRecipe: () => void;
@@ -36,6 +38,7 @@ export function ChatInterface({
   messages,
   isStreaming,
   pendingRecipe,
+  isSavingRecipe = false,
   sendMessage,
   savePendingRecipe,
   cancelPendingRecipe,
@@ -48,6 +51,7 @@ export function ChatInterface({
   className = '',
   skipFirstMessage = false,
 }: ChatInterfaceProps) {
+  const navigate = useNavigate();
   const [input, setInput] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -132,6 +136,21 @@ export function ChatInterface({
 
   const displayMessages = skipFirstMessage ? messages.slice(1) : messages;
 
+  const getDisplayContent = (message: ChatMessage): string => {
+    let content = message.content;
+    if (message.role === 'assistant' && content) {
+      content = content.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
+      content = content.replace(/\[suggestions\]\s*\[.*?\]\s*\[\/suggestions\]/s, '').trim();
+    }
+    return content;
+  };
+
+  const lastMessage = messages[messages.length - 1];
+  // Le contenu brut du dernier message peut contenir uniquement un appel d'outil
+  // (ex: enregistrement de recette) qui disparaît une fois nettoyé : tant que rien
+  // n'est encore affichable, on garde le feedback "Réflexion en cours..." visible.
+  const showThinkingIndicator = isStreaming && lastMessage?.role === 'assistant' && getDisplayContent(lastMessage) === '';
+
   return (
     <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
       {headerContent}
@@ -143,11 +162,7 @@ export function ChatInterface({
         <ScrollArea className="flex-1 px-4" ref={scrollRef}>
           <div className="py-4 space-y-6">
             {displayMessages.map(message => {
-              let displayContent = message.content;
-              if (message.role === 'assistant' && displayContent) {
-                displayContent = displayContent.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
-                displayContent = displayContent.replace(/\[suggestions\]\s*\[.*?\]\s*\[\/suggestions\]/s, '').trim();
-              }
+              const displayContent = getDisplayContent(message);
               const isLast = message.id === messages[messages.length - 1]?.id;
               const showCaret = isStreaming && isLast && message.role === 'assistant' && displayContent !== '';
               const showActions = message.role === 'assistant' && displayContent !== '' && !(isStreaming && isLast);
@@ -201,12 +216,33 @@ export function ChatInterface({
                         )}
                       </div>
                     )}
+                    {message.recipeCard && (
+                      <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-border/50 bg-card p-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                            <ChefHat className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{message.recipeCard.title}</p>
+                            <p className="text-xs text-muted-foreground">{message.recipeCard.servings} portions</p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="shrink-0"
+                          onClick={() => navigate(`/recipes/${message.recipeCard?.id}`)}
+                        >
+                          Voir
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               );
             })}
 
-            {isStreaming && messages[messages.length - 1]?.content === '' && (
+            {showThinkingIndicator && (
               <div className="flex justify-start">
                 <TextShimmer className="font-mono text-sm" duration={1}>
                   Réflexion en cours...
@@ -238,11 +274,11 @@ export function ChatInterface({
             {pendingRecipe.isUpdate ? `Mettre à jour "${pendingRecipe.title}" ?` : `Enregistrer "${pendingRecipe.title}" ?`}
           </p>
           <div className="flex justify-end items-center gap-2">
-            <Button size="sm" onClick={savePendingRecipe} className="gap-1">
-              <Check className="h-4 w-4" />
+            <Button size="sm" onClick={savePendingRecipe} disabled={isSavingRecipe} className="gap-1">
+              {isSavingRecipe ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               {pendingRecipe.isUpdate ? 'Mettre à jour' : 'Créer'}
             </Button>
-            <Button size="icon" variant="ghost" onClick={cancelPendingRecipe} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+            <Button size="icon" variant="ghost" onClick={cancelPendingRecipe} disabled={isSavingRecipe} className="h-8 w-8 text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </Button>
           </div>

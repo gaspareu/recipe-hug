@@ -3,12 +3,21 @@ import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Ingredient, Step } from '@/types/recipe';
 
+export interface RecipeCard {
+  id: string;
+  title: string;
+  servings: number;
+  isUpdate: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   imageUrl?: string;
   timestamp: Date;
+  /** Carte de recette affichée après création/mise à jour, avec lien vers la fiche */
+  recipeCard?: RecipeCard;
 }
 
 export type MessageContent =

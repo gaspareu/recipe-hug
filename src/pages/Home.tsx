@@ -10,7 +10,7 @@ import { ChatInterface } from '@/components/chat/ChatInterface';
 export default function Home() {
   const navigate = useNavigate();
   const {
-    messages, isStreaming, pendingRecipe,
+    messages, isStreaming, pendingRecipe, isSavingRecipe,
     sendMessage, resetChat, savePendingRecipe, cancelPendingRecipe, regenerateResponse,
   } = useHomeChat();
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -61,6 +61,7 @@ export default function Home() {
           messages={messages}
           isStreaming={isStreaming}
           pendingRecipe={pendingRecipe}
+          isSavingRecipe={isSavingRecipe}
           sendMessage={sendMessage}
           savePendingRecipe={savePendingRecipe}
           cancelPendingRecipe={cancelPendingRecipe}
