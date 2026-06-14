@@ -1,6 +1,10 @@
-1. les recettes envoyé à Cookidoo n'ont pas le bon format
-2. Sur le chat, il y a encore des affichages bizarre, marges à gauche, feeling étrange. pas de feedbacks quand on attent le retour de Chef. La modale de validation de création de recette peut-être amélioré. 
-3. revoir la présentation d'une recette dans le chat. S'inspirer de ce que propose actuellement Claude. Proposer un bouton de redirection vers la page recette après la création (bouton creer devient "Voir")
-4. Un feedback plus clair pendant le processing d'une requete par l'ia sur le chat et autre. 
+1. les recettes envoyé à Cookidoo n'ont pas le bon format ✅ (corrigé, PR #31)
+2. Sur le chat, il y a encore des affichages bizarre, marges à gauche, feeling étrange. pas de feedbacks quand on attent le retour de Chef. La modale de validation de création de recette peut-être amélioré. ✅ (feedback "Réflexion en cours" pendant tool calls, loader + erreur sur la sauvegarde de recette — corrigé). Reste : marge à gauche bizarre (`-ml-2`) sur les boutons copier/relancer sous les messages, à revoir visuellement (frontend-design)
+3. revoir la présentation d'une recette dans le chat. S'inspirer de ce que propose actuellement Claude. Proposer un bouton de redirection vers la page recette après la création (bouton creer devient "Voir") ✅ (carte recette compacte + bouton "Voir" ajoutés). Le style de la carte (compact vs détaillé) pourra être affiné visuellement si besoin
+4. Un feedback plus clair pendant le processing d'une requete par l'ia sur le chat et autre. ✅ (indicateur de réflexion pendant les tool calls)
 5. Globalement améliorer les feedbacks des actions. quand l'action peut prendre + de 300ms loader + gestion d'erreur. Sinon, modification du bouton réactif pour montrer que la demande a bien été prise en charge
 6. modifier l'image utilisé pour le raccourci de la PWA
+7. Mode vocal : aucun feedback visible si le micro est refusé ou si la connexion à Scribe échoue (juste un `console.warn`) — l'utilisateur voit le bouton micro revenir à l'état normal sans explication. Ajouter un toast d'erreur clair.
+8. Mode vocal : pas d'indicateur permanent indiquant que le mode vocal est activé (`voiceEnabled`), ni de moyen de le désactiver depuis l'interface — seul `isSpeaking` est visible pendant la lecture. Ajouter un indicateur/bouton pour activer/désactiver le mode vocal explicitement.
+9. Chat : impossible d'arrêter une réponse de Chef en cours de streaming (pas de bouton "stop"). Ajouter un bouton d'arrêt pendant `isStreaming`.
+10. Chat : le bouton "copier" n'est disponible que sur les messages de Chef, pas sur les messages utilisateur (utile pour recopier une recette dictée par exemple).

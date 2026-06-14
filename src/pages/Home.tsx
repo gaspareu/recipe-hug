@@ -11,7 +11,7 @@ export default function Home() {
   const navigate = useNavigate();
   const {
     messages, isStreaming, pendingRecipe, isSavingRecipe,
-    sendMessage, resetChat, savePendingRecipe, cancelPendingRecipe, regenerateResponse,
+    sendMessage, resetChat, savePendingRecipe, cancelPendingRecipe, regenerateResponse, stopGeneration,
   } = useHomeChat();
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -66,6 +66,7 @@ export default function Home() {
           savePendingRecipe={savePendingRecipe}
           cancelPendingRecipe={cancelPendingRecipe}
           regenerateResponse={regenerateResponse}
+          stopGeneration={stopGeneration}
           suggestions={defaultSuggestions}
           placeholder="Poser une question"
           showWelcomeScreen={true}

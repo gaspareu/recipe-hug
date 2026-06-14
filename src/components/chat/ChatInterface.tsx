@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check, Copy, RotateCw, Loader2, ChefHat } from 'lucide-react';
+import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check, Copy, RotateCw, Loader2, ChefHat, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -24,6 +24,7 @@ interface ChatInterfaceProps {
   savePendingRecipe: () => void;
   cancelPendingRecipe: () => void;
   regenerateResponse?: () => void;
+  stopGeneration?: () => void;
   suggestions: string[];
   placeholder?: string;
   showWelcomeScreen?: boolean;
@@ -43,6 +44,7 @@ export function ChatInterface({
   savePendingRecipe,
   cancelPendingRecipe,
   regenerateResponse,
+  stopGeneration,
   suggestions,
   placeholder = 'Poser une question',
   showWelcomeScreen = false,
@@ -173,7 +175,7 @@ export function ChatInterface({
                   initial="initial"
                   animate="animate"
                   transition={messageTransition}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
                   <div className={`max-w-[80%] ${message.role === 'user' ? 'bg-muted rounded-3xl px-4 py-3' : ''}`}>
                     {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
@@ -238,6 +240,17 @@ export function ChatInterface({
                       </div>
                     )}
                   </div>
+                  {message.role === 'user' && message.content && message.content !== '📷 Image envoyée' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleCopy(message.content)}
+                      title="Copier le message"
+                      className="h-7 w-7 mt-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </motion.div>
               );
             })}
@@ -386,7 +399,20 @@ export function ChatInterface({
             {/* Mic / Send button */}
             <div className="flex items-center gap-1">
               <AnimatePresence mode="popLayout" initial={false}>
-                {!input.trim() && !selectedImage ? (
+                {isStreaming && stopGeneration ? (
+                  <motion.button
+                    key="stop"
+                    initial={{ scale: 0.7, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.7, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={stopGeneration}
+                    className="flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors bg-foreground text-background hover:bg-foreground/90"
+                    title="Arrêter la génération"
+                  >
+                    <Square className="h-3.5 w-3.5 fill-current" />
+                  </motion.button>
+                ) : !input.trim() && !selectedImage ? (
                   <motion.button
                     key="mic"
                     initial={{ scale: 0.7, opacity: 0 }}
@@ -443,6 +469,25 @@ export function ChatInterface({
               <button onClick={stopSpeaking} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10">
                 <SoundWaveIndicator className="h-4" barCount={5} />
                 <span>Chef parle... (cliquez pour arrêter)</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Indicateur de mode vocal activé (hors écoute/lecture) */}
+        <AnimatePresence>
+          {voiceEnabled && !isSpeaking && !isListening && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              className="flex items-center justify-center"
+            >
+              <button onClick={toggleVoice} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted" title="Désactiver le mode vocal">
+                <Mic className="h-3.5 w-3.5" />
+                <span>Mode vocal activé</span>
+                <MicOff className="h-3.5 w-3.5" />
               </button>
             </motion.div>
           )}

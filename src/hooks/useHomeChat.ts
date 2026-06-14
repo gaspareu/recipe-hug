@@ -224,7 +224,7 @@ export function useHomeChat() {
     activeRecipe: engine.activeRecipe, pendingRecipe: engine.pendingRecipe,
     searchResults: engine.searchResults,
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
-    regenerateResponse: engine.regenerateResponse,
+    regenerateResponse: engine.regenerateResponse, stopGeneration: engine.stopGeneration,
     savePendingRecipe, cancelPendingRecipe, isSavingRecipe,
   };
 }

@@ -85,6 +85,7 @@ export function useChatEngine(config: ChatEngineConfig) {
     { id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() },
   ]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [activeRecipe, setActiveRecipe] = useState<ActiveRecipeData | null>(initialActiveRecipe);
   const [pendingRecipe, setPendingRecipe] = useState<PendingRecipe | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -257,6 +258,8 @@ export function useChatEngine(config: ChatEngineConfig) {
     setSearchResults([]);
 
     const assistantMessageId = `assistant-${Date.now()}`;
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -268,6 +271,7 @@ export function useChatEngine(config: ChatEngineConfig) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify(body),
+        signal: abortController.signal,
       });
 
       if (!response.ok) {
@@ -281,6 +285,10 @@ export function useChatEngine(config: ChatEngineConfig) {
       const reader = response.body.getReader();
       await parseSSEStream(reader, assistantMessageId, lastUserContent);
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        // Arrêt volontaire : on garde le contenu déjà streamé tel quel.
+        return;
+      }
       console.error('Chat error:', error);
       // Affiche l'erreur dans le fil plutôt que de la masquer : l'utilisateur
       // doit savoir que sa demande a échoué (crédits IA épuisés, réseau, etc.).
@@ -290,9 +298,15 @@ export function useChatEngine(config: ChatEngineConfig) {
         { id: `error-${Date.now()}`, role: 'assistant', content: `⚠️ ${message}`, timestamp: new Date() },
       ]);
     } finally {
+      abortControllerRef.current = null;
       setIsStreaming(false);
     }
   }, [activeRecipe, parseSSEStream]);
+
+  // Interrompt la réponse en cours de génération.
+  const stopGeneration = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
 
   // Send a message
   const sendMessage = useCallback(async (content: string, imageDataUrl?: string) => {
@@ -338,6 +352,6 @@ export function useChatEngine(config: ChatEngineConfig) {
   return {
     messages, isStreaming, activeRecipe, pendingRecipe, searchResults,
     setActiveRecipe, setPendingRecipe, setSearchResults, setMessages,
-    sendMessage, resetChat, regenerateResponse,
+    sendMessage, resetChat, regenerateResponse, stopGeneration,
   };
 }
