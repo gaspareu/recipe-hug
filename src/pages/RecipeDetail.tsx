@@ -330,7 +330,7 @@ function RecipeChatContent({
 }) {
   const {
     messages, isStreaming, pendingRecipe,
-    sendMessage, savePendingRecipe, cancelPendingRecipe, regenerateResponse,
+    sendMessage, savePendingRecipe, cancelPendingRecipe, regenerateResponse, stopGeneration,
   } = useRecipeChat({
     recipe, completedSteps,
     onRecipeUpdate: async (data) => await onRecipeUpdate(data),
@@ -348,6 +348,7 @@ function RecipeChatContent({
       savePendingRecipe={savePendingRecipe}
       cancelPendingRecipe={cancelPendingRecipe}
       regenerateResponse={regenerateResponse}
+      stopGeneration={stopGeneration}
       suggestions={defaultSuggestions}
       placeholder="Poser une question..."
     />

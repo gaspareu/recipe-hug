@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useRecipes } from './useRecipes';
@@ -9,7 +9,7 @@ import type { Ingredient } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
 
 // Re-export types
-export type { ChatMessage, MessageContent, PendingRecipe, ActiveRecipeData } from './useChatEngine';
+export type { ChatMessage, MessageContent, PendingRecipe, ActiveRecipeData, RecipeCard } from './useChatEngine';
 
 const WELCOME_MESSAGE = "Salut ! Je suis Chef, ton assistant culinaire. 👨‍🍳\n\nJe peux t'aider à :\n- 🔍 **Chercher** une recette dans ton livre\n- ✨ **Créer** une nouvelle recette\n- 👨‍🍳 **Cuisiner** en te guidant étape par étape\n- 🔧 **Modifier** une recette existante\n\nQu'est-ce qui te ferait plaisir ?";
 
@@ -153,12 +153,16 @@ export function useHomeChat() {
   });
 
   // Save pending recipe
+  const [isSavingRecipe, setIsSavingRecipe] = useState(false);
   const savePendingRecipe = useCallback(async () => {
     const pending = engine.pendingRecipe;
     if (!pending) return;
+    setIsSavingRecipe(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) { console.error('Not authenticated'); return; }
+      if (!session?.user) throw new Error('Tu dois être connecté pour enregistrer une recette.');
+
+      let recipeId = pending.originalRecipeId ?? '';
 
       if (pending.isUpdate && pending.originalRecipeId) {
         const { error } = await supabase.from('recipes').update({
@@ -174,8 +178,9 @@ export function useHomeChat() {
           source_type: 'ai', status: 'draft',
         }).select('id').single();
         if (error) throw error;
-        if (newRecipe?.id) {
-          triggerBackgroundImageGeneration(newRecipe.id, pending.title, pending.ingredients, session.access_token, refetchRecipes);
+        recipeId = newRecipe?.id ?? '';
+        if (recipeId) {
+          triggerBackgroundImageGeneration(recipeId, pending.title, pending.ingredients, session.access_token, refetchRecipes);
         }
       }
 
@@ -185,15 +190,26 @@ export function useHomeChat() {
       engine.setMessages(prev => [...prev, {
         id: `assistant-${Date.now()}`, role: 'assistant',
         content: pending.isUpdate
-          ? `✅ J'ai mis à jour ta recette "${pending.title}" ! Tu veux faire autre chose ?`
-          : `✅ J'ai enregistré ta nouvelle recette "${pending.title}" ! Une image est en cours de génération. Tu veux la cuisiner ou faire autre chose ?`,
+          ? `✅ J'ai mis à jour ta recette "${pending.title}" !`
+          : `✅ J'ai enregistré ta nouvelle recette "${pending.title}" ! Une image est en cours de génération.`,
+        timestamp: new Date(),
+        recipeCard: recipeId ? { id: recipeId, title: pending.title, servings: pending.servings, isUpdate: !!pending.isUpdate } : undefined,
+      }]);
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      engine.setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`, role: 'assistant',
+        content: "⚠️ Je n'ai pas pu enregistrer la recette. Vérifie ta connexion et réessaie.",
         timestamp: new Date(),
       }]);
-    } catch (error) { console.error('Error saving recipe:', error); }
+    } finally {
+      setIsSavingRecipe(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
   }, [engine.pendingRecipe, refetchRecipes]);
 
   const cancelPendingRecipe = useCallback(() => {
+    if (isSavingRecipe) return;
     engine.setPendingRecipe(null);
     engine.setMessages(prev => [...prev, {
       id: `assistant-${Date.now()}`, role: 'assistant',
@@ -201,14 +217,14 @@ export function useHomeChat() {
       timestamp: new Date(),
     }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
-  }, []);
+  }, [isSavingRecipe]);
 
   return {
     messages: engine.messages, isStreaming: engine.isStreaming,
     activeRecipe: engine.activeRecipe, pendingRecipe: engine.pendingRecipe,
     searchResults: engine.searchResults,
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
-    regenerateResponse: engine.regenerateResponse,
-    savePendingRecipe, cancelPendingRecipe,
+    regenerateResponse: engine.regenerateResponse, stopGeneration: engine.stopGeneration,
+    savePendingRecipe, cancelPendingRecipe, isSavingRecipe,
   };
 }

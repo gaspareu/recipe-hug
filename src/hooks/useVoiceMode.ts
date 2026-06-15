@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useScribe, CommitStrategy } from '@elevenlabs/react';
 
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/sonner';
 
 const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
 const SCRIBE_TOKEN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-scribe-token`;
@@ -195,7 +196,11 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       setIsListening(true);
     } catch (error) {
       console.error('Failed to start listening:', error);
-      console.warn('Microphone error:', error instanceof Error ? error.name : error);
+      if (error instanceof Error && error.name === 'NotAllowedError') {
+        toast("Accès au micro refusé. Autorise le micro dans les réglages de ton navigateur pour utiliser le mode vocal.");
+      } else {
+        toast("Impossible de démarrer le mode vocal. Vérifie ta connexion et réessaie.");
+      }
     } finally {
       setIsConnecting(false);
     }

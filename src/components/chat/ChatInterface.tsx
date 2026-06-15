@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check, Copy, RotateCw } from 'lucide-react';
+import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check, Copy, RotateCw, Loader2, ChefHat, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -11,6 +11,7 @@ import { toast } from '@/components/ui/sonner';
 import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { messageVariants, messageTransition } from '@/lib/motion';
+import { useNavigate } from 'react-router-dom';
 
 import type { ChatMessage, PendingRecipe } from '@/hooks/useChatEngine';
 
@@ -18,10 +19,12 @@ interface ChatInterfaceProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   pendingRecipe: PendingRecipe | null;
+  isSavingRecipe?: boolean;
   sendMessage: (content: string, imageDataUrl?: string) => void;
   savePendingRecipe: () => void;
   cancelPendingRecipe: () => void;
   regenerateResponse?: () => void;
+  stopGeneration?: () => void;
   suggestions: string[];
   placeholder?: string;
   showWelcomeScreen?: boolean;
@@ -36,10 +39,12 @@ export function ChatInterface({
   messages,
   isStreaming,
   pendingRecipe,
+  isSavingRecipe = false,
   sendMessage,
   savePendingRecipe,
   cancelPendingRecipe,
   regenerateResponse,
+  stopGeneration,
   suggestions,
   placeholder = 'Poser une question',
   showWelcomeScreen = false,
@@ -48,6 +53,7 @@ export function ChatInterface({
   className = '',
   skipFirstMessage = false,
 }: ChatInterfaceProps) {
+  const navigate = useNavigate();
   const [input, setInput] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -132,6 +138,21 @@ export function ChatInterface({
 
   const displayMessages = skipFirstMessage ? messages.slice(1) : messages;
 
+  const getDisplayContent = (message: ChatMessage): string => {
+    let content = message.content;
+    if (message.role === 'assistant' && content) {
+      content = content.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
+      content = content.replace(/\[suggestions\]\s*\[.*?\]\s*\[\/suggestions\]/s, '').trim();
+    }
+    return content;
+  };
+
+  const lastMessage = messages[messages.length - 1];
+  // Le contenu brut du dernier message peut contenir uniquement un appel d'outil
+  // (ex: enregistrement de recette) qui disparaît une fois nettoyé : tant que rien
+  // n'est encore affichable, on garde le feedback "Réflexion en cours..." visible.
+  const showThinkingIndicator = isStreaming && lastMessage?.role === 'assistant' && getDisplayContent(lastMessage) === '';
+
   return (
     <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
       {headerContent}
@@ -143,11 +164,7 @@ export function ChatInterface({
         <ScrollArea className="flex-1 px-4" ref={scrollRef}>
           <div className="py-4 space-y-6">
             {displayMessages.map(message => {
-              let displayContent = message.content;
-              if (message.role === 'assistant' && displayContent) {
-                displayContent = displayContent.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
-                displayContent = displayContent.replace(/\[suggestions\]\s*\[.*?\]\s*\[\/suggestions\]/s, '').trim();
-              }
+              const displayContent = getDisplayContent(message);
               const isLast = message.id === messages[messages.length - 1]?.id;
               const showCaret = isStreaming && isLast && message.role === 'assistant' && displayContent !== '';
               const showActions = message.role === 'assistant' && displayContent !== '' && !(isStreaming && isLast);
@@ -158,7 +175,7 @@ export function ChatInterface({
                   initial="initial"
                   animate="animate"
                   transition={messageTransition}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
                   <div className={`max-w-[80%] ${message.role === 'user' ? 'bg-muted rounded-3xl px-4 py-3' : ''}`}>
                     {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
@@ -201,12 +218,44 @@ export function ChatInterface({
                         )}
                       </div>
                     )}
+                    {message.recipeCard && (
+                      <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-border/50 bg-card p-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                            <ChefHat className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{message.recipeCard.title}</p>
+                            <p className="text-xs text-muted-foreground">{message.recipeCard.servings} portions</p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="shrink-0"
+                          onClick={() => navigate(`/recipes/${message.recipeCard?.id}`)}
+                        >
+                          Voir
+                        </Button>
+                      </div>
+                    )}
                   </div>
+                  {message.role === 'user' && message.content && message.content !== '📷 Image envoyée' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleCopy(message.content)}
+                      title="Copier le message"
+                      className="h-7 w-7 mt-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </motion.div>
               );
             })}
 
-            {isStreaming && messages[messages.length - 1]?.content === '' && (
+            {showThinkingIndicator && (
               <div className="flex justify-start">
                 <TextShimmer className="font-mono text-sm" duration={1}>
                   Réflexion en cours...
@@ -238,11 +287,11 @@ export function ChatInterface({
             {pendingRecipe.isUpdate ? `Mettre à jour "${pendingRecipe.title}" ?` : `Enregistrer "${pendingRecipe.title}" ?`}
           </p>
           <div className="flex justify-end items-center gap-2">
-            <Button size="sm" onClick={savePendingRecipe} className="gap-1">
-              <Check className="h-4 w-4" />
+            <Button size="sm" onClick={savePendingRecipe} disabled={isSavingRecipe} className="gap-1">
+              {isSavingRecipe ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               {pendingRecipe.isUpdate ? 'Mettre à jour' : 'Créer'}
             </Button>
-            <Button size="icon" variant="ghost" onClick={cancelPendingRecipe} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+            <Button size="icon" variant="ghost" onClick={cancelPendingRecipe} disabled={isSavingRecipe} className="h-8 w-8 text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -350,7 +399,20 @@ export function ChatInterface({
             {/* Mic / Send button */}
             <div className="flex items-center gap-1">
               <AnimatePresence mode="popLayout" initial={false}>
-                {!input.trim() && !selectedImage ? (
+                {isStreaming && stopGeneration ? (
+                  <motion.button
+                    key="stop"
+                    initial={{ scale: 0.7, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.7, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={stopGeneration}
+                    className="flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors bg-foreground text-background hover:bg-foreground/90"
+                    title="Arrêter la génération"
+                  >
+                    <Square className="h-3.5 w-3.5 fill-current" />
+                  </motion.button>
+                ) : !input.trim() && !selectedImage ? (
                   <motion.button
                     key="mic"
                     initial={{ scale: 0.7, opacity: 0 }}
@@ -407,6 +469,25 @@ export function ChatInterface({
               <button onClick={stopSpeaking} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10">
                 <SoundWaveIndicator className="h-4" barCount={5} />
                 <span>Chef parle... (cliquez pour arrêter)</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Indicateur de mode vocal activé (hors écoute/lecture) */}
+        <AnimatePresence>
+          {voiceEnabled && !isSpeaking && !isListening && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              className="flex items-center justify-center"
+            >
+              <button onClick={toggleVoice} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted" title="Désactiver le mode vocal">
+                <Mic className="h-3.5 w-3.5" />
+                <span>Mode vocal activé</span>
+                <MicOff className="h-3.5 w-3.5" />
               </button>
             </motion.div>
           )}
