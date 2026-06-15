@@ -194,7 +194,7 @@ export function ChatInterface({
                       <p className="text-sm whitespace-pre-wrap text-foreground">{message.content}</p>
                     )}
                     {showActions && (
-                      <div className="flex items-center gap-1 mt-1 -ml-2">
+                      <div className="flex items-center gap-1 mt-1">
                         <Button
                           variant="ghost"
                           size="icon"
