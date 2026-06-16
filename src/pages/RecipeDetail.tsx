@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { toast } from '@/components/ui/sonner';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, ImagePlus, History, Share2 } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, History } from 'lucide-react';
 import { ShareRecipeDialog } from '@/components/recipes/ShareRecipeDialog';
 import { ExportToCookidooButton } from '@/components/recipes/ExportToCookidooButton';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RecipeStatusSelect } from '@/components/recipes/RecipeStatusSelect';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
@@ -135,7 +135,7 @@ export default function RecipeDetail() {
 
   return (
     <MainLayout>
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className={`max-w-2xl mx-auto space-y-6 ${totalSteps > 0 ? 'pb-20' : ''}`}>
         {/* Recipe Image with action buttons overlay */}
         <motion.div
           className="relative"
@@ -199,46 +199,7 @@ export default function RecipeDetail() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Étapes</span>
-              <Sheet open={chatOpen} onOpenChange={setChatOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" title="Assistant culinaire"><MessageCircle className="h-4 w-4" /></Button>
-                </SheetTrigger>
-                <SheetContent className="w-full sm:w-[400px] md:w-[540px] max-w-full flex flex-col p-0">
-                  <AssistantSheetContent
-                    recipe={recipe}
-                    completedSteps={completedSteps}
-                    totalSteps={totalSteps}
-                    onClose={() => setChatOpen(false)}
-                    onRecipeUpdate={async (data) => {
-                      if (user) {
-                        await createVersion.mutateAsync({
-                          recipeId: recipe.id, userId: user.id, title: recipe.title,
-                          servings: recipe.servings, ingredients: recipe.ingredients as Ingredient[],
-                          steps: recipe.steps as Step[], season: recipe.season,
-                          nutrition_tags: recipe.nutrition_tags, changeDescription: 'Avant modification via assistant',
-                        });
-                      }
-                      await updateRecipe.mutateAsync({ id: recipe.id, title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps });
-                      refetch();
-                    }}
-                    onRecipeCreate={async (data) => {
-                      const newRecipe = await createRecipe.mutateAsync({
-                        title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps,
-                        status: 'draft', is_favorite: false, source_type: 'ai',
-                        ai_summary: data.relationToOriginal ? `Inspiré de "${recipe.title}". ${data.relationToOriginal}` : null,
-                        season: null, nutrition_tags: null, calorie_score: null, source_image_url: null,
-                      });
-                      
-                      setChatOpen(false);
-                      navigate(`/recipes/${newRecipe.id}`);
-                    }}
-                    recipeId={recipe.id}
-                  />
-                </SheetContent>
-              </Sheet>
-            </CardTitle>
+            <CardTitle>Étapes</CardTitle>
           </CardHeader>
           <CardContent>
             {steps.length === 0 ? <p className="text-muted-foreground text-sm">Aucune étape</p> : (
@@ -260,6 +221,41 @@ export default function RecipeDetail() {
           </CardContent>
         </Card>
 
+
+        <Sheet open={chatOpen} onOpenChange={setChatOpen}>
+          <SheetContent className="w-full sm:w-[400px] md:w-[540px] max-w-full flex flex-col p-0">
+            <AssistantSheetContent
+              recipe={recipe}
+              completedSteps={completedSteps}
+              totalSteps={totalSteps}
+              onClose={() => setChatOpen(false)}
+              onRecipeUpdate={async (data) => {
+                if (user) {
+                  await createVersion.mutateAsync({
+                    recipeId: recipe.id, userId: user.id, title: recipe.title,
+                    servings: recipe.servings, ingredients: recipe.ingredients as Ingredient[],
+                    steps: recipe.steps as Step[], season: recipe.season,
+                    nutrition_tags: recipe.nutrition_tags, changeDescription: 'Avant modification via assistant',
+                  });
+                }
+                await updateRecipe.mutateAsync({ id: recipe.id, title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps });
+                refetch();
+              }}
+              onRecipeCreate={async (data) => {
+                const newRecipe = await createRecipe.mutateAsync({
+                  title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps,
+                  status: 'draft', is_favorite: false, source_type: 'ai',
+                  ai_summary: data.relationToOriginal ? `Inspiré de "${recipe.title}". ${data.relationToOriginal}` : null,
+                  season: null, nutrition_tags: null, calorie_score: null, source_image_url: null,
+                });
+
+                setChatOpen(false);
+                navigate(`/recipes/${newRecipe.id}`);
+              }}
+              recipeId={recipe.id}
+            />
+          </SheetContent>
+        </Sheet>
 
         {totalSteps > 0 && (
           <div className="fixed bottom-0 left-0 right-0 flex items-center justify-between gap-3 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-background/80 backdrop-blur-sm border-t border-border z-10">
