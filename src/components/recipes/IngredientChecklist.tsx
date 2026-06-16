@@ -216,8 +216,12 @@ function IngredientItem({
           checked && "line-through text-muted-foreground/60"
         )}
       >
-        <span className="font-medium">{ingredient.quantity} {ingredient.unit}</span>
-        {' '}
+        {(ingredient.quantity || ingredient.unit) && (
+          <span className="font-medium">
+            {[ingredient.quantity || null, ingredient.unit || null].filter(Boolean).join(' ')}
+          </span>
+        )}
+        {(ingredient.quantity || ingredient.unit) ? ' ' : ''}
         <span>{ingredient.name}</span>
       </span>
     </li>

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { ChatInterface } from '@/components/chat/ChatInterface';
+import { InstallBanner } from '@/components/InstallBanner';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -56,7 +57,7 @@ export default function Home() {
       </header>
 
       {/* Chat area */}
-      <div className="flex-1 flex flex-col container max-w-3xl mx-auto w-full pt-16 pb-[env(safe-area-inset-bottom)]">
+      <div className="flex-1 flex flex-col container max-w-3xl mx-auto w-full pt-16 min-h-0">
         <ChatInterface
           messages={messages}
           isStreaming={isStreaming}
@@ -89,6 +90,10 @@ export default function Home() {
             </div>
           }
         />
+      </div>
+      {/* Bannière d'installation PWA dans le flux (pas fixed) pour ne pas masquer l'input */}
+      <div className="shrink-0 pb-[env(safe-area-inset-bottom)]">
+        <InstallBanner />
       </div>
     </div>
   );

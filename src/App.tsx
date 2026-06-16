@@ -9,7 +9,6 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { InstallBanner } from "@/components/InstallBanner";
 
 // Lazy load pages for code-splitting
 const Auth = lazy(() => import("./pages/Auth"));
@@ -83,7 +82,6 @@ const App = () => (
           <ThemeProvider>
             <AnimatedRoutes />
             <OfflineBanner />
-            <InstallBanner />
           </ThemeProvider>
         </AuthProvider>
       </BrowserRouter>

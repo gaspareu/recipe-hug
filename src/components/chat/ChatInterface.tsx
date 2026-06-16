@@ -162,7 +162,7 @@ export function ChatInterface({
         welcomeContent
       ) : (
         <ScrollArea className="flex-1 px-4" ref={scrollRef}>
-          <div className="py-4 space-y-6">
+          <div className="flex flex-col justify-end min-h-full py-4 space-y-6">
             {displayMessages.map(message => {
               const displayContent = getDisplayContent(message);
               const isLast = message.id === messages[messages.length - 1]?.id;

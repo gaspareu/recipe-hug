@@ -99,6 +99,13 @@ export function RecipeImageDisplay({
         </div>
       )}
 
+      {/* Badge caméra - toujours visible sur mobile, indicateur d'édition */}
+      {isEditable && !isUploading && (
+        <div className="absolute bottom-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-sm pointer-events-none">
+          <Camera className="h-4 w-4 text-foreground/70" />
+        </div>
+      )}
+
       {/* Remove button for custom images */}
       {isEditable && hasCustomImage && isHovered && !isUploading && (
         <Button
