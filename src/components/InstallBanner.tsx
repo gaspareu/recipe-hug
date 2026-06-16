@@ -28,7 +28,7 @@ export function InstallBanner() {
   return (
     <div
       role="banner"
-      className="fixed bottom-0 left-0 right-0 z-40 bg-primary text-primary-foreground px-4 py-3 shadow-lg"
+      className="w-full bg-primary text-primary-foreground px-4 py-3 shadow-lg"
     >
       {isIosSafari ? (
         <div className="flex flex-col gap-1 text-sm">
