@@ -34,3 +34,4 @@ dist-ssr
 *.sln
 *.sw?
 __pycache__/
+test-results/
