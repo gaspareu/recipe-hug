@@ -51,6 +51,16 @@ export function useHomeChat() {
         return results.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite ?? false }));
       }
 
+      case 'get_recipe_details': {
+        const recipeId = action.data.recipe_id as string;
+        const recipe = recipes.find(r => r.id === recipeId);
+        if (!recipe) return null;
+        return {
+          id: recipe.id, title: recipe.title, servings: recipe.servings,
+          season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
+        };
+      }
+
       case 'open_recipe': {
         const recipeId = action.data.recipe_id as string;
         if (recipeId) setTimeout(() => navigate(`/recipes/${recipeId}`), 500);
