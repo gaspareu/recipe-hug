@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/sonner';
 import type { Recipe, RecipeFormData, Ingredient, Step } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -90,6 +91,9 @@ export function useCreateRecipe() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
     },
+    onError: () => {
+      toast('Impossible de créer la recette');
+    },
   });
 }
 
@@ -150,6 +154,9 @@ export function useUpdateRecipe() {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
       queryClient.invalidateQueries({ queryKey: ['recipe', data.id] });
     },
+    // Pas de onError global : updateRecipe est utilisé via .mutate (statut) et
+    // .mutateAsync (actions impératives) ; le toast est géré au point d'appel
+    // pour éviter les doublons.
   });
 }
 
@@ -167,6 +174,9 @@ export function useDeleteRecipe() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    },
+    onError: () => {
+      toast('Impossible de supprimer la recette');
     },
   });
 }
@@ -217,6 +227,7 @@ export function useToggleFavorite() {
       if (context?.previousRecipes) {
         queryClient.setQueryData(['recipes'], context.previousRecipes);
       }
+      toast('Impossible de mettre à jour le favori');
     },
     onSettled: (_data, _error, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
