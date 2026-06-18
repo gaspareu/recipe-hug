@@ -48,6 +48,17 @@ export default function RecipeDetail() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [chatOpen, setChatOpen] = useState(false);
 
+  // Valeurs dérivées calculées AVANT tout early return : les Hooks doivent être
+  // appelés dans le même ordre à chaque rendu, sinon React lève l'erreur #310
+  // (« Rendered more hooks than during the previous render ») → page blanche.
+  const steps = useMemo(() => (recipe?.steps || []) as Step[], [recipe?.steps]);
+  const sortedSteps = useMemo(() => [...steps].sort((a, b) => a.order - b.order), [steps]);
+  const totalSteps = steps.length;
+  const isComplete = useMemo(
+    () => completedSteps.size === totalSteps && totalSteps > 0,
+    [completedSteps.size, totalSteps]
+  );
+
   const handleToggleFavorite = () => {
     if (!recipe) return;
     toggleFavorite.mutate({ id: recipe.id, is_favorite: !recipe.is_favorite });
@@ -127,14 +138,6 @@ export default function RecipeDetail() {
   if (!recipe) {
     return <MainLayout><div className="text-center py-12"><p className="text-muted-foreground">Recette introuvable</p><Button asChild className="mt-4"><Link to="/dashboard">Retour au dashboard</Link></Button></div></MainLayout>;
   }
-
-  const steps = useMemo(() => (recipe.steps || []) as Step[], [recipe.steps]);
-  const sortedSteps = useMemo(() => [...steps].sort((a, b) => a.order - b.order), [steps]);
-  const totalSteps = steps.length;
-  const isComplete = useMemo(
-    () => completedSteps.size === totalSteps && totalSteps > 0,
-    [completedSteps.size, totalSteps]
-  );
 
   return (
     <MainLayout>
