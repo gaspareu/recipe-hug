@@ -68,6 +68,7 @@ const UNIFIED_PROMPT = `Tu es Chef, l'assistant culinaire de cette application. 
 
 ### Skill : Recherche & Navigation
 - Cherche des recettes dans le livre de l'utilisateur avec search_recipes
+- Charge le contenu complet d'une recette (ingrédients, étapes) avec get_recipe_details AVANT de répondre à toute question qui nécessite de connaître les ingrédients ou les étapes
 - Ouvre une recette spécifique avec open_recipe
 - Navigue vers le dashboard ou le profil avec navigate
 
@@ -128,6 +129,21 @@ Quand l'utilisateur veut planifier ses repas de la semaine :
 
 // ===== ALL TOOLS =====
 const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "get_recipe_details",
+      description: "Charge le contenu complet d'une recette (ingrédients + étapes) pour pouvoir répondre à des questions précises sur cette recette. À utiliser AVANT de répondre à toute question impliquant les ingrédients ou la préparation d'une recette identifiée.",
+      parameters: {
+        type: "object",
+        properties: {
+          recipe_id: { type: "string", description: "L'ID de la recette à charger" },
+          recipe_title: { type: "string", description: "Le titre de la recette (pour confirmation)" },
+        },
+        required: ["recipe_id", "recipe_title"],
+      },
+    },
+  },
   {
     type: "function",
     function: {
