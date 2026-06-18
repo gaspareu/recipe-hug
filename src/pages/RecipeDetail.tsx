@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { toast } from '@/components/ui/sonner';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, ImagePlus, History, Share2 } from 'lucide-react';
+import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, History } from 'lucide-react';
 import { ShareRecipeDialog } from '@/components/recipes/ShareRecipeDialog';
 import { ExportToCookidooButton } from '@/components/recipes/ExportToCookidooButton';
 import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RecipeStatusSelect } from '@/components/recipes/RecipeStatusSelect';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
@@ -128,14 +128,17 @@ export default function RecipeDetail() {
     return <MainLayout><div className="text-center py-12"><p className="text-muted-foreground">Recette introuvable</p><Button asChild className="mt-4"><Link to="/dashboard">Retour au dashboard</Link></Button></div></MainLayout>;
   }
 
-  const steps = (recipe.steps || []) as Step[];
-  const sortedSteps = [...steps].sort((a, b) => a.order - b.order);
+  const steps = useMemo(() => (recipe.steps || []) as Step[], [recipe.steps]);
+  const sortedSteps = useMemo(() => [...steps].sort((a, b) => a.order - b.order), [steps]);
   const totalSteps = steps.length;
-  const isComplete = completedSteps.size === totalSteps && totalSteps > 0;
+  const isComplete = useMemo(
+    () => completedSteps.size === totalSteps && totalSteps > 0,
+    [completedSteps.size, totalSteps]
+  );
 
   return (
     <MainLayout>
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className={`max-w-2xl mx-auto space-y-6 ${totalSteps > 0 ? 'pb-20' : ''}`}>
         {/* Recipe Image with action buttons overlay */}
         <motion.div
           className="relative"
@@ -145,10 +148,10 @@ export default function RecipeDetail() {
         >
           <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={handleImageChange} onImageRemove={handleImageRemove} />
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/50 to-transparent pointer-events-none rounded-t-lg" />
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="absolute top-3 left-3 bg-background/60 backdrop-blur-sm hover:bg-background/80">
-            <ArrowLeft className="h-5 w-5" />
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Retour" className="absolute top-3 left-3 bg-background/60 backdrop-blur-sm hover:bg-background/80">
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Button>
-          <div className="absolute top-3 right-3 flex items-center gap-1">
+          <div className="absolute top-3 right-3 flex items-center flex-wrap justify-end gap-1 max-w-[calc(100%-3.5rem)]" data-testid="action-buttons">
             <TooltipProvider>
               <FavoriteToggle isFavorite={recipe.is_favorite} onToggle={handleToggleFavorite} disabled={toggleFavorite.isPending} tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} variant="overlay" />
               <Tooltip><TooltipTrigger asChild>
@@ -159,8 +162,8 @@ export default function RecipeDetail() {
                     onSuccess: () => toast('Image générée avec succès'),
                     onError: (error) => toast(`Erreur : ${error.message}`, { description: 'La génération d\'image a échoué' }),
                   });
-                }} disabled={generateImage.isPending || isAnalyzing} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
-                  {(generateImage.isPending || isAnalyzing) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                }} disabled={generateImage.isPending || isAnalyzing} aria-label="Analyser et générer l'image" aria-busy={generateImage.isPending || isAnalyzing} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
+                  {(generateImage.isPending || isAnalyzing) ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
                 </Button>
               </TooltipTrigger><TooltipContent><p>Analyser & générer image</p></TooltipContent></Tooltip>
               <Tooltip><TooltipTrigger asChild>
@@ -169,8 +172,8 @@ export default function RecipeDetail() {
               <ExportToCookidooButton recipeId={recipe.id} />
             </TooltipProvider>
             <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" asChild className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
-                <Link to={`/recipes/${recipe.id}/edit`}><Edit className="h-4 w-4" /></Link>
+              <Button variant="ghost" size="icon" asChild aria-label="Éditer la recette" className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
+                <Link to={`/recipes/${recipe.id}/edit`}><Edit className="h-4 w-4" aria-hidden="true" /></Link>
               </Button>
             </TooltipTrigger><TooltipContent><p>Éditer</p></TooltipContent></Tooltip>
           </div>
@@ -199,46 +202,7 @@ export default function RecipeDetail() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Étapes</span>
-              <Sheet open={chatOpen} onOpenChange={setChatOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" title="Assistant culinaire"><MessageCircle className="h-4 w-4" /></Button>
-                </SheetTrigger>
-                <SheetContent className="w-full sm:w-[400px] md:w-[540px] max-w-full flex flex-col p-0">
-                  <AssistantSheetContent
-                    recipe={recipe}
-                    completedSteps={completedSteps}
-                    totalSteps={totalSteps}
-                    onClose={() => setChatOpen(false)}
-                    onRecipeUpdate={async (data) => {
-                      if (user) {
-                        await createVersion.mutateAsync({
-                          recipeId: recipe.id, userId: user.id, title: recipe.title,
-                          servings: recipe.servings, ingredients: recipe.ingredients as Ingredient[],
-                          steps: recipe.steps as Step[], season: recipe.season,
-                          nutrition_tags: recipe.nutrition_tags, changeDescription: 'Avant modification via assistant',
-                        });
-                      }
-                      await updateRecipe.mutateAsync({ id: recipe.id, title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps });
-                      refetch();
-                    }}
-                    onRecipeCreate={async (data) => {
-                      const newRecipe = await createRecipe.mutateAsync({
-                        title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps,
-                        status: 'draft', is_favorite: false, source_type: 'ai',
-                        ai_summary: data.relationToOriginal ? `Inspiré de "${recipe.title}". ${data.relationToOriginal}` : null,
-                        season: null, nutrition_tags: null, calorie_score: null, source_image_url: null,
-                      });
-                      
-                      setChatOpen(false);
-                      navigate(`/recipes/${newRecipe.id}`);
-                    }}
-                    recipeId={recipe.id}
-                  />
-                </SheetContent>
-              </Sheet>
-            </CardTitle>
+            <CardTitle>Étapes</CardTitle>
           </CardHeader>
           <CardContent>
             {steps.length === 0 ? <p className="text-muted-foreground text-sm">Aucune étape</p> : (
@@ -248,7 +212,7 @@ export default function RecipeDetail() {
                   const isCurrent = index === currentStepIndex && !isDone;
                   return (
                     <li key={step.order}>
-                      <button onClick={() => handleStepToggle(step.order)} className={`w-full text-left flex gap-3 p-3 rounded-lg border transition-colors hover:bg-accent/50 ${isCurrent ? 'border-primary bg-primary/5' : isDone ? 'border-muted bg-muted/30' : 'border-border'}`}>
+                      <button onClick={() => handleStepToggle(step.order)} aria-pressed={isDone} aria-label={`Étape ${index + 1} : ${step.text.slice(0, 50)}${step.text.length > 50 ? '...' : ''}`} className={`w-full text-left flex gap-3 p-3 rounded-lg border transition-colors hover:bg-accent/50 ${isCurrent ? 'border-primary bg-primary/5' : isDone ? 'border-muted bg-muted/30' : 'border-border'}`}>
                         <span className="flex-shrink-0 mt-0.5">{isDone ? <CheckCircle className="h-5 w-5 text-primary" /> : <Circle className={`h-5 w-5 ${isCurrent ? 'text-primary' : 'text-muted-foreground'}`} />}</span>
                         <span className={`text-sm leading-relaxed ${isDone ? 'text-muted-foreground line-through' : ''}`}>{step.text}</span>
                       </button>
@@ -260,6 +224,41 @@ export default function RecipeDetail() {
           </CardContent>
         </Card>
 
+
+        <Sheet open={chatOpen} onOpenChange={setChatOpen}>
+          <SheetContent className="w-full sm:w-[400px] md:w-[540px] max-w-full flex flex-col p-0">
+            <AssistantSheetContent
+              recipe={recipe}
+              completedSteps={completedSteps}
+              totalSteps={totalSteps}
+              onClose={() => setChatOpen(false)}
+              onRecipeUpdate={async (data) => {
+                if (user) {
+                  await createVersion.mutateAsync({
+                    recipeId: recipe.id, userId: user.id, title: recipe.title,
+                    servings: recipe.servings, ingredients: recipe.ingredients as Ingredient[],
+                    steps: recipe.steps as Step[], season: recipe.season,
+                    nutrition_tags: recipe.nutrition_tags, changeDescription: 'Avant modification via assistant',
+                  });
+                }
+                await updateRecipe.mutateAsync({ id: recipe.id, title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps });
+                refetch();
+              }}
+              onRecipeCreate={async (data) => {
+                const newRecipe = await createRecipe.mutateAsync({
+                  title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps,
+                  status: 'draft', is_favorite: false, source_type: 'ai',
+                  ai_summary: data.relationToOriginal ? `Inspiré de "${recipe.title}". ${data.relationToOriginal}` : null,
+                  season: null, nutrition_tags: null, calorie_score: null, source_image_url: null,
+                });
+
+                setChatOpen(false);
+                navigate(`/recipes/${newRecipe.id}`);
+              }}
+              recipeId={recipe.id}
+            />
+          </SheetContent>
+        </Sheet>
 
         {totalSteps > 0 && (
           <div className="fixed bottom-0 left-0 right-0 flex items-center justify-between gap-3 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-background/80 backdrop-blur-sm border-t border-border z-10">
