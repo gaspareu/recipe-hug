@@ -15,6 +15,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { RouteError } from "@/components/RouteError";
 
 // Lazy load pages for code-splitting
 const Auth = lazy(() => import("./pages/Auth"));
@@ -61,6 +62,7 @@ const RootLayout = () => (
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
+    errorElement: <RouteError />,
     children: [
       { path: "/", element: <Navigate to="/home" replace /> },
       { path: "/auth", element: <PageTransition><Auth /></PageTransition> },
