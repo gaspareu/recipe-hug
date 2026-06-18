@@ -2,7 +2,13 @@ import { Suspense, lazy } from "react";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import {
+  createBrowserRouter,
+  RouterProvider,
+  Navigate,
+  useOutlet,
+  useLocation,
+} from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
@@ -23,68 +29,82 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
-const AnimatedRoutes = () => {
+const SuspenseFallback = () => (
+  <div className="min-h-[100dvh] flex items-center justify-center">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+  </div>
+);
+
+// Outlet animé : conserve les transitions de page (AnimatePresence keyé par pathname)
+// tout en s'appuyant sur le data router (requis par useBlocker dans RecipeEdit).
+const AnimatedOutlet = () => {
   const location = useLocation();
+  const element = useOutlet();
   return (
-    <Suspense fallback={<div className="min-h-[100dvh] flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
+    <Suspense fallback={<SuspenseFallback />}>
       <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          <Route path="/" element={<Navigate to="/home" replace />} />
-          <Route path="/auth" element={<PageTransition><Auth /></PageTransition>} />
-          <Route path="/home" element={
-            <ProtectedRoute>
-              <PageTransition><Home /></PageTransition>
-            </ProtectedRoute>
-          } />
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <PageTransition><Dashboard /></PageTransition>
-            </ProtectedRoute>
-          } />
-          <Route path="/recipes/new" element={
-            <ProtectedRoute>
-              <PageTransition><RecipeNew /></PageTransition>
-            </ProtectedRoute>
-          } />
-          <Route path="/recipes/:id" element={
-            <ProtectedRoute>
-              <PageTransition><RecipeDetail /></PageTransition>
-            </ProtectedRoute>
-          } />
-          <Route path="/recipes/:id/edit" element={
-            <ProtectedRoute>
-              <PageTransition><RecipeEdit /></PageTransition>
-            </ProtectedRoute>
-          } />
-          <Route path="/profile" element={
-            <ProtectedRoute>
-              <PageTransition><Profile /></PageTransition>
-            </ProtectedRoute>
-          } />
-          <Route path="/meal-planning" element={
-            <ProtectedRoute>
-              <PageTransition><MealPlanning /></PageTransition>
-            </ProtectedRoute>
-          } />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <div key={location.pathname} className="contents">
+          {element}
+        </div>
       </AnimatePresence>
     </Suspense>
   );
 };
 
+const RootLayout = () => (
+  <>
+    <AnimatedOutlet />
+    <OfflineBanner />
+  </>
+);
+
+const router = createBrowserRouter([
+  {
+    element: <RootLayout />,
+    children: [
+      { path: "/", element: <Navigate to="/home" replace /> },
+      { path: "/auth", element: <PageTransition><Auth /></PageTransition> },
+      {
+        path: "/home",
+        element: <ProtectedRoute><PageTransition><Home /></PageTransition></ProtectedRoute>,
+      },
+      {
+        path: "/dashboard",
+        element: <ProtectedRoute><PageTransition><Dashboard /></PageTransition></ProtectedRoute>,
+      },
+      {
+        path: "/recipes/new",
+        element: <ProtectedRoute><PageTransition><RecipeNew /></PageTransition></ProtectedRoute>,
+      },
+      {
+        path: "/recipes/:id",
+        element: <ProtectedRoute><PageTransition><RecipeDetail /></PageTransition></ProtectedRoute>,
+      },
+      {
+        path: "/recipes/:id/edit",
+        element: <ProtectedRoute><PageTransition><RecipeEdit /></PageTransition></ProtectedRoute>,
+      },
+      {
+        path: "/profile",
+        element: <ProtectedRoute><PageTransition><Profile /></PageTransition></ProtectedRoute>,
+      },
+      {
+        path: "/meal-planning",
+        element: <ProtectedRoute><PageTransition><MealPlanning /></PageTransition></ProtectedRoute>,
+      },
+      { path: "*", element: <NotFound /> },
+    ],
+  },
+]);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-
-      <BrowserRouter>
-        <AuthProvider>
-          <ThemeProvider>
-            <AnimatedRoutes />
-            <OfflineBanner />
-          </ThemeProvider>
-        </AuthProvider>
-      </BrowserRouter>
+      <AuthProvider>
+        <ThemeProvider>
+          <RouterProvider router={router} />
+        </ThemeProvider>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
