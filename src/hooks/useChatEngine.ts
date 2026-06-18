@@ -94,6 +94,10 @@ export function useChatEngine(config: ChatEngineConfig) {
   const activeRecipeRef = useRef(activeRecipe);
   activeRecipeRef.current = activeRecipe;
 
+  // Tracks a recipe loaded via get_recipe_details during a streaming turn,
+  // so runAssistantRequest can retry with the enriched context.
+  const retryWithRecipeRef = useRef<ActiveRecipeData | null>(null);
+
   // Exécute un tool call et retourne le contenu (éventuellement enrichi) du
   // message assistant. Le contenu courant est passé par le parser : le relire
   // via un updater setMessages à effet de bord n'est pas fiable (React peut
@@ -107,6 +111,14 @@ export function useChatEngine(config: ChatEngineConfig) {
     try {
       const args = JSON.parse(argsStr);
       const result = await onToolCallRef.current({ type: name, data: args });
+
+      // Handle get_recipe_details: store recipe for auto-retry, don't alter content
+      if (name === 'get_recipe_details' && result) {
+        const recipe = result as ActiveRecipeData;
+        setActiveRecipe(recipe);
+        retryWithRecipeRef.current = recipe;
+        return currentContent;
+      }
 
       // Handle search results
       if (name === 'search_recipes' && result) {
@@ -256,6 +268,7 @@ export function useChatEngine(config: ChatEngineConfig) {
   ) => {
     setIsStreaming(true);
     setSearchResults([]);
+    retryWithRecipeRef.current = null;
 
     const assistantMessageId = `assistant-${Date.now()}`;
     const abortController = new AbortController();
@@ -284,6 +297,33 @@ export function useChatEngine(config: ChatEngineConfig) {
 
       const reader = response.body.getReader();
       await parseSSEStream(reader, assistantMessageId, lastUserContent);
+
+      // Auto-retry: if the AI called get_recipe_details, re-run the same request
+      // with the recipe now available as activeRecipe in the system prompt.
+      const loadedRecipe = retryWithRecipeRef.current;
+      if (loadedRecipe) {
+        retryWithRecipeRef.current = null;
+        setMessages(prev => prev.filter(m => m.id !== assistantMessageId));
+        const { endpoint: ep2, body: body2 } = await buildRequestRef.current({
+          apiMessages,
+          activeRecipe: loadedRecipe,
+        });
+        const response2 = await fetch(ep2, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify(body2),
+          signal: abortController.signal,
+        });
+        if (!response2.ok) {
+          const errorData = await response2.json().catch(() => ({}));
+          throw new Error(errorData.error || "Erreur de communication avec l'assistant");
+        }
+        if (!response2.body) throw new Error('No response body');
+        const retryMessageId = `assistant-${Date.now()}`;
+        setMessages(prev => [...prev, { id: retryMessageId, role: 'assistant', content: '', timestamp: new Date() }]);
+        const reader2 = response2.body.getReader();
+        await parseSSEStream(reader2, retryMessageId, lastUserContent);
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         // Arrêt volontaire : on garde le contenu déjà streamé tel quel.
