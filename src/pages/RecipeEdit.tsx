@@ -3,6 +3,7 @@ import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { ArrowLeft, Save, X, Trash2 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -110,6 +111,7 @@ export default function RecipeEdit() {
       navigate(`/recipes/${id}`);
     } catch (error) {
       console.error('Error updating recipe:', error);
+      toast("Impossible d'enregistrer les modifications");
     }
   };
 
@@ -156,8 +158,8 @@ export default function RecipeEdit() {
             </Button>
             <h1 className="text-2xl font-bold text-foreground">Modifier la recette</h1>
           </div>
-          <Button type="submit" form="recipe-edit-form" disabled={updateRecipe.isPending}>
-            <Save className="mr-2 h-4 w-4" />
+          <Button type="submit" form="recipe-edit-form" loading={updateRecipe.isPending}>
+            {!updateRecipe.isPending && <Save className="mr-2 h-4 w-4" />}
             {updateRecipe.isPending ? 'Enregistrement...' : 'Enregistrer'}
           </Button>
         </div>
@@ -265,8 +267,8 @@ export default function RecipeEdit() {
           </motion.div>
 
           <div className="flex flex-col sm:flex-row gap-3">
-            <Button type="submit" className="flex-1 min-w-0" disabled={updateRecipe.isPending}>
-              <Save className="mr-2 h-4 w-4 shrink-0" />
+            <Button type="submit" className="flex-1 min-w-0" loading={updateRecipe.isPending}>
+              {!updateRecipe.isPending && <Save className="mr-2 h-4 w-4 shrink-0" />}
               <span className="truncate">{updateRecipe.isPending ? 'Enregistrement...' : 'Enregistrer'}</span>
             </Button>
 

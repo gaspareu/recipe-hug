@@ -24,6 +24,7 @@ import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientCh
 import { useRecipe, useToggleFavorite, useUpdateRecipe, useCreateRecipe } from '@/hooks/useRecipes';
 import { useGenerateRecipeImage } from '@/hooks/useGenerateRecipeImage';
 import { useRecipeChat } from '@/hooks/useRecipeChat';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 import { useCreateVersion } from '@/hooks/useRecipeVersions';
 import { useAuth } from '@/hooks/useAuth';
 import { useSwipeClose } from '@/hooks/useSwipeClose';
@@ -43,7 +44,6 @@ export default function RecipeDetail() {
   const createVersion = useCreateVersion();
   const generateImage = useGenerateRecipeImage();
   const { user } = useAuth();
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [chatOpen, setChatOpen] = useState(false);
@@ -66,12 +66,15 @@ export default function RecipeDetail() {
 
   const handleStatusChange = (newStatus: RecipeStatus) => {
     if (!recipe) return;
-    updateRecipe.mutate({ id: recipe.id, status: newStatus });
+    updateRecipe.mutate(
+      { id: recipe.id, status: newStatus },
+      { onError: () => toast('Impossible de changer le statut') },
+    );
   };
 
-  const handleImageChange = async (file: File) => {
-    if (!recipe) return;
-    try {
+  const imageChange = useAsyncAction(
+    async (file: File) => {
+      if (!recipe) return;
       const fileExt = file.name.split('.').pop();
       const fileName = `${recipe.id}-${Date.now()}.${fileExt}`;
       const filePath = `recipe-images/${fileName}`;
@@ -79,24 +82,21 @@ export default function RecipeDetail() {
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('recipes').getPublicUrl(filePath);
       await updateRecipe.mutateAsync({ id: recipe.id, source_image_url: publicUrl });
-    } catch (error) {
-      console.error('Error uploading image:', error);
-    }
-  };
+    },
+    { successMessage: 'Image mise à jour', errorMessage: "L'envoi de l'image a échoué" },
+  );
 
-  const handleImageRemove = async () => {
-    if (!recipe) return;
-    try {
+  const imageRemove = useAsyncAction(
+    async () => {
+      if (!recipe) return;
       await updateRecipe.mutateAsync({ id: recipe.id, source_image_url: null });
-    } catch (error) {
-      console.error('Error removing image:', error);
-    }
-  };
+    },
+    { errorMessage: "Impossible de retirer l'image" },
+  );
 
-  const handleAnalyze = async () => {
-    if (!recipe) return;
-    setIsAnalyzing(true);
-    try {
+  const analyze = useAsyncAction(
+    async () => {
+      if (!recipe) return;
       const { data, error } = await supabase.functions.invoke('analyze-recipe', {
         body: { title: recipe.title, ingredients: recipe.ingredients, steps: recipe.steps },
       });
@@ -105,10 +105,9 @@ export default function RecipeDetail() {
         id: recipe.id, ai_summary: data.ai_summary,
         nutrition_tags: data.nutrition_tags, calorie_score: data.calorie_score, season: data.season,
       });
-    } catch (error) {
-      console.error('Error analyzing recipe:', error);
-    } finally { setIsAnalyzing(false); }
-  };
+    },
+    { errorMessage: "L'analyse a échoué" },
+  );
 
   const handleStepToggle = (stepOrder: number) => {
     setCompletedSteps(prev => {
@@ -149,7 +148,7 @@ export default function RecipeDetail() {
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }}
         >
-          <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={handleImageChange} onImageRemove={handleImageRemove} />
+          <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={imageChange.run} onImageRemove={imageRemove.run} />
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/50 to-transparent pointer-events-none rounded-t-lg" />
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Retour" className="absolute top-3 left-3 bg-background/60 backdrop-blur-sm hover:bg-background/80">
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
@@ -160,13 +159,13 @@ export default function RecipeDetail() {
               <Tooltip><TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" onClick={() => {
                   const ingredients = recipe.ingredients as Array<{ name: string }>;
-                  handleAnalyze();
+                  analyze.run();
                   generateImage.mutate({ recipeId: recipe.id, title: recipe.title, ingredients }, {
                     onSuccess: () => toast('Image générée avec succès'),
                     onError: (error) => toast(`Erreur : ${error.message}`, { description: 'La génération d\'image a échoué' }),
                   });
-                }} disabled={generateImage.isPending || isAnalyzing} aria-label="Analyser et générer l'image" aria-busy={generateImage.isPending || isAnalyzing} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
-                  {(generateImage.isPending || isAnalyzing) ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
+                }} disabled={generateImage.isPending || analyze.isPending} aria-label="Analyser et générer l'image" aria-busy={generateImage.isPending || analyze.showLoader} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
+                  {(generateImage.isPending || analyze.showLoader) ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
                 </Button>
               </TooltipTrigger><TooltipContent><p>Analyser & générer image</p></TooltipContent></Tooltip>
               <Tooltip><TooltipTrigger asChild>
