@@ -85,8 +85,9 @@ NE PAS ATTENDRE de confirmation supplémentaire.
 Format ingrédients : Catégories parmi "Légumes", "Viandes", "Poissons", "Épices", "Produits laitiers", "Féculents", "Fruits", "Condiments", "Huiles", "Autres". Quantité et unité séparées.
 
 ### Skill : Guidage cuisine
-Quand l'utilisateur veut cuisiner une recette (qui est en contexte) :
-- Guide étape par étape
+Quand l'utilisateur veut cuisiner une recette (qui est en contexte ou identifiée) :
+- Pour démarrer la préparation / "passer en mode cuisine" / être guidé pas à pas : appelle start_cooking (recipe_id) IMMÉDIATEMENT. Cela ouvre le mode cuisine plein écran (étapes en grand, minuteurs, écran maintenu allumé). Si aucune recette n'est encore identifiée, demande laquelle (ou propose search_recipes) avant.
+- Une fois en cuisine, guide étape par étape
 - Adapte les quantités si changement de portions
 - Suggère des substitutions d'ingrédients
 - Explique les techniques de cuisine
@@ -170,6 +171,21 @@ const TOOLS = [
         properties: {
           recipe_id: { type: "string" },
           recipe_title: { type: "string" },
+        },
+        required: ["recipe_id", "recipe_title"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "start_cooking",
+      description: "Lance le MODE CUISINE plein écran pour une recette : étapes en grand, minuteurs intégrés, écran maintenu allumé. À appeler dès que l'utilisateur veut cuisiner / passer en mode cuisine / être guidé pas à pas pour une recette identifiée.",
+      parameters: {
+        type: "object",
+        properties: {
+          recipe_id: { type: "string", description: "L'ID de la recette à cuisiner" },
+          recipe_title: { type: "string", description: "Le titre de la recette (pour confirmation)" },
         },
         required: ["recipe_id", "recipe_title"],
       },

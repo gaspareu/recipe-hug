@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { ChatInterface } from '@/components/chat/ChatInterface';
+import { CookingModeContainer } from '@/components/cooking/CookingModeContainer';
 import { InstallBanner } from '@/components/InstallBanner';
 
 export default function Home() {
@@ -13,6 +14,7 @@ export default function Home() {
   const {
     messages, isStreaming, pendingRecipe, isSavingRecipe,
     sendMessage, resetChat, savePendingRecipe, cancelPendingRecipe, regenerateResponse, stopGeneration,
+    cookingRecipeId, startCooking, stopCooking,
   } = useHomeChat();
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -68,6 +70,7 @@ export default function Home() {
           cancelPendingRecipe={cancelPendingRecipe}
           regenerateResponse={regenerateResponse}
           stopGeneration={stopGeneration}
+          onStartCooking={startCooking}
           suggestions={defaultSuggestions}
           placeholder="Poser une question"
           showWelcomeScreen={true}
@@ -95,6 +98,11 @@ export default function Home() {
       <div className="shrink-0 pb-[env(safe-area-inset-bottom)]">
         <InstallBanner />
       </div>
+
+      {/* Mode cuisine plein écran (déclenché par l'assistant ou le bouton « Cuisiner ») */}
+      {cookingRecipeId && (
+        <CookingModeContainer recipeId={cookingRecipeId} onClose={stopCooking} />
+      )}
     </div>
   );
 }

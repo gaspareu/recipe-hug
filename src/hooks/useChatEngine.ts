@@ -159,6 +159,7 @@ export function useChatEngine(config: ChatEngineConfig) {
           extract_modified_recipe: 'extract_modified_recipe',
           create_new_recipe: 'create_new_recipe',
           get_preferences: 'get_preferences', update_preferences: 'update_preferences',
+          start_cooking: 'start_cooking',
         };
         const toolType = actionMap[actionType];
         if (toolType) {
