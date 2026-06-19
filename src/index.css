@@ -119,3 +119,21 @@ All colors MUST be HSL.
     @apply font-solitreo;
   }
 }
+
+/* Animations du mode cuisine (portées depuis la maquette Grimoire) */
+@keyframes cook-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--accent) / 0.5); }
+  50% { box-shadow: 0 0 0 7px hsl(var(--accent) / 0); }
+}
+@keyframes cook-pop {
+  0% { transform: scale(0.9); }
+  60% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+@keyframes cook-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-cook-pulse { animation: cook-pulse 1.1s ease-in-out infinite; }
+.animate-cook-pop { animation: cook-pop 0.5s ease both; }
+.animate-cook-fade-up { animation: cook-fade-up 0.3s var(--ease-emphasized) both; }

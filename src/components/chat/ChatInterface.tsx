@@ -28,6 +28,8 @@ interface ChatInterfaceProps {
   cancelPendingRecipe: () => void;
   regenerateResponse?: () => void;
   stopGeneration?: () => void;
+  /** Si fourni, affiche un bouton « Cuisiner » sur la carte recette (ouvre le mode cuisine). */
+  onStartCooking?: (recipeId: string) => void;
   suggestions: string[];
   placeholder?: string;
   showWelcomeScreen?: boolean;
@@ -36,6 +38,8 @@ interface ChatInterfaceProps {
   className?: string;
   /** If true, skip the first (welcome) message in display */
   skipFirstMessage?: boolean;
+  /** Si vrai, active et démarre l'écoute vocale dès le montage (mode cuisine). */
+  autoListenOnMount?: boolean;
 }
 
 export function ChatInterface({
@@ -48,6 +52,7 @@ export function ChatInterface({
   cancelPendingRecipe,
   regenerateResponse,
   stopGeneration,
+  onStartCooking,
   suggestions,
   placeholder = 'Poser une question',
   showWelcomeScreen = false,
@@ -55,6 +60,7 @@ export function ChatInterface({
   headerContent,
   className = '',
   skipFirstMessage = false,
+  autoListenOnMount = false,
 }: ChatInterfaceProps) {
   const navigate = useNavigate();
   const [input, setInput] = useState('');
@@ -74,6 +80,16 @@ export function ChatInterface({
     toggleVoice, speak, stopSpeaking, startListening, stopListening,
     enableAndListen, partialTranscript,
   } = useVoiceMode(handleVoiceTranscript);
+
+  // Démarrage automatique de l'écoute (mode cuisine : le micro ouvre le chat
+  // déjà à l'écoute). Déclenché une seule fois au montage.
+  const autoListenTriggered = useRef(false);
+  useEffect(() => {
+    if (autoListenOnMount && !autoListenTriggered.current) {
+      autoListenTriggered.current = true;
+      enableAndListen();
+    }
+  }, [autoListenOnMount, enableAndListen]);
 
   // Auto-scroll
   useEffect(() => {
@@ -237,14 +253,26 @@ export function ChatInterface({
                             <p className="text-xs text-muted-foreground">{message.recipeCard.servings} portions</p>
                           </div>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="shrink-0"
-                          onClick={() => navigate(`/recipes/${message.recipeCard?.id}`)}
-                        >
-                          Voir
-                        </Button>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {onStartCooking && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="gap-1.5"
+                              onClick={() => message.recipeCard && onStartCooking(message.recipeCard.id)}
+                            >
+                              <ChefHat className="h-4 w-4" aria-hidden="true" />
+                              Cuisiner
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => navigate(`/recipes/${message.recipeCard?.id}`)}
+                          >
+                            Voir
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>

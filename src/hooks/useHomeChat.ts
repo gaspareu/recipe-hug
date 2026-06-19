@@ -33,6 +33,9 @@ export function useHomeChat() {
   const { data: recipes = [], refetch: refetchRecipes } = useRecipes();
   const { preferences, updatePreferences } = useUserPreferences();
 
+  // Mode cuisine : recette en cours de préparation en plein écran (null = fermé).
+  const [cookingRecipeId, setCookingRecipeId] = useState<string | null>(null);
+
   const handleToolCall = useCallback(async (action: ToolCallAction): Promise<unknown> => {
     console.log('Tool call:', action.type, action.data);
 
@@ -64,6 +67,12 @@ export function useHomeChat() {
       case 'open_recipe': {
         const recipeId = action.data.recipe_id as string;
         if (recipeId) setTimeout(() => navigate(`/recipes/${recipeId}`), 500);
+        return null;
+      }
+
+      case 'start_cooking': {
+        const recipeId = action.data.recipe_id as string;
+        if (recipeId) setCookingRecipeId(recipeId);
         return null;
       }
 
@@ -229,6 +238,9 @@ export function useHomeChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
   }, [isSavingRecipe]);
 
+  const startCooking = useCallback((recipeId: string) => setCookingRecipeId(recipeId), []);
+  const stopCooking = useCallback(() => setCookingRecipeId(null), []);
+
   return {
     messages: engine.messages, isStreaming: engine.isStreaming,
     activeRecipe: engine.activeRecipe, pendingRecipe: engine.pendingRecipe,
@@ -236,5 +248,6 @@ export function useHomeChat() {
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
     regenerateResponse: engine.regenerateResponse, stopGeneration: engine.stopGeneration,
     savePendingRecipe, cancelPendingRecipe, isSavingRecipe,
+    cookingRecipeId, startCooking, stopCooking,
   };
 }
