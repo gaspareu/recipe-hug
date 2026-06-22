@@ -571,7 +571,7 @@ serve(async (req) => {
       .from("user_culinary_preferences")
       .select("*")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     systemPrompt += formatPreferencesContext(prefs);
 
