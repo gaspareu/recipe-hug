@@ -15,10 +15,21 @@ const phoneSchema = z.string().trim().regex(/^\+?[0-9]{7,15}$/, "Numéro de tél
 
 interface ShareRecipeDialogProps {
   recipeId: string;
+  /** Ouverture contrôlée (pour piloter le dialog depuis un menu externe). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Affiche le bouton déclencheur intégré (défaut). Mettre à false en mode contrôlé. */
+  showTrigger?: boolean;
 }
 
-export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
-  const [open, setOpen] = useState(false);
+export function ShareRecipeDialog({ recipeId, open: controlledOpen, onOpenChange, showTrigger = true }: ShareRecipeDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    if (!isControlled) setInternalOpen(value);
+    onOpenChange?.(value);
+  };
   const [tab, setTab] = useState<'email' | 'phone'>('email');
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,11 +69,13 @@ export function ShareRecipeDialog({ recipeId }: ShareRecipeDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
-          <Share2 className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+      {showTrigger && (
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
+            <Share2 className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Partager la recette</DialogTitle>

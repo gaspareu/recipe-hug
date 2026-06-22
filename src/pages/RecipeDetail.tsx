@@ -1,63 +1,45 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { toast } from '@/components/ui/sonner';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Users, ListChecks, Sparkles, Loader2, Leaf, MessageCircle, CheckCircle, Circle, History } from 'lucide-react';
-import { ShareRecipeDialog } from '@/components/recipes/ShareRecipeDialog';
-import { ExportToCookidooButton } from '@/components/recipes/ExportToCookidooButton';
-import { CookingAssistantButton } from '@/components/recipes/CookingAssistantButton';
+import { ArrowLeft, Users, ListChecks, Leaf, ChefHat, History } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
-
+import { RecipeActionsMenu } from '@/components/recipes/RecipeActionsMenu';
+import { RecipeStepsList } from '@/components/recipes/RecipeStepsList';
 import { RecipeVersionHistory } from '@/components/recipes/RecipeVersionHistory';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RecipeStatusSelect } from '@/components/recipes/RecipeStatusSelect';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
-import { useRecipe, useToggleFavorite, useUpdateRecipe, useCreateRecipe } from '@/hooks/useRecipes';
+import { CookingModeContainer } from '@/components/cooking/CookingModeContainer';
+import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
 import { useGenerateRecipeImage } from '@/hooks/useGenerateRecipeImage';
-import { useRecipeChat } from '@/hooks/useRecipeChat';
 import { useAsyncAction } from '@/hooks/useAsyncAction';
-import { useCreateVersion } from '@/hooks/useRecipeVersions';
-import { useAuth } from '@/hooks/useAuth';
-import { useSwipeClose } from '@/hooks/useSwipeClose';
-import { ChatInterface } from '@/components/chat/ChatInterface';
-
 import { supabase } from '@/integrations/supabase/client';
-import type { RecipeStatus, Step, Ingredient } from '@/types/recipe';
+import type { RecipeStatus, Step } from '@/types/recipe';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
-  const { data: recipe, isLoading, refetch } = useRecipe(id || '');
+  const { data: recipe, isLoading } = useRecipe(id || '');
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
-  const createRecipe = useCreateRecipe();
-  const createVersion = useCreateVersion();
   const generateImage = useGenerateRecipeImage();
-  const { user } = useAuth();
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [cooking, setCooking] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // Valeurs dérivées calculées AVANT tout early return : les Hooks doivent être
-  // appelés dans le même ordre à chaque rendu, sinon React lève l'erreur #310
-  // (« Rendered more hooks than during the previous render ») → page blanche.
+  // appelés dans le même ordre à chaque rendu (sinon React #310 → page blanche).
   const steps = useMemo(() => (recipe?.steps || []) as Step[], [recipe?.steps]);
-  const sortedSteps = useMemo(() => [...steps].sort((a, b) => a.order - b.order), [steps]);
   const totalSteps = steps.length;
-  const isComplete = useMemo(
-    () => completedSteps.size === totalSteps && totalSteps > 0,
-    [completedSteps.size, totalSteps]
-  );
 
   const handleToggleFavorite = () => {
     if (!recipe) return;
@@ -109,28 +91,6 @@ export default function RecipeDetail() {
     { errorMessage: "L'analyse a échoué" },
   );
 
-  const handleStepToggle = (stepOrder: number) => {
-    setCompletedSteps(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(stepOrder)) newSet.delete(stepOrder);
-      else newSet.add(stepOrder);
-      return newSet;
-    });
-  };
-
-  const handleAdvanceStep = () => {
-    if (!recipe) return;
-    const steps = recipe.steps as Step[];
-    const sortedSteps = [...steps].sort((a, b) => a.order - b.order);
-    for (let i = 0; i < sortedSteps.length; i++) {
-      if (!completedSteps.has(sortedSteps[i].order)) {
-        setCompletedSteps(prev => new Set([...prev, sortedSteps[i].order]));
-        setCurrentStepIndex(i + 1);
-        return;
-      }
-    }
-  };
-
   if (isLoading) {
     return <MainLayout><div className="max-w-2xl mx-auto space-y-6"><Skeleton className="h-10 w-48" /><Skeleton className="h-[200px]" /><Skeleton className="h-[200px]" /></div></MainLayout>;
   }
@@ -138,10 +98,20 @@ export default function RecipeDetail() {
     return <MainLayout><div className="text-center py-12"><p className="text-muted-foreground">Recette introuvable</p><Button asChild className="mt-4"><Link to="/dashboard">Retour au dashboard</Link></Button></div></MainLayout>;
   }
 
+  const handleAnalyzeAndGenerate = () => {
+    const ingredients = recipe.ingredients as Array<{ name: string }>;
+    analyze.run();
+    generateImage.mutate({ recipeId: recipe.id, title: recipe.title, ingredients }, {
+      onSuccess: () => toast('Image générée avec succès'),
+      onError: (error) => toast(`Erreur : ${error.message}`, { description: "La génération d'image a échoué" }),
+    });
+  };
+  const isAnalyzing = generateImage.isPending || analyze.showLoader;
+
   return (
     <MainLayout>
-      <div className={`max-w-2xl mx-auto space-y-6 ${totalSteps > 0 ? 'pb-20' : ''}`}>
-        {/* Recipe Image with action buttons overlay */}
+      <div className={`max-w-2xl mx-auto space-y-6 ${totalSteps > 0 ? 'pb-24' : ''}`}>
+        {/* Image avec actions en surimpression */}
         <motion.div
           className="relative"
           initial={reduceMotion ? false : { scale: 0.96, opacity: 0 }}
@@ -153,34 +123,15 @@ export default function RecipeDetail() {
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Retour" className="absolute top-3 left-3 bg-background/60 backdrop-blur-sm hover:bg-background/80">
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Button>
-          <div className="absolute top-3 right-3 flex items-center flex-wrap justify-end gap-1 max-w-[calc(100%-3.5rem)]" data-testid="action-buttons">
+          <div className="absolute top-3 right-3 flex items-center gap-1" data-testid="action-buttons">
             <TooltipProvider>
               <FavoriteToggle isFavorite={recipe.is_favorite} onToggle={handleToggleFavorite} disabled={toggleFavorite.isPending} tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} variant="overlay" />
-              <Tooltip><TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => {
-                  const ingredients = recipe.ingredients as Array<{ name: string }>;
-                  analyze.run();
-                  generateImage.mutate({ recipeId: recipe.id, title: recipe.title, ingredients }, {
-                    onSuccess: () => toast('Image générée avec succès'),
-                    onError: (error) => toast(`Erreur : ${error.message}`, { description: 'La génération d\'image a échoué' }),
-                  });
-                }} disabled={generateImage.isPending || analyze.isPending} aria-label="Analyser et générer l'image" aria-busy={generateImage.isPending || analyze.showLoader} className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
-                  {(generateImage.isPending || analyze.showLoader) ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
-                </Button>
-              </TooltipTrigger><TooltipContent><p>Analyser & générer image</p></TooltipContent></Tooltip>
-              <Tooltip><TooltipTrigger asChild>
-                <ShareRecipeDialog recipeId={recipe.id} />
-              </TooltipTrigger><TooltipContent><p>Partager</p></TooltipContent></Tooltip>
-              <ExportToCookidooButton recipeId={recipe.id} />
+              <RecipeActionsMenu recipeId={recipe.id} onAnalyzeAndGenerate={handleAnalyzeAndGenerate} isAnalyzing={isAnalyzing} onOpenHistory={() => setHistoryOpen(true)} />
             </TooltipProvider>
-            <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" asChild aria-label="Éditer la recette" className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
-                <Link to={`/recipes/${recipe.id}/edit`}><Edit className="h-4 w-4" aria-hidden="true" /></Link>
-              </Button>
-            </TooltipTrigger><TooltipContent><p>Éditer</p></TooltipContent></Tooltip>
           </div>
         </motion.div>
 
+        {/* Badges : statut → saison → nutrition → score (rangée scrollable) */}
         <div className="overflow-x-auto pb-1 -mb-1">
           <div className="flex items-center gap-2 min-w-max py-1">
             <RecipeStatusSelect status={recipe.status} onStatusChange={handleStatusChange} disabled={updateRecipe.isPending} />
@@ -203,155 +154,42 @@ export default function RecipeDetail() {
         )}
 
         <Card>
-          <CardHeader>
-            <CardTitle>Étapes</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between">
+              <span>Étapes</span>
+              {totalSteps > 0 && <span className="text-sm font-normal text-muted-foreground">{totalSteps} étapes</span>}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {steps.length === 0 ? <p className="text-muted-foreground text-sm">Aucune étape</p> : (
-              <ol className="space-y-3">
-                {sortedSteps.map((step, index) => {
-                  const isDone = completedSteps.has(step.order);
-                  const isCurrent = index === currentStepIndex && !isDone;
-                  return (
-                    <li key={step.order}>
-                      <button onClick={() => handleStepToggle(step.order)} aria-pressed={isDone} aria-label={`Étape ${index + 1} : ${step.text.slice(0, 50)}${step.text.length > 50 ? '...' : ''}`} className={`w-full text-left flex gap-3 p-3 rounded-lg border transition-colors hover:bg-accent/50 ${isCurrent ? 'border-primary bg-primary/5' : isDone ? 'border-muted bg-muted/30' : 'border-border'}`}>
-                        <span className="flex-shrink-0 mt-0.5">{isDone ? <CheckCircle className="h-5 w-5 text-primary" /> : <Circle className={`h-5 w-5 ${isCurrent ? 'text-primary' : 'text-muted-foreground'}`} />}</span>
-                        <span className={`text-sm leading-relaxed ${isDone ? 'text-muted-foreground line-through' : ''}`}>{step.text}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
+            <RecipeStepsList steps={steps} />
           </CardContent>
         </Card>
 
-
-        <Sheet open={chatOpen} onOpenChange={setChatOpen}>
+        {/* Historique des versions (ouvert depuis le menu d'actions) */}
+        <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
           <SheetContent className="w-full sm:w-[400px] md:w-[540px] max-w-full flex flex-col p-0">
-            <AssistantSheetContent
-              recipe={recipe}
-              completedSteps={completedSteps}
-              totalSteps={totalSteps}
-              onClose={() => setChatOpen(false)}
-              onRecipeUpdate={async (data) => {
-                if (user) {
-                  await createVersion.mutateAsync({
-                    recipeId: recipe.id, userId: user.id, title: recipe.title,
-                    servings: recipe.servings, ingredients: recipe.ingredients as Ingredient[],
-                    steps: recipe.steps as Step[], season: recipe.season,
-                    nutrition_tags: recipe.nutrition_tags, changeDescription: 'Avant modification via assistant',
-                  });
-                }
-                await updateRecipe.mutateAsync({ id: recipe.id, title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps });
-                refetch();
-              }}
-              onRecipeCreate={async (data) => {
-                const newRecipe = await createRecipe.mutateAsync({
-                  title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps,
-                  status: 'draft', is_favorite: false, source_type: 'ai',
-                  ai_summary: data.relationToOriginal ? `Inspiré de "${recipe.title}". ${data.relationToOriginal}` : null,
-                  season: null, nutrition_tags: null, calorie_score: null, source_image_url: null,
-                });
-
-                setChatOpen(false);
-                navigate(`/recipes/${newRecipe.id}`);
-              }}
-              recipeId={recipe.id}
-            />
+            <SheetHeader className="p-4 pb-2 border-b">
+              <SheetTitle className="flex items-center gap-2"><History className="h-4 w-4" />Historique des versions</SheetTitle>
+            </SheetHeader>
+            <RecipeVersionHistory recipeId={recipe.id} onRestore={() => setHistoryOpen(false)} />
           </SheetContent>
         </Sheet>
 
+        {/* CTA principal : ouvrir le mode cuisine */}
         {totalSteps > 0 && (
-          <div className="fixed bottom-0 left-0 right-0 flex items-center justify-between gap-3 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-background/80 backdrop-blur-sm border-t border-border z-10">
-            <span className="text-sm text-muted-foreground">
-              Étape {Math.min(completedSteps.size + 1, totalSteps)} / {totalSteps}
-            </span>
-            <Button
-              onClick={handleAdvanceStep}
-              disabled={isComplete}
-              size="sm"
-            >
-              {isComplete ? 'Terminé ✓' : 'Étape suivante →'}
-            </Button>
+          <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-background/80 backdrop-blur-sm border-t border-border z-10">
+            <div className="max-w-2xl mx-auto">
+              <Button onClick={() => setCooking(true)} size="lg" className="w-full h-12 gap-2 text-base font-semibold">
+                <ChefHat className="h-5 w-5" aria-hidden="true" />
+                Cuisiner
+              </Button>
+            </div>
           </div>
         )}
-        {totalSteps > 0 && <CookingAssistantButton currentStep={completedSteps.size} totalSteps={totalSteps} onPress={() => setChatOpen(!chatOpen)} isComplete={isComplete} />}
       </div>
+
+      {/* Mode cuisine plein écran (overlay) */}
+      {cooking && <CookingModeContainer recipeId={recipe.id} onClose={() => setCooking(false)} />}
     </MainLayout>
-  );
-}
-
-// Assistant Sheet Content
-function AssistantSheetContent({
-  recipe, completedSteps, totalSteps, onClose, onRecipeUpdate, onRecipeCreate, recipeId,
-}: {
-  recipe: NonNullable<ReturnType<typeof useRecipe>['data']>;
-  completedSteps: Set<number>;
-  totalSteps: number;
-  onClose: () => void;
-  onRecipeUpdate: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[] }) => Promise<void>;
-  onRecipeCreate: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[]; relationToOriginal?: string }) => Promise<void>;
-  recipeId: string;
-}) {
-  const { style: swipeStyle, ...swipeHandlers } = useSwipeClose({ onClose, direction: 'right', threshold: 80 });
-  const [activeTab, setActiveTab] = useState<'chat' | 'history'>('chat');
-
-  return (
-    <div className="flex flex-col h-full" style={swipeStyle} {...swipeHandlers}>
-      <SheetHeader className="p-4 pb-2 border-b space-y-3">
-        <SheetTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2">👨‍🍳 Assistant</span>
-          {activeTab === 'chat' && <span className="text-sm font-normal text-muted-foreground px-0 pr-[17px]">Étape {Math.min(completedSteps.size + 1, totalSteps)}/{totalSteps}</span>}
-        </SheetTitle>
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'chat' | 'history')} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="chat" className="flex items-center gap-1.5"><MessageCircle className="h-3.5 w-3.5" /><span className="text-xs">Chat</span></TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-1.5"><History className="h-3.5 w-3.5" /><span className="text-xs">Historique</span></TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </SheetHeader>
-      {activeTab === 'history' ? (
-        <RecipeVersionHistory recipeId={recipeId} onRestore={onClose} />
-      ) : (
-        <RecipeChatContent recipe={recipe} completedSteps={completedSteps} onRecipeUpdate={onRecipeUpdate} onRecipeCreate={onRecipeCreate} />
-      )}
-    </div>
-  );
-}
-
-// Recipe Chat Content using ChatInterface
-function RecipeChatContent({
-  recipe, completedSteps, onRecipeUpdate, onRecipeCreate,
-}: {
-  recipe: NonNullable<ReturnType<typeof useRecipe>['data']>;
-  completedSteps: Set<number>;
-  onRecipeUpdate: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[] }) => Promise<void>;
-  onRecipeCreate: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[]; relationToOriginal?: string }) => Promise<void>;
-}) {
-  const {
-    messages, isStreaming, pendingRecipe,
-    sendMessage, savePendingRecipe, cancelPendingRecipe, regenerateResponse, stopGeneration,
-  } = useRecipeChat({
-    recipe, completedSteps,
-    onRecipeUpdate: async (data) => await onRecipeUpdate(data),
-    onRecipeCreate: async (data) => await onRecipeCreate(data),
-  });
-
-  const defaultSuggestions = ["C'est parti !", 'Modifie cette recette', 'Des conseils ?'];
-
-  return (
-    <ChatInterface
-      messages={messages}
-      isStreaming={isStreaming}
-      pendingRecipe={pendingRecipe}
-      sendMessage={sendMessage}
-      savePendingRecipe={savePendingRecipe}
-      cancelPendingRecipe={cancelPendingRecipe}
-      regenerateResponse={regenerateResponse}
-      stopGeneration={stopGeneration}
-      suggestions={defaultSuggestions}
-      placeholder="Poser une question..."
-    />
   );
 }
