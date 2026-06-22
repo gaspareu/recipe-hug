@@ -1,5 +1,12 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Le composant crée le client Supabase à l'import : on le mocke pour que le test
+// tourne sans variables d'environnement (CI).
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: { functions: { invoke: vi.fn() } },
+}));
+
 import { ShareRecipeDialog } from './ShareRecipeDialog';
 
 describe('ShareRecipeDialog', () => {
