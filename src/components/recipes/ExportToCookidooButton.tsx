@@ -33,11 +33,22 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 interface ExportToCookidooButtonProps {
   recipeId: string;
+  /** Ouverture contrôlée (pour piloter le dialog depuis un menu externe). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Affiche le bouton déclencheur intégré (défaut). Mettre à false en mode contrôlé. */
+  showTrigger?: boolean;
 }
 
-export function ExportToCookidooButton({ recipeId }: ExportToCookidooButtonProps) {
+export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenChange, showTrigger = true }: ExportToCookidooButtonProps) {
   const { status, exportRecipe } = useCookidooConnector();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    if (!isControlled) setInternalOpen(value);
+    onOpenChange?.(value);
+  };
   const [tool, setTool] = useState<ThermomixTool>('TM7');
 
   const configured = status.data?.configured;
@@ -67,20 +78,22 @@ export function ExportToCookidooButton({ recipeId }: ExportToCookidooButtonProps
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80"
-            >
-              <UtensilsCrossed className="h-4 w-4" />
-            </Button>
-          </DialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent><p>Envoyer vers Cookidoo</p></TooltipContent>
-      </Tooltip>
+      {showTrigger && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80"
+              >
+                <UtensilsCrossed className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent><p>Envoyer vers Cookidoo</p></TooltipContent>
+        </Tooltip>
+      )}
 
       <DialogContent>
         <DialogHeader>
