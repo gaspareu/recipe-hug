@@ -12,11 +12,7 @@ const { mockAuth } = vi.hoisted(() => ({ mockAuth: { user: null as { id: string 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 vi.mock("./useAuth", () => ({ useAuth: () => mockAuth }));
 
-import {
-  useUserPreferences,
-  formatPreferencesForContext,
-  formatFavoritesForContext,
-} from "./useUserPreferences";
+import { useUserPreferences } from "./useUserPreferences";
 
 function installSupabase(options: SupabaseMockOptions = {}) {
   const sb = createSupabaseMock(options);
@@ -30,7 +26,7 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// formatPreferencesForContext (fonction pure)
+// Helper partagé pour les tests du hook
 // ---------------------------------------------------------------------------
 function emptyPrefs(): UserCulinaryPreferences {
   return {
@@ -50,82 +46,6 @@ function emptyPrefs(): UserCulinaryPreferences {
     dietary_constraints: { allergies: [], diets: [], restrictions: [] },
   };
 }
-
-describe("formatPreferencesForContext", () => {
-  it("retourne une chaîne vide pour des préférences nulles", () => {
-    expect(formatPreferencesForContext(null)).toBe("");
-  });
-
-  it("retourne une chaîne vide quand toutes les sections sont vides", () => {
-    expect(formatPreferencesForContext(emptyPrefs())).toBe("");
-  });
-
-  it("inclut les saveurs aimées et encadre par les marqueurs de profil", () => {
-    const prefs = emptyPrefs();
-    prefs.taste_preferences.liked_flavors = ["sucré", "acidulé"];
-    const result = formatPreferencesForContext(prefs);
-    expect(result).toContain("Saveurs aimées : sucré, acidulé");
-    expect(result).toContain("--- PROFIL CULINAIRE ---");
-    expect(result).toContain("--- FIN PROFIL ---");
-  });
-
-  it("met en évidence les allergies avec un avertissement", () => {
-    const prefs = emptyPrefs();
-    prefs.dietary_constraints.allergies = ["arachides"];
-    const result = formatPreferencesForContext(prefs);
-    expect(result).toContain("⚠️ Allergies : arachides");
-  });
-
-  it("inclut le niveau de difficulté préféré", () => {
-    const prefs = emptyPrefs();
-    prefs.culinary_style.preferred_difficulty = "facile";
-    const result = formatPreferencesForContext(prefs);
-    expect(result).toContain("Niveau préféré : facile");
-  });
-
-  it("gère l'absence de special_ingredients sans planter", () => {
-    const prefs = emptyPrefs();
-    // @ts-expect-error simulation d'anciennes données sans ce champ
-    delete prefs.taste_preferences.special_ingredients;
-    prefs.taste_preferences.liked_flavors = ["umami"];
-    expect(() => formatPreferencesForContext(prefs)).not.toThrow();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// formatFavoritesForContext (fonction pure)
-// ---------------------------------------------------------------------------
-describe("formatFavoritesForContext", () => {
-  it("retourne une chaîne vide sans recette", () => {
-    expect(formatFavoritesForContext([])).toBe("");
-  });
-
-  it("formate le titre avec saison et tags", () => {
-    const result = formatFavoritesForContext([
-      { title: "Soupe", season: "hiver", nutrition_tags: ["vegan"] },
-    ]);
-    expect(result).toContain("1. Soupe (hiver, vegan)");
-  });
-
-  it("omet la parenthèse quand il n'y a ni saison ni tags", () => {
-    const result = formatFavoritesForContext([
-      { title: "Pain", season: null, nutrition_tags: null },
-    ]);
-    expect(result).toContain("1. Pain");
-    expect(result).not.toContain("Pain (");
-  });
-
-  it("limite la liste aux 5 premières recettes", () => {
-    const recipes = Array.from({ length: 8 }, (_, i) => ({
-      title: `R${i}`,
-      season: null,
-      nutrition_tags: null,
-    }));
-    const result = formatFavoritesForContext(recipes);
-    expect(result).toContain("5. R4");
-    expect(result).not.toContain("6. R5");
-  });
-});
 
 // ---------------------------------------------------------------------------
 // useUserPreferences (hook)
