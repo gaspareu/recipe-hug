@@ -19,6 +19,14 @@ interface AnalyzeResult {
   season?: string | null;
 }
 
+/** Champs descriptifs patchables d'une recette (sous-ensemble du type Update). */
+interface RecipePatch {
+  ai_summary?: string;
+  calorie_score?: number;
+  nutrition_tags?: string[];
+  season?: string;
+}
+
 /**
  * Complète en tâche de fond la description, les tags, la saison et le score
  * calorique d'une recette nouvellement créée, sans écraser les champs déjà saisis.
@@ -40,7 +48,7 @@ export async function triggerRecipeCompletion(
     }
 
     const analysis = data as AnalyzeResult;
-    const patch: Record<string, unknown> = {};
+    const patch: RecipePatch = {};
 
     if (!current.ai_summary?.trim() && analysis.ai_summary) {
       patch.ai_summary = analysis.ai_summary;
