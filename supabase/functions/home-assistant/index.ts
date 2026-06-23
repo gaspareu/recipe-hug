@@ -463,6 +463,38 @@ ${sections.join("\n")}
 --- FIN PROFIL ---`;
 }
 
+interface FavoriteRecipe {
+  id: string;
+  title: string;
+  ai_summary?: string | null;
+}
+
+const FAVORITES_SAMPLE_SIZE = 5;
+
+// Format an inspirational sample of favorite recipes for context.
+// Random rotation : on mélange puis on garde quelques favoris, pour varier
+// l'inspiration d'une session à l'autre sans gonfler le prompt.
+function formatFavoritesContext(favorites: FavoriteRecipe[] | null | undefined): string {
+  if (!favorites || favorites.length === 0) return "";
+
+  // Mélange Fisher-Yates sur une copie (immutabilité)
+  const shuffled = [...favorites];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const lines = shuffled.slice(0, FAVORITES_SAMPLE_SIZE).map((r, i) => {
+    const summary = r.ai_summary?.trim();
+    return summary ? `${i + 1}. ${r.title} — ${summary}` : `${i + 1}. ${r.title}`;
+  });
+
+  return `\n\n--- RECETTES FAVORITES (échantillon, pour inspiration) ---
+Ces recettes que l'utilisateur a mises en favori reflètent ses goûts. Inspire-t'en pour proposer des idées dans le même esprit, sans les recopier ni les citer sauf si c'est pertinent.
+${lines.join("\n")}
+--- FIN FAVORITES ---`;
+}
+
 interface ActiveRecipeContext {
   id: string;
   title: string;
@@ -582,6 +614,15 @@ serve(async (req) => {
         `- ID: ${r.id} | "${r.title}" | Statut: ${r.status}${r.is_favorite ? " ⭐" : ""}`
       ).join("\n");
     }
+
+    // Fetch favorite recipes (with AI summary) for a richer, rotating context sample
+    const { data: favorites } = await supabaseClient
+      .from("recipes")
+      .select("id, title, ai_summary")
+      .eq("user_id", userId)
+      .eq("is_favorite", true);
+
+    systemPrompt += formatFavoritesContext(favorites);
 
     // Add active recipe context
     if (activeRecipe) {
