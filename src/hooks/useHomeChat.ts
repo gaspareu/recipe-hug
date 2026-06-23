@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useChatEngine, ActiveRecipeData, ChatEngineConfig, PendingRecipe, ToolCallAction } from './useChatEngine';
 import type { Ingredient } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
+import { triggerRecipeCompletion } from '@/lib/recipe-completion';
 
 // Re-export types
 export type { ChatMessage, MessageContent, PendingRecipe, ActiveRecipeData, RecipeCard } from './useChatEngine';
@@ -200,6 +201,19 @@ export function useHomeChat() {
         recipeId = newRecipe?.id ?? '';
         if (recipeId) {
           triggerBackgroundImageGeneration(recipeId, pending.title, pending.ingredients, session.access_token, refetchRecipes);
+          triggerRecipeCompletion(
+            recipeId,
+            {
+              title: pending.title,
+              ingredients: pending.ingredients,
+              steps: pending.steps,
+              ai_summary: null,
+              calorie_score: null,
+              nutrition_tags: null,
+              season: null,
+            },
+            refetchRecipes,
+          );
         }
       }
 

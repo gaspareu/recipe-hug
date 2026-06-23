@@ -28,8 +28,12 @@ vi.mock("./useUserPreferences", () => ({
     updatePreferences: mockUpdatePreferences,
   }),
 }));
+vi.mock("@/lib/recipe-completion", () => ({
+  triggerRecipeCompletion: vi.fn(() => Promise.resolve()),
+}));
 
 import { useHomeChat, type ChatMessage } from "./useHomeChat";
+import { triggerRecipeCompletion } from "@/lib/recipe-completion";
 
 const SESSION = { access_token: "tok", user: { id: "u1" } };
 
@@ -187,6 +191,44 @@ describe("useHomeChat — création de recette", () => {
 
     expect(result.current.pendingRecipe).toBeNull();
     expect(lastMessage(result.current.messages).content).toContain("on continue la discussion");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow : complétion description/tags après création
+// ---------------------------------------------------------------------------
+describe("savePendingRecipe — complétion", () => {
+  it("déclenche la complétion description/tags après l'insertion (création)", async () => {
+    installSupabase({
+      resultsByTable: { recipes: { data: { id: "new-1" }, error: null } },
+    });
+    const { result } = renderHook(() => useHomeChat());
+
+    await sendToolCall(result, "save_recipe", PENDING_RECIPE);
+    await act(() => result.current.savePendingRecipe());
+
+    await waitFor(() => expect(triggerRecipeCompletion).toHaveBeenCalled());
+    expect(triggerRecipeCompletion).toHaveBeenCalledWith(
+      "new-1",
+      expect.objectContaining({ title: PENDING_RECIPE.title }),
+      expect.any(Function),
+    );
+  });
+
+  it("ne déclenche pas la complétion en mise à jour", async () => {
+    installSupabase({
+      resultsByTable: { recipes: { data: { id: "r1" }, error: null } },
+    });
+    const { result } = renderHook(() => useHomeChat());
+
+    await sendToolCall(result, "save_recipe", {
+      ...PENDING_RECIPE,
+      isUpdate: true,
+      originalRecipeId: "r1",
+    });
+    await act(() => result.current.savePendingRecipe());
+
+    expect(triggerRecipeCompletion).not.toHaveBeenCalled();
   });
 });
 
