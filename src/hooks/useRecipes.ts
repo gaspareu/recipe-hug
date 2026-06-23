@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
 import type { Recipe, RecipeFormData, Ingredient, Step } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
+import { triggerRecipeCompletion } from '@/lib/recipe-completion';
 
 // Helper pour parser les données Supabase vers notre type Recipe
 export function parseRecipe(data: Record<string, unknown>): Recipe {
@@ -85,7 +86,13 @@ export function useCreateRecipe() {
       if (!recipe.skipImageGeneration && !recipe.source_image_url) {
         triggerImageGeneration(createdRecipe.id, createdRecipe.title, createdRecipe.ingredients);
       }
-      
+
+      // Complétion description/tags en arrière-plan (best-effort, non bloquant)
+      triggerRecipeCompletion(createdRecipe.id, createdRecipe, () => {
+        queryClient.invalidateQueries({ queryKey: ['recipe', createdRecipe.id] });
+        queryClient.invalidateQueries({ queryKey: ['recipes'] });
+      });
+
       return createdRecipe;
     },
     onSuccess: () => {
