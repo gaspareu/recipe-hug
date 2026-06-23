@@ -19,7 +19,8 @@ Le bundler MCP résout les imports relatifs à partir des **noms de fichiers fou
     { "name": "functions/_shared/ai-config.ts", "content": "..." },
     { "name": "functions/_shared/ai-types.ts", "content": "..." },
     { "name": "functions/_shared/ai-providers.ts", "content": "..." },
-    { "name": "functions/_shared/decrypt-keys.ts", "content": "..." }
+    { "name": "functions/_shared/decrypt-keys.ts", "content": "..." },
+    { "name": "functions/_shared/context-format.ts", "content": "..." }
   ]
 }
 ```

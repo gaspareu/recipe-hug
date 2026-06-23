@@ -4,6 +4,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAIStreaming } from "../_shared/ai-providers.ts";
+import { formatPreferencesContext, formatFavoritesContext, formatRecipeContext } from "../_shared/context-format.ts";
 
 // Input validation schema
 const ContentPartSchema = z.union([
@@ -406,110 +407,6 @@ Exemples :
 - Apres une recherche : [suggestions]["Cuisiner la premiere","Voir le detail","Autre recherche"][/suggestions]
 - Apres un conseil : [suggestions]["Etape suivante","Temps de cuisson","Conseil texture"][/suggestions]`;
 
-interface UserPreferences {
-  taste_preferences?: {
-    liked_flavors?: string[];
-    disliked_flavors?: string[];
-    liked_ingredients?: string[];
-    disliked_ingredients?: string[];
-    special_ingredients?: string[];
-  };
-  dietary_constraints?: {
-    allergies?: string[];
-    diets?: string[];
-    restrictions?: string[];
-  };
-  kitchen_equipment?: {
-    available?: string[];
-    unavailable?: string[];
-  };
-  culinary_style?: {
-    favorite_cuisines?: string[];
-    favorite_techniques?: string[];
-    preferred_difficulty?: string;
-  };
-}
-
-// Format user preferences for context
-function formatPreferencesContext(prefs: UserPreferences | null | undefined): string {
-  if (!prefs) return "";
-  const sections: string[] = [];
-
-  const taste = prefs.taste_preferences || {};
-  if (taste.liked_flavors?.length > 0) sections.push(`Saveurs aimées : ${taste.liked_flavors.join(", ")}`);
-  if (taste.disliked_flavors?.length > 0) sections.push(`Saveurs évitées : ${taste.disliked_flavors.join(", ")}`);
-  if (taste.liked_ingredients?.length > 0) sections.push(`Ingrédients favoris : ${taste.liked_ingredients.join(", ")}`);
-  if (taste.disliked_ingredients?.length > 0) sections.push(`Ingrédients évités : ${taste.disliked_ingredients.join(", ")}`);
-  if (taste.special_ingredients?.length > 0) sections.push(`Aliments particuliers : ${taste.special_ingredients.join(", ")}`);
-
-  const diet = prefs.dietary_constraints || {};
-  if (diet.allergies?.length > 0) sections.push(`ALLERGIES : ${diet.allergies.join(", ")}`);
-  if (diet.diets?.length > 0) sections.push(`Régime : ${diet.diets.join(", ")}`);
-  if (diet.restrictions?.length > 0) sections.push(`Restrictions : ${diet.restrictions.join(", ")}`);
-
-  const equipment = prefs.kitchen_equipment || {};
-  if (equipment.available?.length > 0) sections.push(`Équipement disponible : ${equipment.available.join(", ")}`);
-  if (equipment.unavailable?.length > 0) sections.push(`Équipement non disponible : ${equipment.unavailable.join(", ")}`);
-
-  const style = prefs.culinary_style || {};
-  if (style.favorite_cuisines?.length > 0) sections.push(`Cuisines favorites : ${style.favorite_cuisines.join(", ")}`);
-  if (style.favorite_techniques?.length > 0) sections.push(`Techniques : ${style.favorite_techniques.join(", ")}`);
-  if (style.preferred_difficulty) sections.push(`Difficulté préférée : ${style.preferred_difficulty}`);
-
-  if (sections.length === 0) return "";
-  return `\n\n--- PROFIL UTILISATEUR (USAGE SILENCIEUX) ---
-IMPORTANT : Ces informations servent de contexte interne. Tu DOIS les respecter (allergies, restrictions, ingrédients évités) mais tu ne dois PAS les mentionner dans tes réponses sauf si l'utilisateur te pose explicitement la question sur ses préférences ou son profil.
-${sections.join("\n")}
---- FIN PROFIL ---`;
-}
-
-interface ActiveRecipeContext {
-  id: string;
-  title: string;
-  servings?: number;
-  season?: string;
-  ingredients?: Array<{ quantity?: string | number; unit?: string; name: string; category?: string }>;
-  steps?: Array<{ order: number; text: string; completed?: boolean }>;
-  completedSteps?: number[];
-}
-
-// Format active recipe context
-function formatRecipeContext(recipe: ActiveRecipeContext | null | undefined): string {
-  if (!recipe) return "";
-
-  let context = `\n\n--- RECETTE EN CONTEXTE ---\n`;
-  context += `ID: ${recipe.id}\n`;
-  context += `Titre : ${recipe.title}\n`;
-  if (recipe.servings) context += `Portions : ${recipe.servings}\n`;
-  if (recipe.season) context += `Saison : ${recipe.season}\n`;
-
-  if (recipe.ingredients?.length > 0) {
-    context += `\nIngrédients :\n`;
-    for (const ing of recipe.ingredients) {
-      const qty = ing.quantity ?? "";
-      const unit = ing.unit ?? "";
-      context += `- ${qty} ${unit} ${ing.name}${ing.category ? ` (${ing.category})` : ""}\n`;
-    }
-  }
-
-  if (recipe.steps?.length > 0) {
-    context += `\nÉtapes :\n`;
-    const sortedSteps = [...recipe.steps].sort((a, b) => a.order - b.order);
-    const completedSet = new Set(recipe.completedSteps || []);
-    for (const step of sortedSteps) {
-      const isDone = step.completed || completedSet.has(step.order);
-      const status = isDone ? "✓" : "○";
-      context += `${status} ${step.order}. ${step.text}\n`;
-    }
-    if (completedSet.size > 0) {
-      context += `\nProgression : ${completedSet.size}/${sortedSteps.length} étapes complétées\n`;
-    }
-  }
-
-  context += `--- FIN DE LA RECETTE ---`;
-  return context;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -571,7 +468,7 @@ serve(async (req) => {
       .from("user_culinary_preferences")
       .select("*")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     systemPrompt += formatPreferencesContext(prefs);
 
@@ -582,6 +479,15 @@ serve(async (req) => {
         `- ID: ${r.id} | "${r.title}" | Statut: ${r.status}${r.is_favorite ? " ⭐" : ""}`
       ).join("\n");
     }
+
+    // Fetch favorite recipes (with AI summary) for a richer, rotating context sample
+    const { data: favorites } = await supabaseClient
+      .from("recipes")
+      .select("id, title, ai_summary")
+      .eq("user_id", userId)
+      .eq("is_favorite", true);
+
+    systemPrompt += formatFavoritesContext(favorites);
 
     // Add active recipe context
     if (activeRecipe) {
