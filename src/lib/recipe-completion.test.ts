@@ -96,4 +96,15 @@ describe('triggerRecipeCompletion', () => {
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(onUpdated).not.toHaveBeenCalled();
   });
+
+  it("n'appelle pas onUpdated si l'update échoue", async () => {
+    mockInvoke.mockResolvedValue(ANALYSIS);
+    mockEq.mockResolvedValue({ error: { message: 'db down' } });
+    const onUpdated = vi.fn();
+
+    await expect(triggerRecipeCompletion('r1', BASE, onUpdated)).resolves.toBeUndefined();
+
+    expect(mockUpdate).toHaveBeenCalled();
+    expect(onUpdated).not.toHaveBeenCalled();
+  });
 });
