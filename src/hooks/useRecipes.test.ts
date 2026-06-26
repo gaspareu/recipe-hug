@@ -14,6 +14,10 @@ const { mockSupabase } = vi.hoisted(() => ({
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 
+vi.mock("@/lib/recipe-completion", () => ({
+  triggerRecipeCompletion: vi.fn(() => Promise.resolve()),
+}));
+
 import {
   parseRecipe,
   useRecipes,
@@ -23,6 +27,7 @@ import {
   useDeleteRecipe,
   useToggleFavorite,
 } from "./useRecipes";
+import { triggerRecipeCompletion } from "@/lib/recipe-completion";
 
 /** Reconfigure le mock supabase partagé pour le test courant. */
 function installSupabase(options: SupabaseMockOptions = {}) {
@@ -211,6 +216,28 @@ describe("useCreateRecipe", () => {
     const { result } = renderHook(() => useCreateRecipe(), { wrapper: createQueryWrapper() });
     await result.current.mutateAsync({ ...FORM });
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("useCreateRecipe — complétion", () => {
+  it("déclenche la complétion après la création", async () => {
+    installSupabase({
+      user: { id: "u1" },
+      result: { data: { id: "r-new", title: "Nouvelle", ingredients: [], steps: [] }, error: null },
+    });
+
+    const { result } = renderHook(() => useCreateRecipe(), {
+      wrapper: createQueryWrapper(createTestQueryClient()),
+    });
+
+    await result.current.mutateAsync({ ...FORM });
+
+    await waitFor(() => expect(triggerRecipeCompletion).toHaveBeenCalled());
+    expect(triggerRecipeCompletion).toHaveBeenCalledWith(
+      "r-new",
+      expect.objectContaining({ title: "Nouvelle" }),
+      expect.any(Function),
+    );
   });
 });
 

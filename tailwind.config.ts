@@ -15,12 +15,15 @@ export default {
   	},
   	extend: {
   		fontFamily: {
+  			// Police unique de l'app : Lora (alignée sur le DS Claude).
+  			// `solitreo` et `crimson` sont conservés comme alias pour ne pas
+  			// toucher les classes existantes — tous deux rendent désormais Lora.
   			solitreo: [
-  				'Solitreo',
-  				'cursive'
+  				'Lora',
+  				'serif'
   			],
   			crimson: [
-  				'Crimson Text',
+  				'Lora',
   				'serif'
   			],
   			sans: [
@@ -33,6 +36,7 @@ export default {
   				'Noto Color Emoji'
   			],
   			serif: [
+  				'Lora',
   				'ui-serif',
   				'Georgia',
   				'Cambria',
