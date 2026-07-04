@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { encryptValue, decryptValue, maskApiKey } from "./decrypt-keys.ts";
+import { encryptValue, decryptValue, maskApiKey, decryptProviderKeys } from "./decrypt-keys.ts";
 
 const TEST_SECRET = "test-encryption-secret-for-ci";
 
@@ -67,6 +67,29 @@ Deno.test("decrypt with wrong secret throws", async () => {
     threw = true;
   }
   assertEquals(threw, true, "Should throw on wrong secret");
+});
+
+Deno.test("decryptProviderKeys: fail-closed quand AI_KEYS_ENCRYPTION_SECRET absent", async () => {
+  Deno.env.delete("AI_KEYS_ENCRYPTION_SECRET");
+  const cipher = await encryptValue(ANTHROPIC_KEY, TEST_SECRET);
+  let threw = false;
+  try {
+    await decryptProviderKeys({ anthropic: cipher });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true, "Doit refuser de renvoyer des clés sans secret de déchiffrement");
+});
+
+Deno.test("decryptProviderKeys: déchiffre les clés quand le secret est présent", async () => {
+  Deno.env.set("AI_KEYS_ENCRYPTION_SECRET", TEST_SECRET);
+  try {
+    const cipher = await encryptValue(OPENAI_KEY, TEST_SECRET);
+    const result = await decryptProviderKeys({ openai: cipher });
+    assertEquals(result.openai, OPENAI_KEY);
+  } finally {
+    Deno.env.delete("AI_KEYS_ENCRYPTION_SECRET");
+  }
 });
 
 Deno.test("maskApiKey works correctly", () => {

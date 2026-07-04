@@ -30,6 +30,16 @@ serve(async (req) => {
       throw new Error("Missing required environment variables");
     }
 
+    // Fail-closed : sans secret de chiffrement, on refuse de traiter les clés
+    // (jamais de stockage/lecture en clair).
+    if (!ENCRYPTION_SECRET) {
+      console.error("manage-ai-keys: AI_KEYS_ENCRYPTION_SECRET absent");
+      return new Response(
+        JSON.stringify({ error: "server_misconfigured", message: "Chiffrement indisponible" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -62,9 +72,7 @@ serve(async (req) => {
         const newKey = provider_api_keys?.[p];
         if (newKey && typeof newKey === "string" && newKey.trim()) {
           // New key provided - encrypt it
-          encryptedKeys[p] = ENCRYPTION_SECRET
-            ? await encryptValue(newKey.trim(), ENCRYPTION_SECRET)
-            : newKey.trim();
+          encryptedKeys[p] = await encryptValue(newKey.trim(), ENCRYPTION_SECRET);
         } else if (existingKeys[p]) {
           // Keep existing encrypted value
           encryptedKeys[p] = existingKeys[p];
@@ -74,9 +82,7 @@ serve(async (req) => {
       // Handle legacy api_key
       let finalApiKey = existing?.api_key || null;
       if (api_key && typeof api_key === "string" && api_key.trim()) {
-        finalApiKey = ENCRYPTION_SECRET
-          ? await encryptValue(api_key.trim(), ENCRYPTION_SECRET)
-          : api_key.trim();
+        finalApiKey = await encryptValue(api_key.trim(), ENCRYPTION_SECRET);
       }
 
       const payload = {
@@ -103,14 +109,12 @@ serve(async (req) => {
         if (newKey && typeof newKey === "string" && newKey.trim()) {
           maskedKeys[p] = { has_key: true, masked: maskApiKey(newKey.trim()) };
         } else if (existingKeys[p]) {
-          // Decrypt existing to mask it
+          // Decrypt existing to mask it (repli plaintext pour les valeurs legacy)
           let plain = existingKeys[p];
-          if (ENCRYPTION_SECRET) {
-            try {
-              plain = await decryptValue(existingKeys[p], ENCRYPTION_SECRET);
-            } catch {
-              // Already plaintext
-            }
+          try {
+            plain = await decryptValue(existingKeys[p], ENCRYPTION_SECRET);
+          } catch {
+            // Valeur legacy déjà en clair
           }
           maskedKeys[p] = { has_key: true, masked: maskApiKey(plain) };
         } else {
@@ -141,16 +145,10 @@ serve(async (req) => {
         const rawKey = keys[p];
         if (rawKey) {
           let plain = rawKey;
-          if (ENCRYPTION_SECRET) {
-            try {
-              plain = await decryptValue(rawKey, ENCRYPTION_SECRET);
-              console.log(`[manage-ai-keys GET] ${p}: decrypted OK`);
-            } catch (err) {
-              console.warn(`[manage-ai-keys GET] ${p}: decrypt FAILED, using as plaintext`);
-              // Already plaintext
-            }
-          } else {
-            console.warn(`[manage-ai-keys GET] ${p}: no ENCRYPTION_SECRET, using raw key`);
+          try {
+            plain = await decryptValue(rawKey, ENCRYPTION_SECRET);
+          } catch {
+            // Valeur legacy déjà en clair
           }
           maskedKeys[p] = { has_key: true, masked: maskApiKey(plain) };
         } else {

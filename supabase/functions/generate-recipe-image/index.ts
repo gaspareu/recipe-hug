@@ -98,9 +98,10 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    // Détail loggé côté serveur uniquement — jamais renvoyé au client
+    // (un message d'erreur brut peut contenir des URL/secrets).
     console.error("Error generating recipe image:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ error: "Échec de la génération de l'image" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
