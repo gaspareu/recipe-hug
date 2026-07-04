@@ -92,7 +92,7 @@ Projet : `ifpqsyyvytfpossqycpc`
 ## Génération d'images — détails techniques
 
 - **Modèle** : `gemini-2.5-flash-image` (API native, pas l'endpoint OpenAI-compat)
-- **Endpoint** : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key={GEMINI_API_KEY}`
+- **Endpoint** : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent` — clé via l'en-tête `x-goog-api-key` (jamais en query string : une erreur réseau exposerait l'URL, donc la clé)
 - **Format requête** : `{ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ["IMAGE", "TEXT"] } }`
 - **Format réponse** : `candidates[0].content.parts[].inlineData.data` (base64) + `inlineData.mimeType`
 - **Fallback** : si l'utilisateur a configuré un agent config `generate_image` avec DALL-E 3, c'est utilisé à la place

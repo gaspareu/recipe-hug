@@ -1,5 +1,33 @@
-import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { transformAnthropicStreamToOpenAI } from "./ai-providers.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { callAIStreaming, transformAnthropicStreamToOpenAI } from "./ai-providers.ts";
+import { AIConfig } from "./ai-types.ts";
+
+Deno.test("callAIStreaming (gemini natif): la clé passe par l'en-tête x-goog-api-key, jamais dans l'URL", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = "";
+  let capturedHeaders: Record<string, string> = {};
+
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    capturedUrl = String(input);
+    capturedHeaders = (init?.headers ?? {}) as Record<string, string>;
+    return Promise.resolve(
+      new Response(JSON.stringify({ candidates: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  }) as typeof fetch;
+
+  const config: AIConfig = { provider: "gemini", model: "gemini-2.5-flash", apiKey: "SECRET_GEMINI_KEY", endpoint: "" };
+  try {
+    await callAIStreaming(config, [{ role: "user", content: "salut" }], { stream: false });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert(!capturedUrl.includes("SECRET_GEMINI_KEY"), `La clé ne doit jamais apparaître dans l'URL : ${capturedUrl}`);
+  assertEquals(capturedHeaders["x-goog-api-key"], "SECRET_GEMINI_KEY");
+});
 
 /** Construit une Response SSE imitant le flux natif de l'API Anthropic. */
 function anthropicSSE(events: object[]): Response {

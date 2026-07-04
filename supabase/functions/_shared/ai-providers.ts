@@ -161,14 +161,15 @@ async function callGeminiStreaming(config: AIConfig, messages: ChatMessage[], op
     }];
   }
 
-  // Use native Gemini endpoint (not OpenAI-compat) for streaming
-  const endpoint = options.stream
-    ? `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?key=${config.apiKey}`
-    : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
+  // Use native Gemini endpoint (not OpenAI-compat) for streaming.
+  // Clé via l'en-tête `x-goog-api-key`, jamais en query string (une erreur
+  // réseau bas niveau exposerait l'URL — donc la clé — dans son message).
+  const action = options.stream ? "streamGenerateContent" : "generateContent";
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:${action}`;
 
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": config.apiKey },
     body: JSON.stringify(body),
   });
 

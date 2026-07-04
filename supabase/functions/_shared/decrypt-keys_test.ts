@@ -69,6 +69,26 @@ Deno.test("decrypt with wrong secret throws", async () => {
   assertEquals(threw, true, "Should throw on wrong secret");
 });
 
+Deno.test("encryptValue: refuse un secret vide (fail-closed au choke-point crypto)", async () => {
+  let threw = false;
+  try {
+    await encryptValue(ANTHROPIC_KEY, "");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true, "Ne doit jamais chiffrer avec un secret vide");
+});
+
+Deno.test("decryptValue: refuse un secret vide", async () => {
+  let threw = false;
+  try {
+    await decryptValue("nimporte", "");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true, "Ne doit jamais déchiffrer avec un secret vide");
+});
+
 Deno.test("decryptProviderKeys: fail-closed quand AI_KEYS_ENCRYPTION_SECRET absent", async () => {
   Deno.env.delete("AI_KEYS_ENCRYPTION_SECRET");
   const cipher = await encryptValue(ANTHROPIC_KEY, TEST_SECRET);

@@ -3,6 +3,11 @@ const ALGORITHM = "AES-GCM";
 const IV_LENGTH = 12;
 
 async function deriveKey(secret: string): Promise<CryptoKey> {
+  // Fail-closed au choke-point : jamais de clé dérivée d'un secret vide
+  // (sinon chiffrement/déchiffrement silencieux avec une clé prévisible).
+  if (!secret) {
+    throw new Error("Secret de chiffrement manquant");
+  }
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
   return crypto.subtle.importKey("raw", hash, { name: ALGORITHM }, false, ["encrypt", "decrypt"]);
 }

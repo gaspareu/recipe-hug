@@ -70,10 +70,12 @@ serve(async (req) => {
     try {
       switch (provider) {
         case "gemini": {
-          // Test Gemini API with a simple models list request
+          // Test Gemini API with a simple models list request.
+          // Clé via l'en-tête `x-goog-api-key`, jamais en query string
+          // (une erreur réseau exposerait l'URL, donc la clé).
           const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models?key=${api_key}`,
-            { method: "GET" }
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            { method: "GET", headers: { "x-goog-api-key": api_key } }
           );
           
           if (response.ok) {
