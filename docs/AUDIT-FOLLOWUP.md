@@ -42,11 +42,16 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
 
 ### B. Chantiers « altitude » (dette de conception révélée par `/simplify`)
 
-1. **Gemini streaming** — `transformGeminiStreamToOpenAI` (`_shared/ai-providers.ts`) avale
-   encore les erreurs (`catch {}`), n'émet pas de `finish_reason` par outil (→ multi-outils
-   impossible pour Gemini) et n'est pas incrémental (regex sur tableau complet). Extraire un
-   **builder de chunk OpenAI partagé** (`openAIContentChunk`/`openAIToolCallChunk`/`openAIFinishChunk` + `sse()`)
-   consommé par les deux transforms, et un chemin de surfaçage d'erreur commun (détection par-provider).
+1. **Gemini streaming — ✅ fait (branche `refactor/gemini-streaming`).** Bascule sur le flux
+   SSE natif de Gemini (`streamGenerateContent?alt=sse`) → parsing incrémental ligne par ligne
+   (fini le regex sur tableau complet). Erreurs mi-stream propagées au client via un
+   `surfaceStreamError` commun (fini le `catch {}`) ; `finish_reason: "tool_calls"` émis par
+   `functionCall` → les outils Gemini s'exécutent enfin (multi-outils OK). Builders de chunk OpenAI
+   partagés (`openAIContentChunk`/`openAIToolCallChunk`/`openAIFinishChunk` + `sse()`) et boucle SSE
+   partagée (`transformSSEToOpenAI`, détection d'erreur par-provider) consommés par les deux
+   transforms. Filet : 14 tests Deno (dont 6 Gemini) verts + `deno check` OK. `/security-review` :
+   0 finding (clé toujours dans l'en-tête). `/simplify` : boucle SSE dupliquée factorisée.
+   **⚠️ Redéploiement edge function requis au merge.** Prochaine étape : §B.2 (`useChatEngine.onToolCall`).
 2. **`useChatEngine.onToolCall`** — injecter `activeRecipe` en argument (par symétrie avec
    `buildRequest`) ; l'engine tient déjà un `activeRecipeRef` interne inutilisé. Supprimerait
    le contournement `activeRecipeRef` dupliqué dans `useHomeChat` **et** `useRecipeChat`.
