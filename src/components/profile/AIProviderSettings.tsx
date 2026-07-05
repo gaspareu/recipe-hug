@@ -511,7 +511,7 @@ const AgentConfigRow = ({
 };
 
 export function AIProviderSettings() {
-  const { settings, isLoading, updateSettings, validateApiKey, maskedKeys, hasApiKeyForProvider } = useAISettings();
+  const { settings, isLoading, updateSettings, validateApiKey, hasApiKeyForProvider, getMaskedKeyForProvider } = useAISettings();
 
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('anthropic');
   const [providerApiKeys, setProviderApiKeys] = useState<ProviderApiKeys>({});
@@ -687,8 +687,9 @@ export function AIProviderSettings() {
       // Clear typed keys after successful save (they're now encrypted in DB)
       setProviderApiKeys({});
       toast.success('Configuration IA enregistrée');
-    } catch (error) {
-      console.error('Error saving AI settings:', error);
+    } catch {
+      // Le log détaillé est fait par updateSettings.onError (source unique) ;
+      // ici on surface l'échec à l'utilisateur.
       toast.error("Échec de l'enregistrement de la configuration IA", {
         description: 'Vérifie ta connexion et réessaie.',
       });
@@ -768,8 +769,8 @@ export function AIProviderSettings() {
                   provider={provider}
                   isDefault={selectedProvider === provider}
                   apiKey={provider === 'anthropic' ? '' : (providerApiKeys[provider as Exclude<AIProvider, 'anthropic'>] || '')}
-                  hasExistingKey={provider !== 'anthropic' && !!maskedKeys?.[provider as Exclude<AIProvider, 'anthropic'>]?.has_key}
-                  maskedKey={provider !== 'anthropic' ? maskedKeys?.[provider as Exclude<AIProvider, 'anthropic'>]?.masked : null}
+                  hasExistingKey={provider !== 'anthropic' && hasApiKeyForProvider(provider)}
+                  maskedKey={provider !== 'anthropic' ? getMaskedKeyForProvider(provider) : null}
                   onApiKeyChange={(key) => handleApiKeyChange(provider as Exclude<AIProvider, 'anthropic'>, key)}
                   onValidate={() => handleValidateKey(provider as Exclude<AIProvider, 'anthropic'>)}
                   onSetDefault={() => setSelectedProvider(provider)}

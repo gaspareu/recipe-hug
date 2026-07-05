@@ -250,8 +250,9 @@ export function CulinaryPreferencesContent() {
         setLocalPrefs(null);
         toast.success('Préférences enregistrées');
       },
-      onError: (error) => {
-        console.error('Error saving preferences', error);
+      onError: () => {
+        // Log détaillé fait par updateMutation.onError (source unique) ;
+        // ici on surface l'échec à l'utilisateur.
         toast.error("Échec de l'enregistrement des préférences", {
           description: 'Vérifie ta connexion et réessaie.',
         });

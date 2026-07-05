@@ -51,7 +51,6 @@ function makeSettings(overrides: Partial<AISettings> = {}): AISettings {
     api_key: null,
     preferred_model: null,
     agent_configs: null,
-    provider_api_keys: {},
     created_at: '',
     updated_at: '',
     ...overrides,
