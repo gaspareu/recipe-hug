@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { callAIStreaming, transformAnthropicStreamToOpenAI } from "./ai-providers.ts";
+import { callAIStreaming, transformAnthropicStreamToOpenAI, transformGeminiStreamToOpenAI } from "./ai-providers.ts";
 import { AIConfig } from "./ai-types.ts";
 
 Deno.test("callAIStreaming (gemini natif): la clé passe par l'en-tête x-goog-api-key, jamais dans l'URL", async () => {
@@ -27,6 +27,31 @@ Deno.test("callAIStreaming (gemini natif): la clé passe par l'en-tête x-goog-a
 
   assert(!capturedUrl.includes("SECRET_GEMINI_KEY"), `La clé ne doit jamais apparaître dans l'URL : ${capturedUrl}`);
   assertEquals(capturedHeaders["x-goog-api-key"], "SECRET_GEMINI_KEY");
+});
+
+Deno.test("callAIStreaming (gemini natif, streaming): la requête demande le flux SSE (alt=sse)", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = "";
+
+  globalThis.fetch = ((input: string | URL | Request, _init?: RequestInit) => {
+    capturedUrl = String(input);
+    return Promise.resolve(
+      new Response(new Blob([""]).stream(), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    );
+  }) as typeof fetch;
+
+  const config: AIConfig = { provider: "gemini", model: "gemini-2.5-flash", apiKey: "K", endpoint: "" };
+  try {
+    await callAIStreaming(config, [{ role: "user", content: "salut" }], { stream: true });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert(capturedUrl.includes("streamGenerateContent"), `endpoint streaming attendu : ${capturedUrl}`);
+  assert(capturedUrl.includes("alt=sse"), `Le streaming doit demander le flux SSE : ${capturedUrl}`);
 });
 
 /** Construit une Response SSE imitant le flux natif de l'API Anthropic. */
@@ -149,6 +174,91 @@ Deno.test("transform: chaque tool_use émet son propre finish_reason (le consomm
 Deno.test("transform: termine toujours par [DONE]", async () => {
   const res = transformAnthropicStreamToOpenAI(anthropicSSE([
     { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "ok" } },
+  ]));
+  const text = await res.text();
+  assertEquals(text.trimEnd().endsWith("data: [DONE]"), true);
+});
+
+// ============================================================
+// Gemini (flux SSE natif : `data: {GenerateContentResponse}`)
+// ============================================================
+
+/** Construit une Response SSE imitant le flux natif de Gemini (`?alt=sse`). */
+function geminiSSE(chunks: object[]): Response {
+  const body = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("");
+  return new Response(new Blob([body]).stream(), {
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
+Deno.test("transform gemini: les parts de texte deviennent des deltas de contenu OpenAI", async () => {
+  const res = transformGeminiStreamToOpenAI(geminiSSE([
+    { candidates: [{ content: { role: "model", parts: [{ text: "Bon" }] } }] },
+    { candidates: [{ content: { role: "model", parts: [{ text: "jour" }] } }] },
+  ]));
+
+  const chunks = await readOpenAIChunks(res);
+  const content = chunks.map((c) => c.choices[0].delta.content).filter(Boolean).join("");
+  assertEquals(content, "Bonjour");
+});
+
+Deno.test("transform gemini: un functionCall émet nom, arguments et finish_reason tool_calls", async () => {
+  const res = transformGeminiStreamToOpenAI(geminiSSE([
+    { candidates: [{ content: { role: "model", parts: [{ functionCall: { name: "save_recipe", args: { title: "Tarte", servings: 4 } } }] }, finishReason: "STOP" }] },
+  ]));
+
+  const chunks = await readOpenAIChunks(res);
+
+  const names = chunks.flatMap((c) => c.choices[0].delta.tool_calls ?? []).map((t) => t.function?.name).filter(Boolean);
+  assertEquals(names, ["save_recipe"]);
+
+  const args = chunks.flatMap((c) => c.choices[0].delta.tool_calls ?? []).map((t) => t.function?.arguments ?? "").join("");
+  assertEquals(JSON.parse(args), { title: "Tarte", servings: 4 });
+
+  // Le front s'appuie sur finish_reason === "tool_calls" pour exécuter l'outil
+  // (aujourd'hui absent côté Gemini → outils jamais exécutés).
+  const finish = chunks.map((c) => c.choices[0].finish_reason).filter(Boolean);
+  assertEquals(finish, ["tool_calls"]);
+});
+
+Deno.test("transform gemini: deux functionCall reçoivent des index distincts + un finish_reason chacun", async () => {
+  const res = transformGeminiStreamToOpenAI(geminiSSE([
+    { candidates: [{ content: { role: "model", parts: [{ functionCall: { name: "navigate", args: { destination: "home" } } }] } }] },
+    { candidates: [{ content: { role: "model", parts: [{ functionCall: { name: "get_preferences", args: {} } }] }, finishReason: "STOP" }] },
+  ]));
+
+  const chunks = await readOpenAIChunks(res);
+  const toolCalls = chunks.flatMap((c) => c.choices[0].delta.tool_calls ?? []);
+
+  const nameAt = (i: number) => toolCalls.find((t) => t.index === i && t.function?.name)?.function?.name;
+  const argsAt = (i: number) => toolCalls.filter((t) => t.index === i).map((t) => t.function?.arguments ?? "").join("");
+  assertEquals(nameAt(0), "navigate");
+  assertEquals(nameAt(1), "get_preferences");
+  assertEquals(JSON.parse(argsAt(0)), { destination: "home" });
+  assertEquals(JSON.parse(argsAt(1)), {});
+
+  const finish = chunks.map((c) => c.choices[0].finish_reason).filter(Boolean);
+  assertEquals(finish, ["tool_calls", "tool_calls"]);
+});
+
+Deno.test("transform gemini: une erreur mi-stream fait échouer le flux (pas de succès silencieux)", async () => {
+  const res = transformGeminiStreamToOpenAI(geminiSSE([
+    { candidates: [{ content: { role: "model", parts: [{ text: "Bonj" }] } }] },
+    { error: { code: 503, message: "The model is overloaded.", status: "UNAVAILABLE" } },
+  ]));
+
+  let threw = false;
+  try {
+    await res.text();
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true, "Le flux doit être en erreur, pas clôturé proprement par [DONE]");
+});
+
+Deno.test("transform gemini: termine toujours par [DONE]", async () => {
+  const res = transformGeminiStreamToOpenAI(geminiSSE([
+    { candidates: [{ content: { role: "model", parts: [{ text: "ok" }] } }] },
   ]));
   const text = await res.text();
   assertEquals(text.trimEnd().endsWith("data: [DONE]"), true);
