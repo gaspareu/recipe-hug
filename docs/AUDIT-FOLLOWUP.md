@@ -1,0 +1,114 @@
+# Suivi d'audit — recipe-hug
+
+> Audit complet réalisé par revue multi-agents (9 lots : sécurité backend, SSRF,
+> DB/RLS, cœur IA, hooks, UI, tests). Ce document liste **ce qui a été traité** et
+> **ce qui reste**, avec un prompt prêt à coller pour reprendre en session fraîche.
+
+## ✅ Traité — branche `fix/high-fuites-securite` (PR)
+
+Les **9 findings HIGH** ont été corrigés en TDD, chaque itération conclue par
+`/security-review` (aucune nouvelle vuln) + `/simplify` :
+
+| # | Finding | Correctif |
+|---|---------|-----------|
+| 1 | Fail-open du chiffrement des clés API | fail-closed (`manage-ai-keys` 500 ; `decryptProviderKeys` + `deriveKey` lèvent si secret absent/vide) |
+| 2 | Fuite `GEMINI_API_KEY` (3 chemins natifs) | clé via en-tête `x-goog-api-key` ; `generate-recipe-image` ne renvoie plus `error.message` brut |
+| 3 | Micro `getUserMedia` jamais arrêté (RGPD) | `stop()` sur les pistes du flux de pré-vol |
+| 4 | Faux succès des préférences (chat) | `updatePreferencesAsync` (mutateAsync) dans les hooks de chat |
+| 5 | Doublon de recette (closure périmée) | `activeRecipeRef` synchronisé dans `get_recipe_details` |
+| 8 | Erreurs Anthropic mi-stream avalées | `controller.error` propage l'échec au client |
+| 9 | Tool-calling parallèle écrasé sur index 0 | index de tool_call croissant (finish_reason par bloc conservé) |
+| 6 | Détection de clé cassée + cause racine | `hasApiKeyForProvider`/`maskedKeys` ; champ trompeur `AISettings.provider_api_keys` supprimé |
+| 7 | Échecs de sauvegarde silencieux | `toast.error`/`toast.success` (AIProviderSettings, CulinaryPreferencesContent) |
+| — | Code mort (~1360 l) | 6 composants non montés supprimés (RecipeCard, RecipeGridItem, WebhookIntegration, CulinaryPreferencesEditor, ThemeSelector) |
+
+**⚠️ Déploiement** : les edge functions modifiées (`ai-providers`, `manage-ai-keys`,
+`generate-recipe-image`, `validate-ai-key`, `decrypt-keys`, `generate-image`) ne
+sont actives qu'après redéploiement Supabase (auto au merge sur `main`, ou MCP/CLI en hotfix).
+
+---
+
+## 🔜 Reste à faire
+
+### A. Découpage `AIProviderSettings` (853 l > limite projet 800) — *prochaine étape*
+
+Refacto mécanique pur (comportement inchangé), **protégé par `AIProviderSettings.test.tsx`**.
+Sous-composants déjà définis inline dans le fichier, à extraire vers des fichiers dédiés :
+`ProviderBadge`, `ApiKeyStatusIndicator`, `CapabilityBadge`, `ProviderApiKeyInput`,
+`ProviderCard`, `AgentConfigRow`. Extraire `ProviderCard` + `AgentConfigRow` suffit à repasser sous 800.
+
+### B. Chantiers « altitude » (dette de conception révélée par `/simplify`)
+
+1. **Gemini streaming** — `transformGeminiStreamToOpenAI` (`_shared/ai-providers.ts`) avale
+   encore les erreurs (`catch {}`), n'émet pas de `finish_reason` par outil (→ multi-outils
+   impossible pour Gemini) et n'est pas incrémental (regex sur tableau complet). Extraire un
+   **builder de chunk OpenAI partagé** (`openAIContentChunk`/`openAIToolCallChunk`/`openAIFinishChunk` + `sse()`)
+   consommé par les deux transforms, et un chemin de surfaçage d'erreur commun (détection par-provider).
+2. **`useChatEngine.onToolCall`** — injecter `activeRecipe` en argument (par symétrie avec
+   `buildRequest`) ; l'engine tient déjà un `activeRecipeRef` interne inutilisé. Supprimerait
+   le contournement `activeRecipeRef` dupliqué dans `useHomeChat` **et** `useRecipeChat`.
+3. **Helpers partagés** — `notifySaveError(label)`/`notifySaveSuccess(label)` (aligner `useAsyncAction`
+   sur `toast.error`/`toast.success`) ; centraliser `json()` + `corsHeaders` + un guard
+   `requireEncryptionSecret()` dans `supabase/functions/_shared/` (aujourd'hui dupliqués/inline).
+
+### C. Sécurité MEDIUM (review initiale)
+
+- **`share-recipe`** : oracle d'énumération de comptes (réponse différente selon existence) +
+  injection de recette non sollicitée dans le compte d'autrui → uniformiser la réponse, tout traiter en « pending ».
+- **`claim-shares`** : confiance à un email/téléphone non vérifié → vérifier `email_confirmed_at`/`phone_confirmed_at`.
+- **DB/RLS** : `verify_jwt = false` étendu à 10 fonctions (ne garder que `webhook-recipe`) ;
+  `webhook_token` stocké en clair (stocker un hash) ; policy storage du bucket `recipes`
+  incohérente (INSERT dossier public partagé, UPDATE/DELETE jamais satisfaits) ;
+  vues `*_safe` sans `REVOKE` colonne (defense-in-depth) ; buckets publics (`avatars` = PII).
+- **Validation des sorties LLM** (règle « ne jamais faire confiance aux données externes ») :
+  `analyze-recipe` parse la sortie sans schéma ; payloads d'outils castés sans Zod dans les hooks de chat.
+
+### D. Correctness / conventions MEDIUM (review initiale)
+
+- `useVoiceMode` : pas de cleanup au démontage (Scribe reste connecté, file audio continue).
+- `savePendingRecipe` (`useHomeChat`) : réimplémente les mutations hors TanStack Query, n'invalide
+  pas `['recipe', id]` après update.
+- `useWebhookToken` : hors TanStack Query + `isLoading` bloqué à `true` si non connecté.
+- `useChatEngine` : `AbortController` non abandonné au démontage.
+- `useRecipeVersions.useRestoreVersion` : n'invalide pas `['recipes']`.
+- `StepsEditor.tsx:57` : `steps.sort()` **mute la prop** pendant le rendu → `[...steps].sort()`.
+- `MealPlanning`/`Profile` : appels `supabase` directs → extraire des hooks (`useMealPlans`, `useProfile`).
+- `Auth.tsx` : messages d'erreur calculés mais jamais affichés (uniquement `console.error`).
+- Token webhook affiché en clair dans les exemples/`.md` de `WebhookIntegrationContent`.
+
+### E. Tests (review initiale) — zones critiques non couvertes
+
+- **0 test** : `resolveAIConfig` (routage provider + clé — CRITIQUE), `webhook-recipe` (endpoint externe),
+  `manage-ai-keys` (chiffrement).
+- Partiels : `decryptProviderKeys` (branche repli plaintext), transform Gemini + builders de requête, `useAuth`.
+- **Aucun E2E** malgré `@playwright/test` installé (auth, création via chat, liste de courses).
+
+### F. LOW (durcissement)
+
+CORS wildcard → restreindre à `APP_URL` ; rate limiting (webhook, validate-ai-key, share-recipe) ;
+KDF sans sel (documenter/imposer un secret 32 o aléatoire, idéalement HKDF) ; `aria-label` sur
+boutons-icônes ; `NotFound` en anglais + `<a>` au lieu de `<Link>` ; duplication des constantes
+tags/saisons/statuts entre pages/composants ; `ChatInterface` (539 l) à découper.
+
+---
+
+## Prompt de reprise (à coller en nouvelle session)
+
+```
+Contexte : la branche fix/high-fuites-securite a corrigé les 9 findings HIGH d'un
+audit (voir docs/AUDIT-FOLLOWUP.md). Enchaîne maintenant, en TDD, avec une passe
+/security-review + /simplify en fin de chaque itération, dans cet ordre :
+
+1. Découper src/components/profile/AIProviderSettings.tsx (853 l > 800) : extraire
+   les sous-composants inline (ProviderCard, AgentConfigRow au minimum) en fichiers
+   dédiés, sans changer le comportement. AIProviderSettings.test.tsx garde le filet.
+2. Chantier Gemini streaming + builder de chunk OpenAI partagé, et gestion d'erreur
+   mi-stream commune aux deux transforms (transformGeminiStreamToOpenAI avale encore
+   les erreurs). Voir docs/AUDIT-FOLLOWUP.md §B.1.
+3. Injecter activeRecipe dans onToolCall de useChatEngine pour supprimer le
+   contournement activeRecipeRef dupliqué (§B.2).
+
+Puis attaquer la sécurité MEDIUM (§C) : share-recipe (énumération), claim-shares
+(email non vérifié), durcissement DB (verify_jwt, webhook_token haché, policy storage).
+Rappel : redéployer les edge functions modifiées après merge.
+```
