@@ -30,12 +30,15 @@ sont actives qu'après redéploiement Supabase (auto au merge sur `main`, ou MCP
 
 ## 🔜 Reste à faire
 
-### A. Découpage `AIProviderSettings` (853 l > limite projet 800) — *prochaine étape*
+### A. Découpage `AIProviderSettings` — ✅ fait (branche `refactor/aiprovidersettings-decoupage`)
 
-Refacto mécanique pur (comportement inchangé), **protégé par `AIProviderSettings.test.tsx`**.
-Sous-composants déjà définis inline dans le fichier, à extraire vers des fichiers dédiés :
-`ProviderBadge`, `ApiKeyStatusIndicator`, `CapabilityBadge`, `ProviderApiKeyInput`,
-`ProviderCard`, `AgentConfigRow`. Extraire `ProviderCard` + `AgentConfigRow` suffit à repasser sous 800.
+853 l → **360 l** (< 800). Les 6 sous-composants inline extraits vers
+`src/components/profile/ai-provider/` : `ProviderBadge`, `ApiKeyStatusIndicator`,
+`CapabilityBadge`, `ProviderApiKeyInput`, `ProviderCard`, `AgentConfigRow`. Comportement
+inchangé — filet `AIProviderSettings.test.tsx` 2/2 + suite 382/382 vertes, `build` OK.
+`/security-review` : 0 finding. `/simplify` : tables statiques des badges hissées en
+constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`, helper
+`hasKeyForProvider` — relève de §B, non traité ici). **Prochaine étape : §B.1 (Gemini streaming).**
 
 ### B. Chantiers « altitude » (dette de conception révélée par `/simplify`)
 
