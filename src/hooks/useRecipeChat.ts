@@ -1,9 +1,10 @@
 import { useCallback, useRef } from 'react';
 
 import { useRecipes } from './useRecipes';
-import { useUserPreferences, UserCulinaryPreferences } from './useUserPreferences';
+import { useUserPreferences } from './useUserPreferences';
 import { useChatEngine, ActiveRecipeData, ChatEngineConfig, PendingRecipe, ToolCallAction } from './useChatEngine';
 import type { Recipe } from '@/types/recipe';
+import { applyPreferenceOperations, type PreferenceOperation } from '@/lib/preference-operations';
 
 // Re-export types
 export type { ChatMessage, MessageContent } from './useChatEngine';
@@ -58,20 +59,9 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
       case 'get_preferences': return preferences;
 
       case 'update_preferences': {
-        const operations = action.data.operations as Array<{
-          operation: 'add' | 'remove' | 'set';
-          category: 'taste_preferences' | 'kitchen_equipment' | 'culinary_style' | 'dietary_constraints';
-          field: string; values?: string[]; value?: string | null;
-        }>;
+        const operations = action.data.operations as PreferenceOperation[];
         if (!preferences) return { error: 'No preferences loaded' };
-        const updatedPrefs = JSON.parse(JSON.stringify(preferences)) as UserCulinaryPreferences;
-        for (const op of operations) {
-          const category = updatedPrefs[op.category] as unknown as Record<string, string[] | string | null>;
-          if (!category) continue;
-          if (op.operation === 'add' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = [...new Set([...c, ...op.values])]; }
-          else if (op.operation === 'remove' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = c.filter((v: string) => !op.values!.includes(v)); }
-          else if (op.operation === 'set') { category[op.field] = op.value; }
-        }
+        const updatedPrefs = applyPreferenceOperations(preferences, operations);
         try { await updatePreferencesAsync(updatedPrefs); return { success: true, updatedPreferences: updatedPrefs }; }
         catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }

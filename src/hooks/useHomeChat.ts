@@ -2,12 +2,13 @@ import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useRecipes } from './useRecipes';
-import { useUserPreferences, UserCulinaryPreferences } from './useUserPreferences';
+import { useUserPreferences } from './useUserPreferences';
 import { supabase } from '@/integrations/supabase/client';
 import { useChatEngine, ActiveRecipeData, ChatEngineConfig, PendingRecipe, ToolCallAction } from './useChatEngine';
 import type { Ingredient } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
 import { triggerRecipeCompletion } from '@/lib/recipe-completion';
+import { applyPreferenceOperations, type PreferenceOperation } from '@/lib/preference-operations';
 
 // Re-export types
 export type { ChatMessage, MessageContent, PendingRecipe, ActiveRecipeData, RecipeCard } from './useChatEngine';
@@ -37,10 +38,12 @@ export function useHomeChat() {
   // Mode cuisine : recette en cours de préparation en plein écran (null = fermé).
   const [cookingRecipeId, setCookingRecipeId] = useState<string | null>(null);
 
-  // Reflète toujours la recette active courante. handleToolCall est mémoïsé
-  // sans `engine` en dépendance (dépendance circulaire) : lire `engine.activeRecipe`
-  // par closure renverrait la valeur périmée du premier rendu (null) et une
-  // modification serait enregistrée comme nouvelle recette. Le ref reste à jour.
+  // Recette active courante. handleToolCall est mémoïsé sans `engine` en
+  // dépendance (dépendance circulaire) : lire `engine.activeRecipe` par closure
+  // renverrait la valeur périmée du premier rendu (null), et une modification
+  // serait enregistrée comme nouvelle recette. Le ref est posé dès
+  // `get_recipe_details` (seule source d'une recette active), de façon synchrone
+  // — avant l'auto-retry `extract_modified_recipe` qui survient dans le même tour.
   const activeRecipeRef = useRef<ActiveRecipeData | null>(null);
 
   const handleToolCall = useCallback(async (action: ToolCallAction): Promise<unknown> => {
@@ -134,20 +137,9 @@ export function useHomeChat() {
       case 'get_preferences': return preferences;
 
       case 'update_preferences': {
-        const operations = action.data.operations as Array<{
-          operation: 'add' | 'remove' | 'set';
-          category: 'taste_preferences' | 'kitchen_equipment' | 'culinary_style' | 'dietary_constraints';
-          field: string; values?: string[]; value?: string | null;
-        }>;
+        const operations = action.data.operations as PreferenceOperation[];
         if (!preferences) { console.error('Impossible de charger les préférences'); return { error: 'No preferences loaded' }; }
-        const updatedPrefs = JSON.parse(JSON.stringify(preferences)) as UserCulinaryPreferences;
-        for (const op of operations) {
-          const category = updatedPrefs[op.category] as unknown as Record<string, string[] | string | null>;
-          if (!category) continue;
-          if (op.operation === 'add' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = [...new Set([...c, ...op.values])]; }
-          else if (op.operation === 'remove' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = c.filter((v: string) => !op.values!.includes(v)); }
-          else if (op.operation === 'set') { category[op.field] = op.value; }
-        }
+        const updatedPrefs = applyPreferenceOperations(preferences, operations);
         try { await updatePreferencesAsync(updatedPrefs); return { success: true, updatedPreferences: updatedPrefs }; }
         catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }
@@ -181,9 +173,6 @@ export function useHomeChat() {
     onToolCall: handleToolCall,
     buildRequest,
   });
-
-  // Garde le ref synchronisé avec la recette active (lue par handleToolCall).
-  if (engine.activeRecipe) activeRecipeRef.current = engine.activeRecipe;
 
   // Save pending recipe
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
