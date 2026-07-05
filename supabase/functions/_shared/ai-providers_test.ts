@@ -39,7 +39,7 @@ function anthropicSSE(events: object[]): Response {
 
 interface OpenAIChunk {
   choices: Array<{
-    delta: { content?: string; tool_calls?: Array<{ function?: { name?: string; arguments?: string } }> };
+    delta: { content?: string; tool_calls?: Array<{ index?: number; function?: { name?: string; arguments?: string } }> };
     finish_reason?: string;
   }>;
 }
@@ -88,6 +88,62 @@ Deno.test("transform: un bloc tool_use émet nom, arguments accumulés et finish
   // Le front s'appuie sur finish_reason === "tool_calls" pour exécuter l'outil.
   const finish = chunks.map((c) => c.choices[0].finish_reason).filter(Boolean);
   assertEquals(finish, ["tool_calls"]);
+});
+
+Deno.test("transform: une erreur Anthropic mi-stream fait échouer le flux (pas de succès silencieux)", async () => {
+  const res = transformAnthropicStreamToOpenAI(anthropicSSE([
+    { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+    { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Bonj" } },
+    { type: "error", error: { type: "overloaded_error", message: "Overloaded" } },
+  ]));
+
+  let threw = false;
+  try {
+    await res.text(); // consomme le flux transformé jusqu'au bout
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true, "Le flux doit être en erreur, pas clôturé proprement par [DONE]");
+});
+
+Deno.test("transform: deux tool_use reçoivent des index de tool_call distincts (0 puis 1)", async () => {
+  const res = transformAnthropicStreamToOpenAI(anthropicSSE([
+    { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "toolu_a", name: "navigate", input: {} } },
+    { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: '{"destination":"home"}' } },
+    { type: "content_block_stop", index: 0 },
+    { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_b", name: "get_preferences", input: {} } },
+    { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: "{}" } },
+    { type: "content_block_stop", index: 1 },
+  ]));
+
+  const chunks = await readOpenAIChunks(res);
+  const toolCalls = chunks.flatMap((c) => c.choices[0].delta.tool_calls ?? []);
+
+  // Chaque bloc tool_use porte un index distinct (pas 0 partout) : le nom et les
+  // arguments de chaque outil restent rattachés au bon appel.
+  const nameAt = (i: number) => toolCalls.find((t) => t.index === i && t.function?.name)?.function?.name;
+  const argsAt = (i: number) => toolCalls.filter((t) => t.index === i).map((t) => t.function?.arguments ?? "").join("");
+  assertEquals(nameAt(0), "navigate");
+  assertEquals(nameAt(1), "get_preferences");
+  assertEquals(JSON.parse(argsAt(0)), { destination: "home" });
+  assertEquals(JSON.parse(argsAt(1)), {});
+});
+
+Deno.test("transform: chaque tool_use émet son propre finish_reason (le consommateur exécute chaque outil)", async () => {
+  const res = transformAnthropicStreamToOpenAI(anthropicSSE([
+    { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "toolu_a", name: "navigate", input: {} } },
+    { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: "{}" } },
+    { type: "content_block_stop", index: 0 },
+    { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_b", name: "get_preferences", input: {} } },
+    { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: "{}" } },
+    { type: "content_block_stop", index: 1 },
+  ]));
+
+  const chunks = await readOpenAIChunks(res);
+  const finish = chunks.map((c) => c.choices[0].finish_reason).filter(Boolean);
+  // Un finish_reason par outil : useChatEngine réinitialise son accumulateur à
+  // chaque finish_reason, ce qui lui permet d'exécuter les deux outils.
+  assertEquals(finish, ["tool_calls", "tool_calls"]);
 });
 
 Deno.test("transform: termine toujours par [DONE]", async () => {
