@@ -280,8 +280,7 @@ export function transformAnthropicStreamToOpenAI(response: Response): Response {
       // Index de tool_call croissant : chaque bloc `tool_use` obtient le sien
       // (0, 1, …) pour que deux outils émis dans le même message restent
       // distincts au format OpenAI, au lieu d'être écrasés sur l'index 0.
-      let toolCallCount = 0;
-      let currentToolCallIndex = 0;
+      let toolCallIndex = -1;
       while (true) {
         const { done, value } = await reader.read();
         if (done) { controller.enqueue(encoder.encode("data: [DONE]\n\n")); controller.close(); break; }
@@ -299,6 +298,7 @@ export function transformAnthropicStreamToOpenAI(response: Response): Response {
                 // recevait une réponse tronquée prise pour un succès. On propage
                 // l'échec pour que le client l'affiche au lieu de l'ignorer.
                 console.error("Anthropic stream error:", data.error);
+                await reader.cancel().catch(() => {}); // libère la connexion Anthropic amont
                 controller.error(new Error(data.error?.message ?? "Erreur du fournisseur IA pendant la génération"));
                 return;
               }
@@ -306,9 +306,9 @@ export function transformAnthropicStreamToOpenAI(response: Response): Response {
                 const block = data.content_block;
                 if (block?.type === "tool_use") {
                   currentBlockIsTool = true;
-                  currentToolCallIndex = toolCallCount++;
+                  toolCallIndex++;
                   // Émet le nom de l'outil (arguments accumulés dans les deltas).
-                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: currentToolCallIndex, id: block.id, type: "function", function: { name: block.name, arguments: "" } }] } }] }));
+                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: toolCallIndex, id: block.id, type: "function", function: { name: block.name, arguments: "" } }] } }] }));
                 } else {
                   currentBlockIsTool = false;
                 }
@@ -316,7 +316,7 @@ export function transformAnthropicStreamToOpenAI(response: Response): Response {
               }
               case "content_block_delta": {
                 if (data.delta?.type === "input_json_delta") {
-                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: currentToolCallIndex, function: { arguments: data.delta.partial_json || "" } }] } }] }));
+                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: toolCallIndex, function: { arguments: data.delta.partial_json || "" } }] } }] }));
                 } else if (data.delta?.text != null) {
                   controller.enqueue(sse({ choices: [{ index: 0, delta: { content: data.delta.text } }] }));
                 }
