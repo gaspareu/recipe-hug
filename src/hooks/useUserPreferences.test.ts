@@ -102,6 +102,23 @@ describe("useUserPreferences", () => {
     });
   });
 
+  it("expose updatePreferencesAsync (awaitable) qui rejette quand l'écriture échoue", async () => {
+    mockAuth.user = { id: "u1" };
+    installSupabase({
+      resultsByTable: {
+        user_culinary_preferences: { data: null, error: { message: "db fail" } },
+      },
+    });
+    const { result } = renderHook(() => useUserPreferences(), { wrapper: createQueryWrapper() });
+
+    // Contrairement à `updatePreferences` (mutate, fire-and-forget), la version
+    // async doit être attendable ET propager l'échec au lieu d'un faux succès.
+    expect(typeof result.current.updatePreferencesAsync).toBe("function");
+    await expect(
+      result.current.updatePreferencesAsync({ taste_preferences: emptyPrefs().taste_preferences }),
+    ).rejects.toBeTruthy();
+  });
+
   it("n'écrit rien en base si l'utilisateur n'est pas authentifié", async () => {
     mockAuth.user = null;
     const sb = installSupabase();

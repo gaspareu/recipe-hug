@@ -123,13 +123,21 @@ export function useUserPreferences() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
     },
+    onError: (error) => {
+      console.error('Échec de la mise à jour des préférences culinaires:', error);
+    },
   });
 
   return {
     preferences: query.data,
     isLoading: query.isLoading,
     error: query.error,
+    // `updatePreferences` (mutate) : fire-and-forget avec callbacks onSuccess/onError,
+    // pour les composants. `updatePreferencesAsync` (mutateAsync) : attendable et
+    // rejette en cas d'échec, pour les appelants qui doivent connaître le résultat
+    // (hooks de chat) — sinon un `await mutate()` résout toujours et masque l'échec.
     updatePreferences: updateMutation.mutate,
+    updatePreferencesAsync: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
   };
 }
