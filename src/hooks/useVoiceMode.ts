@@ -151,8 +151,12 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
   const doStartListening = useCallback(async () => {
     setIsConnecting(true);
     try {
-      // 1. getUserMedia FIRST — must be in direct user gesture chain
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+      // 1. getUserMedia FIRST — must be in direct user gesture chain.
+      // On libère aussitôt les pistes : ce flux ne sert qu'à obtenir la
+      // permission micro ; Scribe ouvre ensuite le sien. Sans ce stop(), le
+      // micro resterait actif (captation orpheline).
+      const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      permissionStream.getTracks().forEach((track) => track.stop());
 
       // 2. Get session
       const { data: { session } } = await supabase.auth.getSession();

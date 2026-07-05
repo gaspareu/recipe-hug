@@ -52,10 +52,12 @@ export async function generateImage(config: AIConfig, prompt: string): Promise<G
   }
 
   if (config.provider === "gemini") {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
+    // Clé via en-tête `x-goog-api-key` (jamais en query string : une erreur
+    // réseau bas niveau inclurait l'URL — donc la clé — dans son message).
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`;
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": config.apiKey },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { responseModalities: ["IMAGE", "TEXT"] },

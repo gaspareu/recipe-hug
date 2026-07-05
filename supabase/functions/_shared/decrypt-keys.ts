@@ -3,6 +3,11 @@ const ALGORITHM = "AES-GCM";
 const IV_LENGTH = 12;
 
 async function deriveKey(secret: string): Promise<CryptoKey> {
+  // Fail-closed au choke-point : jamais de clé dérivée d'un secret vide
+  // (sinon chiffrement/déchiffrement silencieux avec une clé prévisible).
+  if (!secret) {
+    throw new Error("Secret de chiffrement manquant");
+  }
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
   return crypto.subtle.importKey("raw", hash, { name: ALGORITHM }, false, ["encrypt", "decrypt"]);
 }
@@ -29,15 +34,16 @@ export async function decryptValue(encrypted: string, secret: string): Promise<s
 
 /**
  * Decrypt all provider API keys from the database.
- * Falls back to plaintext if decryption fails (backward compatibility).
+ * Fail-closed : lève une erreur si le secret de chiffrement est absent
+ * (on ne renvoie jamais de clés potentiellement en clair).
+ * Conserve un repli plaintext par clé pour les valeurs legacy non chiffrées.
  */
 export async function decryptProviderKeys(
   keys: Record<string, string>
 ): Promise<Record<string, string>> {
   const secret = Deno.env.get("AI_KEYS_ENCRYPTION_SECRET");
   if (!secret) {
-    console.warn("[decrypt] No AI_KEYS_ENCRYPTION_SECRET set, returning raw keys");
-    return keys;
+    throw new Error("AI_KEYS_ENCRYPTION_SECRET absent : déchiffrement des clés impossible");
   }
 
   const result: Record<string, string> = {};

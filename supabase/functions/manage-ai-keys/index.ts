@@ -7,6 +7,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const PROVIDERS = ["gemini", "openai", "anthropic"] as const;
+
+/** Déchiffre une clé stockée (repli plaintext pour les valeurs legacy) et renvoie sa version masquée. */
+async function maskStoredKey(stored: string, secret: string): Promise<{ has_key: true; masked: string }> {
+  let plain = stored;
+  try {
+    plain = await decryptValue(stored, secret);
+  } catch {
+    // Valeur legacy déjà en clair
+  }
+  return { has_key: true, masked: maskApiKey(plain) };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -28,6 +41,16 @@ serve(async (req) => {
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Missing required environment variables");
+    }
+
+    // Fail-closed : sans secret de chiffrement, on refuse de traiter les clés
+    // (jamais de stockage/lecture en clair).
+    if (!ENCRYPTION_SECRET) {
+      console.error("manage-ai-keys: AI_KEYS_ENCRYPTION_SECRET absent");
+      return new Response(
+        JSON.stringify({ error: "server_misconfigured", message: "Chiffrement indisponible" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -58,13 +81,11 @@ serve(async (req) => {
       const encryptedKeys: Record<string, string> = {};
 
       // For each provider: encrypt new key or keep existing encrypted value
-      for (const p of ["gemini", "openai", "anthropic"]) {
+      for (const p of PROVIDERS) {
         const newKey = provider_api_keys?.[p];
         if (newKey && typeof newKey === "string" && newKey.trim()) {
           // New key provided - encrypt it
-          encryptedKeys[p] = ENCRYPTION_SECRET
-            ? await encryptValue(newKey.trim(), ENCRYPTION_SECRET)
-            : newKey.trim();
+          encryptedKeys[p] = await encryptValue(newKey.trim(), ENCRYPTION_SECRET);
         } else if (existingKeys[p]) {
           // Keep existing encrypted value
           encryptedKeys[p] = existingKeys[p];
@@ -74,9 +95,7 @@ serve(async (req) => {
       // Handle legacy api_key
       let finalApiKey = existing?.api_key || null;
       if (api_key && typeof api_key === "string" && api_key.trim()) {
-        finalApiKey = ENCRYPTION_SECRET
-          ? await encryptValue(api_key.trim(), ENCRYPTION_SECRET)
-          : api_key.trim();
+        finalApiKey = await encryptValue(api_key.trim(), ENCRYPTION_SECRET);
       }
 
       const payload = {
@@ -98,21 +117,12 @@ serve(async (req) => {
 
       // Return masked keys info (not the encrypted values)
       const maskedKeys: Record<string, { has_key: boolean; masked: string | null }> = {};
-      for (const p of ["gemini", "openai", "anthropic"]) {
+      for (const p of PROVIDERS) {
         const newKey = provider_api_keys?.[p];
         if (newKey && typeof newKey === "string" && newKey.trim()) {
           maskedKeys[p] = { has_key: true, masked: maskApiKey(newKey.trim()) };
         } else if (existingKeys[p]) {
-          // Decrypt existing to mask it
-          let plain = existingKeys[p];
-          if (ENCRYPTION_SECRET) {
-            try {
-              plain = await decryptValue(existingKeys[p], ENCRYPTION_SECRET);
-            } catch {
-              // Already plaintext
-            }
-          }
-          maskedKeys[p] = { has_key: true, masked: maskApiKey(plain) };
+          maskedKeys[p] = await maskStoredKey(existingKeys[p], ENCRYPTION_SECRET);
         } else {
           maskedKeys[p] = { has_key: false, masked: null };
         }
@@ -137,22 +147,10 @@ serve(async (req) => {
       const keys = data?.provider_api_keys || {};
       const maskedKeys: Record<string, { has_key: boolean; masked: string | null }> = {};
 
-      for (const p of ["gemini", "openai", "anthropic"]) {
+      for (const p of PROVIDERS) {
         const rawKey = keys[p];
         if (rawKey) {
-          let plain = rawKey;
-          if (ENCRYPTION_SECRET) {
-            try {
-              plain = await decryptValue(rawKey, ENCRYPTION_SECRET);
-              console.log(`[manage-ai-keys GET] ${p}: decrypted OK`);
-            } catch (err) {
-              console.warn(`[manage-ai-keys GET] ${p}: decrypt FAILED, using as plaintext`);
-              // Already plaintext
-            }
-          } else {
-            console.warn(`[manage-ai-keys GET] ${p}: no ENCRYPTION_SECRET, using raw key`);
-          }
-          maskedKeys[p] = { has_key: true, masked: maskApiKey(plain) };
+          maskedKeys[p] = await maskStoredKey(rawKey, ENCRYPTION_SECRET);
         } else {
           maskedKeys[p] = { has_key: false, masked: null };
         }

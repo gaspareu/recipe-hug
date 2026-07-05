@@ -5,13 +5,13 @@ import { sseResponse, toolCallEvent, contentEvent } from "@/test/sse";
 import type { Recipe } from "@/types/recipe";
 import type { UserCulinaryPreferences } from "./useUserPreferences";
 
-const { mockSupabase, mockNavigate, mockRefetch, mockUpdatePreferences, hookState } = vi.hoisted(
+const { mockSupabase, mockNavigate, mockRefetch, mockUpdatePreferencesAsync, hookState } = vi.hoisted(
   () => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockSupabase: { from: vi.fn(), auth: { getSession: vi.fn(), getUser: vi.fn() } } as any,
     mockNavigate: vi.fn(),
     mockRefetch: vi.fn(() => Promise.resolve()),
-    mockUpdatePreferences: vi.fn(),
+    mockUpdatePreferencesAsync: vi.fn(() => Promise.resolve()),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     hookState: { recipes: [] as any[], preferences: null as any },
   }),
@@ -25,7 +25,7 @@ vi.mock("./useRecipes", () => ({
 vi.mock("./useUserPreferences", () => ({
   useUserPreferences: () => ({
     preferences: hookState.preferences,
-    updatePreferences: mockUpdatePreferences,
+    updatePreferencesAsync: mockUpdatePreferencesAsync,
   }),
 }));
 vi.mock("@/lib/recipe-completion", () => ({
@@ -125,6 +125,7 @@ beforeEach(() => {
   ];
   hookState.preferences = makePreferences();
   mockRefetch.mockImplementation(() => Promise.resolve());
+  mockUpdatePreferencesAsync.mockResolvedValue(undefined);
   installSupabase();
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockResolvedValue(sseResponse([contentEvent("Ok")]));
@@ -298,11 +299,28 @@ describe("useHomeChat — préférences utilisateur", () => {
       ],
     });
 
-    expect(mockUpdatePreferences).toHaveBeenCalledTimes(1);
-    const updated = mockUpdatePreferences.mock.calls[0][0] as UserCulinaryPreferences;
+    expect(mockUpdatePreferencesAsync).toHaveBeenCalledTimes(1);
+    const updated = mockUpdatePreferencesAsync.mock.calls[0][0] as UserCulinaryPreferences;
     expect(updated.dietary_constraints.allergies).toEqual(["gluten", "arachides"]);
     expect(updated.taste_preferences.liked_flavors).toEqual([]);
     expect(updated.culinary_style.preferred_difficulty).toBe("facile");
+  });
+
+  it("update_preferences ne masque pas un échec de persistance", async () => {
+    // Regression #4 : `await updatePreferences` (mutate) résolvait toujours et le
+    // catch ne se déclenchait jamais. Avec mutateAsync, un échec DB est bien capté.
+    mockUpdatePreferencesAsync.mockRejectedValueOnce(new Error("db fail"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderHook(() => useHomeChat());
+
+    await sendToolCall(result, "update_preferences", {
+      operations: [
+        { operation: "add", category: "dietary_constraints", field: "allergies", values: ["arachides"] },
+      ],
+    });
+
+    expect(errorSpy).toHaveBeenCalledWith("Error updating preferences:", expect.any(Error));
+    errorSpy.mockRestore();
   });
 
   it("update_preferences dédoublonne les valeurs ajoutées", async () => {
@@ -314,7 +332,7 @@ describe("useHomeChat — préférences utilisateur", () => {
       ],
     });
 
-    const updated = mockUpdatePreferences.mock.calls[0][0] as UserCulinaryPreferences;
+    const updated = mockUpdatePreferencesAsync.mock.calls[0][0] as UserCulinaryPreferences;
     expect(updated.dietary_constraints.allergies).toEqual(["gluten"]);
   });
 
@@ -328,7 +346,38 @@ describe("useHomeChat — préférences utilisateur", () => {
       ],
     });
 
-    expect(mockUpdatePreferences).not.toHaveBeenCalled();
+    expect(mockUpdatePreferencesAsync).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow : modification d'une recette existante
+// ---------------------------------------------------------------------------
+describe("useHomeChat — modification de recette", () => {
+  it("extract_modified_recipe après get_recipe_details rattache la recette active (pas de doublon)", async () => {
+    // Regression #5 : handleToolCall lisait engine.activeRecipe via une closure
+    // périmée -> originalRecipeId undefined -> la modification était enregistrée
+    // comme une NOUVELLE recette. La recette doit rester rattachée à son id.
+    const { result } = renderHook(() => useHomeChat());
+
+    fetchMock
+      .mockResolvedValueOnce(sseResponse([toolCallEvent("get_recipe_details", { recipe_id: "r1" })]))
+      .mockResolvedValueOnce(
+        sseResponse([
+          toolCallEvent("extract_modified_recipe", {
+            title: "Tarte revisitée",
+            servings: 4,
+            ingredients: [],
+            steps: [],
+          }),
+        ]),
+      );
+
+    await act(() => result.current.sendMessage("modifie la tarte aux pommes"));
+
+    await waitFor(() => expect(result.current.pendingRecipe).toBeTruthy());
+    expect(result.current.pendingRecipe?.isUpdate).toBe(true);
+    expect(result.current.pendingRecipe?.originalRecipeId).toBe("r1");
   });
 });
 

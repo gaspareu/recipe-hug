@@ -1,13 +1,14 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useRecipes } from './useRecipes';
-import { useUserPreferences, UserCulinaryPreferences } from './useUserPreferences';
+import { useUserPreferences } from './useUserPreferences';
 import { supabase } from '@/integrations/supabase/client';
 import { useChatEngine, ActiveRecipeData, ChatEngineConfig, PendingRecipe, ToolCallAction } from './useChatEngine';
 import type { Ingredient } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
 import { triggerRecipeCompletion } from '@/lib/recipe-completion';
+import { applyPreferenceOperations, type PreferenceOperation } from '@/lib/preference-operations';
 
 // Re-export types
 export type { ChatMessage, MessageContent, PendingRecipe, ActiveRecipeData, RecipeCard } from './useChatEngine';
@@ -32,10 +33,18 @@ async function triggerBackgroundImageGeneration(
 export function useHomeChat() {
   const navigate = useNavigate();
   const { data: recipes = [], refetch: refetchRecipes } = useRecipes();
-  const { preferences, updatePreferences } = useUserPreferences();
+  const { preferences, updatePreferencesAsync } = useUserPreferences();
 
   // Mode cuisine : recette en cours de préparation en plein écran (null = fermé).
   const [cookingRecipeId, setCookingRecipeId] = useState<string | null>(null);
+
+  // Recette active courante. handleToolCall est mémoïsé sans `engine` en
+  // dépendance (dépendance circulaire) : lire `engine.activeRecipe` par closure
+  // renverrait la valeur périmée du premier rendu (null), et une modification
+  // serait enregistrée comme nouvelle recette. Le ref est posé dès
+  // `get_recipe_details` (seule source d'une recette active), de façon synchrone
+  // — avant l'auto-retry `extract_modified_recipe` qui survient dans le même tour.
+  const activeRecipeRef = useRef<ActiveRecipeData | null>(null);
 
   const handleToolCall = useCallback(async (action: ToolCallAction): Promise<unknown> => {
     console.log('Tool call:', action.type, action.data);
@@ -59,10 +68,14 @@ export function useHomeChat() {
         const recipeId = action.data.recipe_id as string;
         const recipe = recipes.find(r => r.id === recipeId);
         if (!recipe) return null;
-        return {
+        const details: ActiveRecipeData = {
           id: recipe.id, title: recipe.title, servings: recipe.servings,
           season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
         };
+        // Synchronise le ref immédiatement : l'auto-retry (extract_modified_recipe)
+        // survient dans le même tour, avant tout re-rendu.
+        activeRecipeRef.current = details;
+        return details;
       }
 
       case 'open_recipe': {
@@ -124,27 +137,16 @@ export function useHomeChat() {
       case 'get_preferences': return preferences;
 
       case 'update_preferences': {
-        const operations = action.data.operations as Array<{
-          operation: 'add' | 'remove' | 'set';
-          category: 'taste_preferences' | 'kitchen_equipment' | 'culinary_style' | 'dietary_constraints';
-          field: string; values?: string[]; value?: string | null;
-        }>;
+        const operations = action.data.operations as PreferenceOperation[];
         if (!preferences) { console.error('Impossible de charger les préférences'); return { error: 'No preferences loaded' }; }
-        const updatedPrefs = JSON.parse(JSON.stringify(preferences)) as UserCulinaryPreferences;
-        for (const op of operations) {
-          const category = updatedPrefs[op.category] as unknown as Record<string, string[] | string | null>;
-          if (!category) continue;
-          if (op.operation === 'add' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = [...new Set([...c, ...op.values])]; }
-          else if (op.operation === 'remove' && op.values) { const c = (category[op.field] as string[]) || []; category[op.field] = c.filter((v: string) => !op.values!.includes(v)); }
-          else if (op.operation === 'set') { category[op.field] = op.value; }
-        }
-        try { await updatePreferences(updatedPrefs); return { success: true, updatedPreferences: updatedPrefs }; }
+        const updatedPrefs = applyPreferenceOperations(preferences, operations);
+        try { await updatePreferencesAsync(updatedPrefs); return { success: true, updatedPreferences: updatedPrefs }; }
         catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }
 
       case 'save_recipe': { engine.setPendingRecipe(action.data as unknown as PendingRecipe); return null; }
       case 'extract_modified_recipe': {
-        engine.setPendingRecipe({ ...(action.data as unknown as PendingRecipe), isUpdate: true, originalRecipeId: engine.activeRecipe?.id });
+        engine.setPendingRecipe({ ...(action.data as unknown as PendingRecipe), isUpdate: true, originalRecipeId: activeRecipeRef.current?.id });
         return null;
       }
       case 'create_new_recipe': {
@@ -155,7 +157,7 @@ export function useHomeChat() {
       default: console.log('Unknown tool call:', action.type); return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables et `engine.activeRecipe` est lu via closure au moment de l'appel
-  }, [recipes, navigate, preferences, updatePreferences]);
+  }, [recipes, navigate, preferences, updatePreferencesAsync]);
 
   const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
     const recipeSummaries = recipes.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));

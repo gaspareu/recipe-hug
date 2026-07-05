@@ -161,14 +161,15 @@ async function callGeminiStreaming(config: AIConfig, messages: ChatMessage[], op
     }];
   }
 
-  // Use native Gemini endpoint (not OpenAI-compat) for streaming
-  const endpoint = options.stream
-    ? `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?key=${config.apiKey}`
-    : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
+  // Use native Gemini endpoint (not OpenAI-compat) for streaming.
+  // Clé via l'en-tête `x-goog-api-key`, jamais en query string (une erreur
+  // réseau bas niveau exposerait l'URL — donc la clé — dans son message).
+  const action = options.stream ? "streamGenerateContent" : "generateContent";
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:${action}`;
 
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": config.apiKey },
     body: JSON.stringify(body),
   });
 
@@ -273,8 +274,13 @@ export function transformAnthropicStreamToOpenAI(response: Response): Response {
       let buffer = "";
       // Suit le type du content block courant : le SSE Anthropic envoie le nom
       // de l'outil dans `content_block_start` puis les arguments en deltas
-      // `input_json_delta`, et clôt avec `content_block_stop`.
+      // `input_json_delta`, et clôt avec `content_block_stop`. Les blocs sont
+      // séquentiels (un seul actif à la fois).
       let currentBlockIsTool = false;
+      // Index de tool_call croissant : chaque bloc `tool_use` obtient le sien
+      // (0, 1, …) pour que deux outils émis dans le même message restent
+      // distincts au format OpenAI, au lieu d'être écrasés sur l'index 0.
+      let toolCallIndex = -1;
       while (true) {
         const { done, value } = await reader.read();
         if (done) { controller.enqueue(encoder.encode("data: [DONE]\n\n")); controller.close(); break; }
@@ -286,12 +292,23 @@ export function transformAnthropicStreamToOpenAI(response: Response): Response {
           try {
             const data = JSON.parse(line.slice(6));
             switch (data.type) {
+              case "error": {
+                // Erreur émise APRÈS le 200 initial (overloaded, rate-limit…) :
+                // sans ce cas, le flux se clôturait proprement et le client
+                // recevait une réponse tronquée prise pour un succès. On propage
+                // l'échec pour que le client l'affiche au lieu de l'ignorer.
+                console.error("Anthropic stream error:", data.error);
+                await reader.cancel().catch(() => {}); // libère la connexion Anthropic amont
+                controller.error(new Error(data.error?.message ?? "Erreur du fournisseur IA pendant la génération"));
+                return;
+              }
               case "content_block_start": {
                 const block = data.content_block;
                 if (block?.type === "tool_use") {
                   currentBlockIsTool = true;
+                  toolCallIndex++;
                   // Émet le nom de l'outil (arguments accumulés dans les deltas).
-                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: block.id, type: "function", function: { name: block.name, arguments: "" } }] } }] }));
+                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: toolCallIndex, id: block.id, type: "function", function: { name: block.name, arguments: "" } }] } }] }));
                 } else {
                   currentBlockIsTool = false;
                 }
@@ -299,7 +316,7 @@ export function transformAnthropicStreamToOpenAI(response: Response): Response {
               }
               case "content_block_delta": {
                 if (data.delta?.type === "input_json_delta") {
-                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: data.delta.partial_json || "" } }] } }] }));
+                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: toolCallIndex, function: { arguments: data.delta.partial_json || "" } }] } }] }));
                 } else if (data.delta?.text != null) {
                   controller.enqueue(sse({ choices: [{ index: 0, delta: { content: data.delta.text } }] }));
                 }
@@ -307,6 +324,9 @@ export function transformAnthropicStreamToOpenAI(response: Response): Response {
               }
               case "content_block_stop": {
                 // Signale au front la fin de l'appel d'outil pour qu'il l'exécute.
+                // Un finish_reason par outil : le consommateur réinitialise son
+                // accumulateur à chaque fois, ce qui permet d'exécuter chaque
+                // outil d'un message multi-outils.
                 if (currentBlockIsTool) {
                   controller.enqueue(sse({ choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] }));
                   currentBlockIsTool = false;
@@ -314,7 +334,10 @@ export function transformAnthropicStreamToOpenAI(response: Response): Response {
                 break;
               }
             }
-          } catch { /* Skip invalid */ }
+          } catch {
+            // Ligne JSON incomplète/malformée : on l'ignore (les événements
+            // Anthropic sont complets ligne par ligne ; le partiel est rebufferisé).
+          }
         }
       }
     },

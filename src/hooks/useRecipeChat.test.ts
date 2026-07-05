@@ -5,10 +5,10 @@ import { sseResponse, toolCallEvent, contentEvent } from "@/test/sse";
 import type { Recipe } from "@/types/recipe";
 import type { UserCulinaryPreferences } from "./useUserPreferences";
 
-const { mockSupabase, mockUpdatePreferences, hookState } = vi.hoisted(() => ({
+const { mockSupabase, mockUpdatePreferencesAsync, hookState } = vi.hoisted(() => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mockSupabase: { from: vi.fn(), auth: { getSession: vi.fn(), getUser: vi.fn() } } as any,
-  mockUpdatePreferences: vi.fn(),
+  mockUpdatePreferencesAsync: vi.fn(() => Promise.resolve()),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   hookState: { recipes: [] as any[], preferences: null as any },
 }));
@@ -20,7 +20,7 @@ vi.mock("./useRecipes", () => ({
 vi.mock("./useUserPreferences", () => ({
   useUserPreferences: () => ({
     preferences: hookState.preferences,
-    updatePreferences: mockUpdatePreferences,
+    updatePreferencesAsync: mockUpdatePreferencesAsync,
   }),
 }));
 
@@ -238,7 +238,7 @@ describe("useRecipeChat — préférences", () => {
       ],
     });
 
-    const updated = mockUpdatePreferences.mock.calls[0][0] as UserCulinaryPreferences;
+    const updated = mockUpdatePreferencesAsync.mock.calls[0][0] as UserCulinaryPreferences;
     expect(updated.kitchen_equipment.available).toEqual(["airfryer"]);
   });
 });

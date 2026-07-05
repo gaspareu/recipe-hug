@@ -40,7 +40,9 @@ export interface AISettings {
   api_key: string | null; // Deprecated - kept for backwards compatibility
   preferred_model: string | null;
   agent_configs: Partial<Record<AgentType, AgentConfig>> | null;
-  provider_api_keys: ProviderApiKeys; // Contains encrypted blobs from DB (used for presence check only)
+  // NB : la présence d'une clé n'est PAS dérivée de settings — les clés (blobs
+  // chiffrés) ne sont jamais renvoyées au client. Utiliser `hasApiKeyForProvider`
+  // / `maskedKeys` (source serveur via manage-ai-keys). Voir #6.
   created_at: string;
   updated_at: string;
 }
@@ -165,7 +167,6 @@ export function useAISettings() {
         ...data,
         provider: data.provider as AIProvider,
         agent_configs: data.agent_configs as Partial<Record<AgentType, AgentConfig>> | null,
-        provider_api_keys: {}, // Never fetched from DB; presence derived from maskedKeys
         api_key: null,
       } as AISettings;
     },
