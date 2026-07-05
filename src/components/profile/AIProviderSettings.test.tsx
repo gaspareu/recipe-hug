@@ -40,6 +40,13 @@ vi.mock('@/hooks/useAISettings', async (importActual) => {
 
 vi.mock('@/components/ui/sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
+// Le mock de useAISettings ci-dessus utilise importActual pour récupérer les
+// constantes réelles (PROVIDER_MODELS, PROVIDER_INFO…), ce qui exécute le
+// top-level de useAISettings.ts -> import du client Supabase -> createClient().
+// En CI il n'y a pas de .env : createClient('') lève « supabaseUrl is required ».
+// On neutralise le client (jamais appelé, le hook est entièrement mocké).
+vi.mock('@/integrations/supabase/client', () => ({ supabase: {} }));
+
 import { AIProviderSettings } from './AIProviderSettings';
 import { toast } from '@/components/ui/sonner';
 
