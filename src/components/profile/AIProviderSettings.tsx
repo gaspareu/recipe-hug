@@ -22,6 +22,7 @@ import {
   ProviderApiKeys
 } from '@/hooks/useAISettings';
 import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui/sonner';
 
 // Provider icons/logos as simple colored badges
 const ProviderBadge = ({ provider, size = 'md' }: { provider: AIProvider; size?: 'sm' | 'md' }) => {
@@ -510,7 +511,7 @@ const AgentConfigRow = ({
 };
 
 export function AIProviderSettings() {
-  const { settings, isLoading, updateSettings, validateApiKey, maskedKeys } = useAISettings();
+  const { settings, isLoading, updateSettings, validateApiKey, maskedKeys, hasApiKeyForProvider } = useAISettings();
 
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('anthropic');
   const [providerApiKeys, setProviderApiKeys] = useState<ProviderApiKeys>({});
@@ -685,6 +686,12 @@ export function AIProviderSettings() {
       
       // Clear typed keys after successful save (they're now encrypted in DB)
       setProviderApiKeys({});
+      toast.success('Configuration IA enregistrée');
+    } catch (error) {
+      console.error('Error saving AI settings:', error);
+      toast.error("Échec de l'enregistrement de la configuration IA", {
+        description: 'Vérifie ta connexion et réessaie.',
+      });
     } finally {
       setIsSaving(false);
       setSavePhase('idle');
@@ -709,10 +716,12 @@ export function AIProviderSettings() {
     selectedModel !== (settings?.preferred_model || '') ||
     JSON.stringify(agentConfigs) !== JSON.stringify(settings?.agent_configs || {});
 
-  // Check if current default provider has a valid key (new typed key OR existing encrypted key)
-  const defaultProviderHasKey = selectedProvider === 'anthropic' ||
+  // Check if current default provider has a valid key (new typed key OR existing key).
+  // La présence d'une clé existante vient de maskedKeys (via hasApiKeyForProvider) :
+  // settings.provider_api_keys n'est jamais peuplé côté client (blobs chiffrés).
+  const defaultProviderHasKey =
     !!providerApiKeys[selectedProvider]?.trim() ||
-    !!settings?.provider_api_keys?.[selectedProvider as Exclude<AIProvider, 'anthropic'>];
+    hasApiKeyForProvider(selectedProvider);
 
   if (isLoading) {
     return (
@@ -759,7 +768,7 @@ export function AIProviderSettings() {
                   provider={provider}
                   isDefault={selectedProvider === provider}
                   apiKey={provider === 'anthropic' ? '' : (providerApiKeys[provider as Exclude<AIProvider, 'anthropic'>] || '')}
-                  hasExistingKey={provider !== 'anthropic' && !!settings?.provider_api_keys?.[provider as Exclude<AIProvider, 'anthropic'>]}
+                  hasExistingKey={provider !== 'anthropic' && !!maskedKeys?.[provider as Exclude<AIProvider, 'anthropic'>]?.has_key}
                   maskedKey={provider !== 'anthropic' ? maskedKeys?.[provider as Exclude<AIProvider, 'anthropic'>]?.masked : null}
                   onApiKeyChange={(key) => handleApiKeyChange(provider as Exclude<AIProvider, 'anthropic'>, key)}
                   onValidate={() => handleValidateKey(provider as Exclude<AIProvider, 'anthropic'>)}

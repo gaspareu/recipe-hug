@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/components/ui/sonner';
 
 import { 
   useUserPreferences, 
@@ -247,9 +248,13 @@ export function CulinaryPreferencesContent() {
       onSuccess: () => {
         setHasChanges(false);
         setLocalPrefs(null);
+        toast.success('Préférences enregistrées');
       },
-      onError: () => {
-        console.error('Error saving preferences');
+      onError: (error) => {
+        console.error('Error saving preferences', error);
+        toast.error("Échec de l'enregistrement des préférences", {
+          description: 'Vérifie ta connexion et réessaie.',
+        });
       },
     });
   };
