@@ -1,31 +1,38 @@
 project_id = "ifpqsyyvytfpossqycpc"
 
+# Politique verify_jwt : le gateway Supabase exige un JWT valide AVANT d'exécuter
+# la fonction (défense en profondeur, réduit la surface d'attaque). Toutes les
+# fonctions sont appelées depuis le front avec le JWT utilisateur — elles restent
+# donc en verify_jwt = true. Seule `webhook-recipe` reste à false : elle
+# s'authentifie par un token webhook (UUID), pas par un JWT, donc la vérification
+# du gateway rejetterait tous les appels externes légitimes.
+
 [functions.parse-recipe-image]
-verify_jwt = false
+verify_jwt = true
 
 [functions.analyze-recipe]
-verify_jwt = false
+verify_jwt = true
 
 [functions.home-assistant]
-verify_jwt = false
+verify_jwt = true
 
 [functions.elevenlabs-tts]
-verify_jwt = false
+verify_jwt = true
 
 [functions.elevenlabs-scribe-token]
-verify_jwt = false
+verify_jwt = true
 
 [functions.webhook-recipe]
 verify_jwt = false
 
 [functions.generate-recipe-image]
-verify_jwt = false
+verify_jwt = true
 
 [functions.validate-ai-key]
-verify_jwt = false
+verify_jwt = true
 
 [functions.manage-cookidoo-credentials]
-verify_jwt = false
+verify_jwt = true
 
 [functions.export-recipe-cookidoo]
-verify_jwt = false
+verify_jwt = true

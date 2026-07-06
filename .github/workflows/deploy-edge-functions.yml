@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - "supabase/functions/**"
+      - "supabase/config.toml" # verify_jwt par fonction y est défini
       - ".github/workflows/deploy-edge-functions.yml"
   workflow_dispatch: # déclenchement manuel possible
 

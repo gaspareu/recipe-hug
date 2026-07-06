@@ -71,21 +71,26 @@ Projet : `ifpqsyyvytfpossqycpc`
 
 | Fonction | verify_jwt | Rôle |
 |----------|-----------|------|
-| `home-assistant` | false | Chat IA unifié (streaming) |
-| `analyze-recipe` | false | Analyse nutritionnelle |
-| `parse-recipe-image` | false | OCR image → recette |
-| `generate-recipe-image` | **true** | Génération photo plat (Gemini) |
-| `webhook-recipe` | false | Réception webhook externe |
-| `manage-ai-keys` | false | CRUD clés API chiffrées |
-| `validate-ai-key` | false | Test validité clé API |
-| `elevenlabs-tts` | false | Text-to-speech |
-| `elevenlabs-scribe-token` | false | Token STT temps réel |
-| `share-recipe` | false | Partage recette par email/tél |
-| `claim-shares` | false | Réclamer recettes partagées |
-| `manage-cookidoo-credentials` | false | CRUD identifiants Cookidoo chiffrés (AES-GCM) |
-| `export-recipe-cookidoo` | false | Export d'une recette vers Cookidoo (Thermomix) |
+| `home-assistant` | true | Chat IA unifié (streaming) |
+| `analyze-recipe` | true | Analyse nutritionnelle |
+| `parse-recipe-image` | true | OCR image → recette |
+| `generate-recipe-image` | true | Génération photo plat (Gemini) |
+| `webhook-recipe` | **false** | Réception webhook externe |
+| `manage-ai-keys` | true | CRUD clés API chiffrées |
+| `validate-ai-key` | true | Test validité clé API |
+| `elevenlabs-tts` | true | Text-to-speech |
+| `elevenlabs-scribe-token` | true | Token STT temps réel |
+| `share-recipe` | true | Partage recette par email/tél |
+| `claim-shares` | true | Réclamer recettes partagées |
+| `manage-cookidoo-credentials` | true | CRUD identifiants Cookidoo chiffrés (AES-GCM) |
+| `export-recipe-cookidoo` | true | Export d'une recette vers Cookidoo (Thermomix) |
 
-> `generate-recipe-image` a `verify_jwt: true` car elle modifie des données utilisateur (upload Storage + update recipes).
+> **Politique** : `verify_jwt = true` partout (le gateway exige un JWT valide avant
+> d'exécuter la fonction — défense en profondeur ; le front envoie déjà le JWT sur
+> tous les appels). **Seule `webhook-recipe` est à `false`** : elle s'authentifie
+> par un token webhook (UUID) et non par un JWT, donc la vérification du gateway
+> rejetterait les appels externes légitimes. L'auth reste aussi gérée dans le corps
+> des fonctions (double barrière). Défini dans `supabase/config.toml`.
 
 ---
 
