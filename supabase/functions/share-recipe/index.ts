@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { buildShareResult } from "../_shared/sharing.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -77,38 +78,8 @@ Deno.serve(async (req) => {
       calorie_score: recipe.calorie_score,
     };
 
-    // Admin client to look up users
+    // Admin client : lookup du nom de l'expéditeur + enregistrement du partage.
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
-    // Check if recipient already exists — targeted lookups, never listUsers()
-    let recipientUserId: string | null = null;
-
-    if (identifierType === "email") {
-      const { data: userData, error: userError } =
-        await adminClient.auth.admin.getUserByEmail(identifier);
-      if (userError && userError.status !== 404) {
-        console.error("getUserByEmail error:", userError);
-        return new Response(JSON.stringify({ error: "Failed to lookup user" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (userData?.user) recipientUserId = userData.user.id;
-    } else {
-      // phone: targeted RPC lookup on auth.users via SECURITY DEFINER function
-      const { data: phoneData, error: phoneError } = await adminClient.rpc(
-        "get_user_id_by_phone",
-        { phone_number: identifier }
-      );
-      if (phoneError) {
-        console.error("get_user_id_by_phone error:", phoneError);
-        return new Response(JSON.stringify({ error: "Failed to lookup user" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (phoneData) recipientUserId = phoneData as string;
-    }
 
     // Fetch sender display_name for the share URL
     const { data: senderProfile } = await adminClient
@@ -117,77 +88,33 @@ Deno.serve(async (req) => {
       .eq("id", senderId)
       .single();
 
-    const senderName = senderProfile?.display_name ?? "";
-    const recipeTitle = snapshot.title ?? "";
+    const { shareRow, response } = buildShareResult({
+      senderId,
+      identifier,
+      identifierType,
+      snapshot,
+      senderName: senderProfile?.display_name ?? "",
+      appUrl: Deno.env.get("APP_URL") ?? "https://recipe-hug.vercel.app",
+    });
 
-    const appUrl = Deno.env.get("APP_URL") ?? "https://recipe-hug.vercel.app";
-    const shareParams = new URLSearchParams();
-    if (senderName) shareParams.set("shared_by", senderName);
-    if (recipeTitle) shareParams.set("recipe", recipeTitle);
-    const shareUrl = `${appUrl}/auth?${shareParams.toString()}`;
+    // Toujours enregistré en « pending » : le destinataire réclame la recette
+    // via claim-shares (consentement + identifiant vérifié). On ne recherche
+    // plus le destinataire — donc aucune insertion directe dans le compte
+    // d'autrui, et aucune réponse variant selon son existence (pas d'oracle).
+    const { error: shareError } = await adminClient.from("recipe_shares").insert(shareRow);
 
-    if (recipientUserId) {
-      // User exists: create recipe directly in their account
-      const { error: insertError } = await adminClient.from("recipes").insert({
-        user_id: recipientUserId,
-        title: snapshot.title,
-        servings: snapshot.servings,
-        ingredients: snapshot.ingredients,
-        steps: snapshot.steps,
-        season: snapshot.season,
-        nutrition_tags: snapshot.nutrition_tags,
-        source_image_url: snapshot.source_image_url,
-        ai_summary: `Recette partagée par un ami`,
-        source_type: "shared",
-        status: "draft",
+    if (shareError) {
+      console.error("Share error:", shareError);
+      return new Response(JSON.stringify({ error: "Failed to create share" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-
-      if (insertError) {
-        console.error("Insert error:", insertError);
-        return new Response(JSON.stringify({ error: "Failed to create recipe" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Also record the share as claimed
-      await adminClient.from("recipe_shares").insert({
-        sender_id: senderId,
-        recipient_identifier: identifier,
-        identifier_type: identifierType,
-        recipe_snapshot: snapshot,
-        status: "claimed",
-        recipient_id: recipientUserId,
-        claimed_at: new Date().toISOString(),
-      });
-
-      return new Response(
-        JSON.stringify({ status: "claimed", message: "Recette envoyée avec succès" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    } else {
-      // User doesn't exist: store as pending
-      const { error: shareError } = await adminClient.from("recipe_shares").insert({
-        sender_id: senderId,
-        recipient_identifier: identifier,
-        identifier_type: identifierType,
-        recipe_snapshot: snapshot,
-        status: "pending",
-      });
-
-      if (shareError) {
-        console.error("Share error:", shareError);
-        return new Response(JSON.stringify({ error: "Failed to create share" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      return new Response(
-        JSON.stringify({ status: "pending", message: "Partage en attente de création de compte", shareUrl }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
+
+    return new Response(
+      JSON.stringify(response),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (err) {
     console.error("Error:", err);
     return new Response(JSON.stringify({ error: "Internal error" }), {

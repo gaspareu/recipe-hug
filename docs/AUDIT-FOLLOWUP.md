@@ -69,9 +69,15 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
 
 ### C. Sécurité MEDIUM (review initiale)
 
-- **`share-recipe`** : oracle d'énumération de comptes (réponse différente selon existence) +
-  injection de recette non sollicitée dans le compte d'autrui → uniformiser la réponse, tout traiter en « pending ».
-- **`claim-shares`** : confiance à un email/téléphone non vérifié → vérifier `email_confirmed_at`/`phone_confirmed_at`.
+- **`share-recipe` — ✅ fait (branche `fix/medium-partage-recette`).** Plus de lookup du
+  destinataire : tout partage est créé en « pending » via `buildShareResult` (`_shared/sharing.ts`),
+  avec une réponse **uniforme** → l'oracle d'énumération de comptes ET l'injection non sollicitée
+  dans le compte d'autrui sont fermés. Le destinataire réclame la recette via `claim-shares`.
+- **`claim-shares` — ✅ fait.** Apparie les partages via `shareMatchesVerifiedIdentifier`
+  (`_shared/sharing.ts`), qui exige un identifiant **vérifié** (`email_confirmed_at`/`phone_confirmed_at`)
+  → un compte à l'email/téléphone d'autrui non confirmé ne peut plus réclamer ses recettes.
+  Filet : 8 tests Deno (`sharing_test.ts`). `/security-review` : 0 finding (deux failles confirmées
+  fermées, pas de contournement). **⚠️ Redéploiement edge functions requis au merge.**
 - **DB/RLS** : `verify_jwt = false` étendu à 10 fonctions (ne garder que `webhook-recipe`) ;
   `webhook_token` stocké en clair (stocker un hash) ; policy storage du bucket `recipes`
   incohérente (INSERT dossier public partagé, UPDATE/DELETE jamais satisfaits) ;
