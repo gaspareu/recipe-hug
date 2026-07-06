@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { shareMatchesVerifiedIdentifier } from "../_shared/sharing.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -29,26 +30,23 @@ Deno.serve(async (req) => {
     }
 
     const userId = userData.user.id;
-    const userEmail = userData.user.email;
-    const userPhone = userData.user.phone;
+    // Identifiant vérifié requis pour l'appariement — cf. shareMatchesVerifiedIdentifier.
+    const user = {
+      email: userData.user.email ?? null,
+      emailConfirmed: !!userData.user.email_confirmed_at,
+      phone: userData.user.phone ?? null,
+      phoneConfirmed: !!userData.user.phone_confirmed_at,
+    };
 
-    // Find pending shares matching email or phone
-    const query = adminClient
+    // Find pending shares matching a verified email or phone
+    const { data: allPending } = await adminClient
       .from("recipe_shares")
       .select("*")
       .eq("status", "pending");
 
-    const { data: allPending } = await query;
-
-    const matchingShares = (allPending || []).filter((share) => {
-      if (share.identifier_type === "email" && userEmail) {
-        return share.recipient_identifier.toLowerCase() === userEmail.toLowerCase();
-      }
-      if (share.identifier_type === "phone" && userPhone) {
-        return share.recipient_identifier === userPhone;
-      }
-      return false;
-    });
+    const matchingShares = (allPending || []).filter((share) =>
+      shareMatchesVerifiedIdentifier(share, user)
+    );
 
     if (matchingShares.length === 0) {
       return new Response(
