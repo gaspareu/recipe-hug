@@ -78,10 +78,15 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
   → un compte à l'email/téléphone d'autrui non confirmé ne peut plus réclamer ses recettes.
   Filet : 8 tests Deno (`sharing_test.ts`). `/security-review` : 0 finding (deux failles confirmées
   fermées, pas de contournement). **⚠️ Redéploiement edge functions requis au merge.**
-- **DB/RLS** : `verify_jwt = false` étendu à 10 fonctions (ne garder que `webhook-recipe`) ;
-  `webhook_token` stocké en clair (stocker un hash) ; policy storage du bucket `recipes`
-  incohérente (INSERT dossier public partagé, UPDATE/DELETE jamais satisfaits) ;
-  vues `*_safe` sans `REVOKE` colonne (defense-in-depth) ; buckets publics (`avatars` = PII).
+- **DB/RLS** — décomposé par risque (les migrations s'appliquent auto au merge, non TDD-ables en local) :
+  - `verify_jwt` — **✅ fait (branche `fix/medium-verify-jwt`).** Toutes les fonctions passées à
+    `verify_jwt = true` sauf `webhook-recipe` (auth par token UUID). Le front envoie déjà le JWT sur
+    tous les appels (vérifié call-site par call-site) → sûr. `config.toml` ajouté au trigger du
+    workflow de déploiement (sinon non redéployé). Doc `functions/CLAUDE.md` alignée.
+  - **Reste (🟠/🔴, déploiements coordonnés requis) :** `webhook_token` stocké en clair (stocker un hash) ;
+    policy storage du bucket `recipes` incohérente (INSERT dossier partagé vs UPDATE/DELETE en `uid`) ;
+    vues `*_safe` sans `REVOKE` colonne (defense-in-depth — casse `select('*')` front) ;
+    buckets publics (`avatars` = PII → URLs signées, casse les avatars existants sans déploiement atomique).
 - **Validation des sorties LLM** (règle « ne jamais faire confiance aux données externes ») :
   `analyze-recipe` parse la sortie sans schéma ; payloads d'outils castés sans Zod dans les hooks de chat.
 
