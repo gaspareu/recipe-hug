@@ -52,12 +52,20 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
    transforms. Filet : 14 tests Deno (dont 6 Gemini) verts + `deno check` OK. `/security-review` :
    0 finding (clé toujours dans l'en-tête). `/simplify` : boucle SSE dupliquée factorisée.
    **⚠️ Redéploiement edge function requis au merge.** Prochaine étape : §B.2 (`useChatEngine.onToolCall`).
-2. **`useChatEngine.onToolCall`** — injecter `activeRecipe` en argument (par symétrie avec
-   `buildRequest`) ; l'engine tient déjà un `activeRecipeRef` interne inutilisé. Supprimerait
-   le contournement `activeRecipeRef` dupliqué dans `useHomeChat` **et** `useRecipeChat`.
+2. **`useChatEngine.onToolCall` — ✅ fait (branche `refactor/ontoolcall-activerecipe`).**
+   `activeRecipe` injecté en 2e argument d'`onToolCall` (le moteur tient un `activeRecipeRef`
+   unique, synchronisé dans le handler `get_recipe_details` pour l'auto-retry du même tour). Les
+   contournements `activeRecipeRef` dupliqués de `useHomeChat` **et** `useRecipeChat` supprimés
+   (+ imports `useRef`). Filet : 48 tests (useChatEngine/useHomeChat/useRecipeChat), dont les
+   regressions #5, verts ; ESLint clean, 0 nouvelle erreur de type. `/security-review` : 0 finding.
+   `/simplify` : « ship it » (3/4 angles clean). Front pur, pas de redéploiement.
+   Prochaine étape : §C (sécurité MEDIUM).
 3. **Helpers partagés** — `notifySaveError(label)`/`notifySaveSuccess(label)` (aligner `useAsyncAction`
    sur `toast.error`/`toast.success`) ; centraliser `json()` + `corsHeaders` + un guard
    `requireEncryptionSecret()` dans `supabase/functions/_shared/` (aujourd'hui dupliqués/inline).
+   Révélé par le Lot 3 : les 3 branches pending-recipe (`save_recipe`/`extract_modified_recipe`/
+   `create_new_recipe`) sont désormais identiques entre `useHomeChat` et `useRecipeChat` →
+   extractibles en helper commun.
 
 ### C. Sécurité MEDIUM (review initiale)
 
