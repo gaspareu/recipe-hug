@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useRecipes } from './useRecipes';
@@ -38,15 +38,10 @@ export function useHomeChat() {
   // Mode cuisine : recette en cours de préparation en plein écran (null = fermé).
   const [cookingRecipeId, setCookingRecipeId] = useState<string | null>(null);
 
-  // Recette active courante. handleToolCall est mémoïsé sans `engine` en
-  // dépendance (dépendance circulaire) : lire `engine.activeRecipe` par closure
-  // renverrait la valeur périmée du premier rendu (null), et une modification
-  // serait enregistrée comme nouvelle recette. Le ref est posé dès
-  // `get_recipe_details` (seule source d'une recette active), de façon synchrone
-  // — avant l'auto-retry `extract_modified_recipe` qui survient dans le même tour.
-  const activeRecipeRef = useRef<ActiveRecipeData | null>(null);
-
-  const handleToolCall = useCallback(async (action: ToolCallAction): Promise<unknown> => {
+  // La recette active est fournie par le moteur en 2e argument (il en tient un
+  // ref synchronisé, y compris pendant l'auto-retry) : plus besoin d'un ref
+  // local dupliqué ici. C'était la cause du doublon de recette (regression #5).
+  const handleToolCall = useCallback(async (action: ToolCallAction, activeRecipe: ActiveRecipeData | null): Promise<unknown> => {
     console.log('Tool call:', action.type, action.data);
 
     switch (action.type) {
@@ -72,9 +67,6 @@ export function useHomeChat() {
           id: recipe.id, title: recipe.title, servings: recipe.servings,
           season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
         };
-        // Synchronise le ref immédiatement : l'auto-retry (extract_modified_recipe)
-        // survient dans le même tour, avant tout re-rendu.
-        activeRecipeRef.current = details;
         return details;
       }
 
@@ -146,7 +138,7 @@ export function useHomeChat() {
 
       case 'save_recipe': { engine.setPendingRecipe(action.data as unknown as PendingRecipe); return null; }
       case 'extract_modified_recipe': {
-        engine.setPendingRecipe({ ...(action.data as unknown as PendingRecipe), isUpdate: true, originalRecipeId: activeRecipeRef.current?.id });
+        engine.setPendingRecipe({ ...(action.data as unknown as PendingRecipe), isUpdate: true, originalRecipeId: activeRecipe?.id });
         return null;
       }
       case 'create_new_recipe': {
@@ -156,7 +148,7 @@ export function useHomeChat() {
 
       default: console.log('Unknown tool call:', action.type); return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables et `engine.activeRecipe` est lu via closure au moment de l'appel
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables. La recette active vient désormais du 2e argument.
   }, [recipes, navigate, preferences, updatePreferencesAsync]);
 
   const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {

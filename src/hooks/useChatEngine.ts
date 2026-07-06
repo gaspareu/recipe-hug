@@ -59,8 +59,8 @@ export interface ActiveRecipeData {
 export interface ChatEngineConfig {
   welcomeMessage: string;
   initialActiveRecipe: ActiveRecipeData | null;
-  /** Handle a tool call */
-  onToolCall: (action: ToolCallAction) => Promise<unknown>;
+  /** Handle a tool call. Reçoit la recette active courante, comme buildRequest. */
+  onToolCall: (action: ToolCallAction, activeRecipe: ActiveRecipeData | null) => Promise<unknown>;
   /** Build request body for the send */
   buildRequest: (params: {
     apiMessages: Array<{ role: string; content: MessageContent }>;
@@ -90,7 +90,10 @@ export function useChatEngine(config: ChatEngineConfig) {
   const [pendingRecipe, setPendingRecipe] = useState<PendingRecipe | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
-  // Keep mutable refs for state that needs to be read during streaming
+  // Recette active lue pendant le streaming (les callbacks sont mémoïsés sans
+  // `activeRecipe` en dépendance, pour éviter les closures périmées) : elle est
+  // injectée en 2e argument d'onToolCall. Synchronisée au rendu, et de façon
+  // synchrone dans executeToolCall (get_recipe_details) pour l'auto-retry.
   const activeRecipeRef = useRef(activeRecipe);
   activeRecipeRef.current = activeRecipe;
 
@@ -110,11 +113,15 @@ export function useChatEngine(config: ChatEngineConfig) {
   ): Promise<string> => {
     try {
       const args = JSON.parse(argsStr);
-      const result = await onToolCallRef.current({ type: name, data: args });
+      const result = await onToolCallRef.current({ type: name, data: args }, activeRecipeRef.current);
 
       // Handle get_recipe_details: store recipe for auto-retry, don't alter content
       if (name === 'get_recipe_details' && result) {
         const recipe = result as ActiveRecipeData;
+        // Synchronise le ref immédiatement : l'auto-retry (extract_modified_recipe)
+        // survient dans le même tour, avant tout re-rendu — c'est cette valeur qui
+        // sera injectée en 2e argument d'onToolCall au tour suivant.
+        activeRecipeRef.current = recipe;
         setActiveRecipe(recipe);
         retryWithRecipeRef.current = recipe;
         return currentContent;
@@ -163,7 +170,7 @@ export function useChatEngine(config: ChatEngineConfig) {
         };
         const toolType = actionMap[actionType];
         if (toolType) {
-          onToolCallRef.current({ type: toolType, data: { ...parameters } });
+          onToolCallRef.current({ type: toolType, data: { ...parameters } }, activeRecipeRef.current);
         }
         cleaned = cleaned.replace(match[0], '').trim();
       } catch (e) {

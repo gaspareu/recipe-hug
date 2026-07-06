@@ -203,10 +203,10 @@ describe("sendMessage — tool calls", () => {
 
     await act(() => result.current.sendMessage("Crée une tarte"));
 
-    expect(onToolCall).toHaveBeenCalledWith({
-      type: "save_recipe",
-      data: { title: "Tarte", servings: 4 },
-    });
+    expect(onToolCall).toHaveBeenCalledWith(
+      { type: "save_recipe", data: { title: "Tarte", servings: 4 } },
+      null,
+    );
   });
 
   it("accumule les arguments répartis sur plusieurs événements", async () => {
@@ -227,7 +227,7 @@ describe("sendMessage — tool calls", () => {
 
     await act(() => result.current.sendMessage("Va sur mon profil"));
 
-    expect(onToolCall).toHaveBeenCalledWith({ type: "navigate", data: { destination: "profile" } });
+    expect(onToolCall).toHaveBeenCalledWith({ type: "navigate", data: { destination: "profile" } }, null);
   });
 
   it("exécute un tool call accumulé même sans finish_reason (fallback fin de stream)", async () => {
@@ -248,10 +248,10 @@ describe("sendMessage — tool calls", () => {
 
     await act(() => result.current.sendMessage("Mes recettes"));
 
-    expect(onToolCall).toHaveBeenCalledWith({
-      type: "navigate",
-      data: { destination: "dashboard" },
-    });
+    expect(onToolCall).toHaveBeenCalledWith(
+      { type: "navigate", data: { destination: "dashboard" } },
+      null,
+    );
   });
 
   it("affiche les résultats de search_recipes dans le message assistant", async () => {
@@ -288,6 +288,49 @@ describe("sendMessage — tool calls", () => {
     );
   });
 
+  it("injecte la recette active courante en second argument de onToolCall", async () => {
+    fetchMock.mockResolvedValue(
+      sseResponse([toolCallEvent("extract_modified_recipe", { title: "Modif" })]),
+    );
+    const activeRecipe = { id: "r1", title: "Tarte", servings: 4 };
+    const { result, onToolCall } = setup({ initialActiveRecipe: activeRecipe });
+
+    await act(() => result.current.sendMessage("Modifie la tarte"));
+
+    expect(onToolCall).toHaveBeenCalledWith(
+      { type: "extract_modified_recipe", data: { title: "Modif" } },
+      activeRecipe,
+    );
+  });
+
+  it("après get_recipe_details, injecte la recette chargée dans le tool call suivant (auto-retry)", async () => {
+    // Le moteur charge une recette (get_recipe_details) puis rejoue la requête ;
+    // le tool call du 2e tour doit recevoir cette recette en second argument,
+    // sans que le consommateur ait à maintenir son propre ref (regression #5).
+    const loaded = { id: "r9", title: "Chargée", servings: 2 };
+    const onToolCall = vi
+      .fn()
+      .mockResolvedValueOnce(loaded) // get_recipe_details -> renvoie la recette
+      .mockResolvedValueOnce(null); // extract_modified_recipe
+    fetchMock
+      .mockResolvedValueOnce(sseResponse([toolCallEvent("get_recipe_details", { recipe_id: "r9" })]))
+      .mockResolvedValueOnce(sseResponse([toolCallEvent("extract_modified_recipe", { title: "Modif" })]));
+    const { result } = setup({ onToolCall });
+
+    await act(() => result.current.sendMessage("modifie la recette r9"));
+
+    expect(onToolCall).toHaveBeenNthCalledWith(
+      1,
+      { type: "get_recipe_details", data: { recipe_id: "r9" } },
+      null,
+    );
+    expect(onToolCall).toHaveBeenNthCalledWith(
+      2,
+      { type: "extract_modified_recipe", data: { title: "Modif" } },
+      loaded,
+    );
+  });
+
   it("interprète une action JSON écrite en texte (fallback) et nettoie le message", async () => {
     fetchMock.mockResolvedValue(
       sseResponse([
@@ -298,10 +341,10 @@ describe("sendMessage — tool calls", () => {
 
     await act(() => result.current.sendMessage("Mes recettes"));
 
-    expect(onToolCall).toHaveBeenCalledWith({
-      type: "navigate",
-      data: { destination: "dashboard" },
-    });
+    expect(onToolCall).toHaveBeenCalledWith(
+      { type: "navigate", data: { destination: "dashboard" } },
+      null,
+    );
     const last = lastMessage(result.current.messages);
     expect(last.content).toBe("Je t'emmène !");
   });
