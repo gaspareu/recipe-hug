@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 
 import { useRecipes } from './useRecipes';
 import { useUserPreferences } from './useUserPreferences';
@@ -27,9 +27,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
     season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
   };
 
-  const activeRecipeRef = useRef(initialActiveRecipe);
-
-  const handleToolCall = useCallback(async (action: ToolCallAction): Promise<unknown> => {
+  const handleToolCall = useCallback(async (action: ToolCallAction, activeRecipe: ActiveRecipeData | null): Promise<unknown> => {
     console.log('Recipe chat tool call:', action.type, action.data);
 
     switch (action.type) {
@@ -68,7 +66,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
       case 'save_recipe': { engine.setPendingRecipe(action.data as unknown as PendingRecipe); return null; }
       case 'extract_modified_recipe': {
-        engine.setPendingRecipe({ ...(action.data as unknown as PendingRecipe), isUpdate: true, originalRecipeId: activeRecipeRef.current.id });
+        engine.setPendingRecipe({ ...(action.data as unknown as PendingRecipe), isUpdate: true, originalRecipeId: activeRecipe?.id });
         return null;
       }
       case 'create_new_recipe': {
@@ -78,7 +76,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
       default: console.log('Unknown tool call:', action.type); return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables et `engine.activeRecipe` est lu via closure au moment de l'appel
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables. La recette active vient désormais du 2e argument.
   }, [recipes, preferences, updatePreferencesAsync]);
 
   const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
@@ -96,9 +94,6 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
     onToolCall: handleToolCall,
     buildRequest,
   });
-
-  // Keep ref in sync
-  if (engine.activeRecipe) activeRecipeRef.current = engine.activeRecipe;
 
   const savePendingRecipe = useCallback(async () => {
     const pending = engine.pendingRecipe;
