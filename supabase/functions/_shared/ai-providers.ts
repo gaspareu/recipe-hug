@@ -164,8 +164,12 @@ async function callGeminiStreaming(config: AIConfig, messages: ChatMessage[], op
   // Use native Gemini endpoint (not OpenAI-compat) for streaming.
   // Clé via l'en-tête `x-goog-api-key`, jamais en query string (une erreur
   // réseau bas niveau exposerait l'URL — donc la clé — dans son message).
-  const action = options.stream ? "streamGenerateContent" : "generateContent";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:${action}`;
+  // En streaming, `?alt=sse` demande un flux SSE (`data: {...}` ligne par
+  // ligne) parsé incrémentalement par transformGeminiStreamToOpenAI ; sans lui
+  // Gemini renvoie un unique tableau JSON qu'il faudrait bufferiser en entier.
+  const endpoint = options.stream
+    ? `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?alt=sse`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`;
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -221,128 +225,210 @@ async function callAnthropicStreaming(config: AIConfig, messages: ChatMessage[],
 // ============================================================
 // STREAM TRANSFORMERS
 // ============================================================
+//
+// Anthropic et Gemini (streaming) sont normalisés vers le format de chunks
+// OpenAI attendu par le front (`useChatEngine`). Les builders ci-dessous
+// produisent ces chunks et sont partagés par les deux transforms ;
+// `surfaceStreamError` propage une erreur survenue APRÈS le 200 initial (sinon
+// le flux se clôturerait proprement et le client prendrait une réponse
+// tronquée pour un succès).
 
-function transformGeminiStreamToOpenAI(response: Response): Response {
-  const reader = response.body!.getReader();
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
+const encoder = new TextEncoder();
+const DONE_CHUNK = encoder.encode("data: [DONE]\n\n");
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) { controller.enqueue(encoder.encode("data: [DONE]\n\n")); controller.close(); break; }
-        buffer += decoder.decode(value, { stream: true });
-        try {
-          const jsonMatch = buffer.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            const chunks = JSON.parse(jsonMatch[0]);
-            for (const chunk of chunks) {
-              const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              const toolCalls = chunk.candidates?.[0]?.content?.parts?.[0]?.functionCall;
-              const openAIChunk: { choices: Array<{ delta: { content?: string; tool_calls?: ToolCall[] }; index: number }> } =
-                { choices: [{ delta: {}, index: 0 }] };
-              if (text) openAIChunk.choices[0].delta.content = text;
-              if (toolCalls) {
-                openAIChunk.choices[0].delta.tool_calls = [{
-                  id: `call_${Date.now()}`, type: "function",
-                  function: { name: toolCalls.name, arguments: JSON.stringify(toolCalls.args) },
-                }];
-              }
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAIChunk)}\n\n`));
-            }
-            buffer = "";
-          }
-        } catch { /* Keep accumulating */ }
-      }
-    },
-  });
-  return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
+/** Encode un objet en événement SSE `data: {...}`. */
+const sse = (payload: object): Uint8Array => encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
+
+interface OpenAIToolCallDelta {
+  index: number;
+  id?: string;
+  type?: "function";
+  function: { name?: string; arguments?: string };
 }
 
-export function transformAnthropicStreamToOpenAI(response: Response): Response {
+/** Chunk OpenAI : delta de contenu textuel. */
+function openAIContentChunk(text: string) {
+  return { choices: [{ index: 0, delta: { content: text } }] };
+}
+
+/**
+ * Chunk OpenAI : delta d'appel d'outil. `id`/`name` ne sont émis qu'au premier
+ * chunk d'un outil ; les chunks suivants ne portent que la suite des `arguments`.
+ */
+function openAIToolCallChunk(tc: { index: number; id?: string; name?: string; arguments?: string }) {
+  const fn: { name?: string; arguments?: string } = {};
+  if (tc.name !== undefined) fn.name = tc.name;
+  if (tc.arguments !== undefined) fn.arguments = tc.arguments;
+  const toolCall: OpenAIToolCallDelta = { index: tc.index, function: fn };
+  if (tc.id !== undefined) {
+    toolCall.id = tc.id;
+    toolCall.type = "function";
+  }
+  return { choices: [{ index: 0, delta: { tool_calls: [toolCall] } }] };
+}
+
+/** Chunk OpenAI : fin d'un bloc (le consommateur exécute l'outil accumulé). */
+function openAIFinishChunk(reason: string) {
+  return { choices: [{ index: 0, delta: {}, finish_reason: reason }] };
+}
+
+/**
+ * Propage une erreur mi-stream au client : coupe la connexion amont et met le
+ * flux transformé en erreur (le client l'affiche au lieu de la voir avalée).
+ */
+async function surfaceStreamError(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  error: { message?: string } | undefined,
+): Promise<void> {
+  console.error("AI stream error:", error);
+  await reader.cancel().catch(() => {}); // libère la connexion amont
+  controller.error(new Error(error?.message ?? "Erreur du fournisseur IA pendant la génération"));
+}
+
+interface GeminiStreamPart {
+  text?: string;
+  functionCall?: { name: string; args?: unknown };
+}
+
+interface GeminiStreamChunk {
+  candidates?: Array<{ content?: { parts?: GeminiStreamPart[] } }>;
+  error?: { message?: string; code?: number; status?: string };
+}
+
+interface AnthropicStreamEvent {
+  type?: string;
+  error?: { message?: string };
+  content_block?: { type?: string; id?: string; name?: string };
+  delta?: { type?: string; partial_json?: string; text?: string };
+}
+
+/** Un handler qui retourne une valeur demande l'arrêt du flux en erreur. */
+type SSEStop = { error?: { message?: string } };
+
+/**
+ * Boucle SSE partagée par les deux fournisseurs de streaming : lit les lignes
+ * `data: {...}` de façon incrémentale (le partiel est rebufferisé), délègue
+ * chaque objet parsé à `handle`, et clôt par `[DONE]`. Si `handle` renvoie une
+ * valeur, le flux est propagé en erreur au client via `surfaceStreamError` —
+ * chaque fournisseur détecte sa propre forme d'erreur, le surfaçage est commun.
+ */
+function transformSSEToOpenAI<T>(
+  response: Response,
+  handle: (data: T, emit: (chunk: object) => void) => SSEStop | void,
+): Response {
   const reader = response.body!.getReader();
-  const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
-  const sse = (payload: object) =>
-    encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
-
-  const stream = new ReadableStream({
+  const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      const emit = (chunk: object) => controller.enqueue(sse(chunk));
       let buffer = "";
-      // Suit le type du content block courant : le SSE Anthropic envoie le nom
-      // de l'outil dans `content_block_start` puis les arguments en deltas
-      // `input_json_delta`, et clôt avec `content_block_stop`. Les blocs sont
-      // séquentiels (un seul actif à la fois).
-      let currentBlockIsTool = false;
-      // Index de tool_call croissant : chaque bloc `tool_use` obtient le sien
-      // (0, 1, …) pour que deux outils émis dans le même message restent
-      // distincts au format OpenAI, au lieu d'être écrasés sur l'index 0.
-      let toolCallIndex = -1;
       while (true) {
         const { done, value } = await reader.read();
-        if (done) { controller.enqueue(encoder.encode("data: [DONE]\n\n")); controller.close(); break; }
+        if (done) {
+          controller.enqueue(DONE_CHUNK);
+          controller.close();
+          break;
+        }
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        buffer = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
+          let data: T;
           try {
-            const data = JSON.parse(line.slice(6));
-            switch (data.type) {
-              case "error": {
-                // Erreur émise APRÈS le 200 initial (overloaded, rate-limit…) :
-                // sans ce cas, le flux se clôturait proprement et le client
-                // recevait une réponse tronquée prise pour un succès. On propage
-                // l'échec pour que le client l'affiche au lieu de l'ignorer.
-                console.error("Anthropic stream error:", data.error);
-                await reader.cancel().catch(() => {}); // libère la connexion Anthropic amont
-                controller.error(new Error(data.error?.message ?? "Erreur du fournisseur IA pendant la génération"));
-                return;
-              }
-              case "content_block_start": {
-                const block = data.content_block;
-                if (block?.type === "tool_use") {
-                  currentBlockIsTool = true;
-                  toolCallIndex++;
-                  // Émet le nom de l'outil (arguments accumulés dans les deltas).
-                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: toolCallIndex, id: block.id, type: "function", function: { name: block.name, arguments: "" } }] } }] }));
-                } else {
-                  currentBlockIsTool = false;
-                }
-                break;
-              }
-              case "content_block_delta": {
-                if (data.delta?.type === "input_json_delta") {
-                  controller.enqueue(sse({ choices: [{ index: 0, delta: { tool_calls: [{ index: toolCallIndex, function: { arguments: data.delta.partial_json || "" } }] } }] }));
-                } else if (data.delta?.text != null) {
-                  controller.enqueue(sse({ choices: [{ index: 0, delta: { content: data.delta.text } }] }));
-                }
-                break;
-              }
-              case "content_block_stop": {
-                // Signale au front la fin de l'appel d'outil pour qu'il l'exécute.
-                // Un finish_reason par outil : le consommateur réinitialise son
-                // accumulateur à chaque fois, ce qui permet d'exécuter chaque
-                // outil d'un message multi-outils.
-                if (currentBlockIsTool) {
-                  controller.enqueue(sse({ choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] }));
-                  currentBlockIsTool = false;
-                }
-                break;
-              }
-            }
+            data = JSON.parse(line.slice(6)) as T;
           } catch {
-            // Ligne JSON incomplète/malformée : on l'ignore (les événements
-            // Anthropic sont complets ligne par ligne ; le partiel est rebufferisé).
+            // Ligne partielle/non-JSON : ignorée (le partiel est rebufferisé).
+            continue;
+          }
+          const stop = handle(data, emit);
+          if (stop) {
+            await surfaceStreamError(controller, reader, stop.error);
+            return;
           }
         }
       }
     },
   });
   return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
+}
+
+/**
+ * Flux SSE natif de Gemini (`?alt=sse` → `data: {GenerateContentResponse}`)
+ * normalisé en chunks OpenAI. Émet un `finish_reason: "tool_calls"` après
+ * chaque `functionCall` pour que le consommateur exécute chaque outil
+ * (auparavant absent → outils Gemini jamais exécutés).
+ */
+export function transformGeminiStreamToOpenAI(response: Response): Response {
+  let toolCallIndex = -1;
+  return transformSSEToOpenAI<GeminiStreamChunk>(response, (data, emit) => {
+    if (data.error) return { error: data.error };
+    for (const part of data.candidates?.[0]?.content?.parts ?? []) {
+      if (part.text) emit(openAIContentChunk(part.text));
+      if (part.functionCall) {
+        toolCallIndex++;
+        emit(openAIToolCallChunk({
+          index: toolCallIndex,
+          id: `call_${part.functionCall.name}_${toolCallIndex}`,
+          name: part.functionCall.name,
+          arguments: JSON.stringify(part.functionCall.args ?? {}),
+        }));
+        emit(openAIFinishChunk("tool_calls"));
+      }
+    }
+  });
+}
+
+/**
+ * Flux SSE Anthropic normalisé en chunks OpenAI. Le nom de l'outil arrive dans
+ * `content_block_start`, ses arguments en deltas `input_json_delta`, et le bloc
+ * clôt sur `content_block_stop` (blocs séquentiels, un seul actif à la fois).
+ */
+export function transformAnthropicStreamToOpenAI(response: Response): Response {
+  // Index de tool_call croissant : chaque bloc `tool_use` obtient le sien
+  // (0, 1, …) pour que deux outils émis dans le même message restent distincts
+  // au format OpenAI, au lieu d'être écrasés sur l'index 0.
+  let toolCallIndex = -1;
+  let currentBlockIsTool = false;
+  return transformSSEToOpenAI<AnthropicStreamEvent>(response, (data, emit) => {
+    switch (data.type) {
+      case "error":
+        // Erreur émise APRÈS le 200 initial (overloaded, rate-limit…).
+        return { error: data.error };
+      case "content_block_start": {
+        const block = data.content_block;
+        if (block?.type === "tool_use") {
+          currentBlockIsTool = true;
+          toolCallIndex++;
+          // Émet le nom de l'outil (arguments accumulés dans les deltas).
+          emit(openAIToolCallChunk({ index: toolCallIndex, id: block.id, name: block.name, arguments: "" }));
+        } else {
+          currentBlockIsTool = false;
+        }
+        break;
+      }
+      case "content_block_delta": {
+        if (data.delta?.type === "input_json_delta") {
+          emit(openAIToolCallChunk({ index: toolCallIndex, arguments: data.delta.partial_json || "" }));
+        } else if (data.delta?.text != null) {
+          emit(openAIContentChunk(data.delta.text));
+        }
+        break;
+      }
+      case "content_block_stop": {
+        // Un finish_reason par outil : le consommateur réinitialise son
+        // accumulateur à chaque fois, ce qui permet d'exécuter chaque outil
+        // d'un message multi-outils.
+        if (currentBlockIsTool) {
+          emit(openAIFinishChunk("tool_calls"));
+          currentBlockIsTool = false;
+        }
+        break;
+      }
+    }
+  });
 }
 
 // ============================================================
