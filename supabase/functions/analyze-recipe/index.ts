@@ -5,6 +5,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAINonStreaming } from "../_shared/ai-providers.ts";
+import { parseAnalysis } from "../_shared/analyze-output.ts";
 
 const IngredientSchema = z.object({
   name: z.string(),
@@ -91,18 +92,17 @@ Réponds uniquement avec le JSON, sans markdown ni texte supplémentaire.`;
     const aiResponse = await callAINonStreaming(aiConfig, [{ role: "user", content: prompt }]);
     console.log("AI response received");
 
-    let analysis;
-    try {
-      const cleanJson = aiResponse.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      analysis = JSON.parse(cleanJson);
-    } catch (parseError) {
-      console.error("Failed to parse AI response:", parseError);
-      throw new Error("Failed to parse AI analysis");
+    // La sortie du modèle est une donnée externe non fiable : on la valide
+    // contre un schéma avant de la renvoyer (et donc de l'écrire en base).
+    const parsed = parseAnalysis(aiResponse);
+    if (!parsed.ok) {
+      console.error("Invalid AI analysis:", parsed.error);
+      return new Response(JSON.stringify({ error: "Failed to parse AI analysis" }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     console.log("Parsed analysis for recipe:", title);
 
-    return new Response(JSON.stringify(analysis), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify(parsed.data), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
     console.error("Error in analyze-recipe function:", error);
     return new Response(JSON.stringify({ error: "Failed to analyze recipe" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
