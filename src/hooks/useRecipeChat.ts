@@ -4,7 +4,8 @@ import { useRecipes } from './useRecipes';
 import { useUserPreferences } from './useUserPreferences';
 import { useChatEngine, ActiveRecipeData, ChatEngineConfig, PendingRecipe, ToolCallAction } from './useChatEngine';
 import type { Recipe } from '@/types/recipe';
-import { applyPreferenceOperations, type PreferenceOperation } from '@/lib/preference-operations';
+import { applyPreferenceOperations } from '@/lib/preference-operations';
+import { parseRecipePayload, parsePreferenceOperations } from '@/lib/chat-tool-payloads';
 
 // Re-export types
 export type { ChatMessage, MessageContent } from './useChatEngine';
@@ -57,20 +58,27 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
       case 'get_preferences': return preferences;
 
       case 'update_preferences': {
-        const operations = action.data.operations as PreferenceOperation[];
+        const operations = parsePreferenceOperations(action.data.operations);
+        if (!operations) return { error: 'Invalid preference operations' };
         if (!preferences) return { error: 'No preferences loaded' };
         const updatedPrefs = applyPreferenceOperations(preferences, operations);
         try { await updatePreferencesAsync(updatedPrefs); return { success: true, updatedPreferences: updatedPrefs }; }
         catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }
 
-      case 'save_recipe': { engine.setPendingRecipe(action.data as unknown as PendingRecipe); return null; }
+      case 'save_recipe': {
+        const recipe = parseRecipePayload(action.data);
+        if (recipe) engine.setPendingRecipe(recipe);
+        return null;
+      }
       case 'extract_modified_recipe': {
-        engine.setPendingRecipe({ ...(action.data as unknown as PendingRecipe), isUpdate: true, originalRecipeId: activeRecipe?.id });
+        const recipe = parseRecipePayload(action.data);
+        if (recipe) engine.setPendingRecipe({ ...recipe, isUpdate: true, originalRecipeId: activeRecipe?.id });
         return null;
       }
       case 'create_new_recipe': {
-        engine.setPendingRecipe({ ...(action.data as unknown as PendingRecipe), relationToOriginal: action.data.relation_to_original as string });
+        const recipe = parseRecipePayload(action.data);
+        if (recipe) engine.setPendingRecipe({ ...recipe, relationToOriginal: action.data.relation_to_original as string });
         return null;
       }
 

@@ -92,9 +92,13 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
     validée contre un schéma Zod (`_shared/analyze-output.ts` → `parseAnalysis`) avant d'être renvoyée
     (et écrite en base) : types + bornes (`calorie_score` 1-5, tags ≤5, longueurs), clés inconnues
     retirées ; échec → 502. Filet : 9 tests Deno. ⚠️ Redéploiement edge function requis au merge.
-  - **Reste :** payloads d'outils castés sans Zod dans les hooks de chat (`save_recipe`/
-    `extract_modified_recipe`/`create_new_recipe`/`update_preferences`) → valider `action.data`, avec
-    des schémas calés sur les tool definitions de `home-assistant` pour ne pas rejeter de sorties valides.
+  - Payloads d'outils dans les hooks de chat — **✅ fait (branche `fix/medium-validation-tool-payloads`).**
+    `save_recipe`/`extract_modified_recipe`/`create_new_recipe`/`update_preferences` validés via
+    `src/lib/chat-tool-payloads.ts` (`parseRecipePayload`/`parsePreferenceOperations`, Zod) dans
+    `useHomeChat` **et** `useRecipeChat` : schémas tolérants (calés sur le contrat réel de `home-assistant`,
+    `quantity` string|number, champs optionnels) pour ne pas rejeter de recettes valides ; clés inconnues
+    retirées, marqueurs `isUpdate`/`originalRecipeId` préservés ; payload invalide → no-op sûr. Filet :
+    14 tests Vitest. Front pur (pas de redéploiement). `/security-review` : 0 finding.
 
 ### D. Correctness / conventions MEDIUM (review initiale)
 
