@@ -117,7 +117,11 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
   et `useProfile`/`useUpdateProfile`/`useUploadAvatar` (10 tests). Comportement préservé (cache-buster
   avatar, undo optimiste). Reste : vérif E2E Playwright de ces écrans (→ §E).
 - `Auth.tsx` : messages d'erreur calculés mais jamais affichés (uniquement `console.error`).
-- Token webhook affiché en clair dans les exemples/`.md` de `WebhookIntegrationContent`.
+- ✅ Token webhook affiché en clair dans les exemples de `WebhookIntegrationContent`
+  (branche `fix/medium-webhook-token-clear`) — les exemples cURL/Raccourcis et le header inline
+  affichent désormais `<votre-token>` ; les boutons « copier » injectent le vrai token (utilité
+  préservée). Le champ token reste `type="password"`. Guide `.md` téléchargé inchangé (action
+  explicite de l'utilisateur, avertissement « ne partagez jamais »). Filet : 2 tests.
 
 ### E. Tests (review initiale) — zones critiques non couvertes
 
