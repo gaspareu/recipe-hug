@@ -102,15 +102,15 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
 
 ### D. Correctness / conventions MEDIUM (review initiale)
 
-- ✅ `useVoiceMode` : cleanup au démontage ajouté (branche `fix/medium-cleanup-lifecycle`) —
-  déconnecte Scribe (fin de la captation micro orpheline, RGPD) + vide la file audio et libère
-  les URLs blob. Filet : test de démontage.
-- `savePendingRecipe` (`useHomeChat`) : réimplémente les mutations hors TanStack Query, n'invalide
-  pas `['recipe', id]` après update.
-- `useWebhookToken` : hors TanStack Query + `isLoading` bloqué à `true` si non connecté.
-- ✅ `useChatEngine` : `AbortController` abandonné au démontage (branche `fix/medium-cleanup-lifecycle`)
-  — plus de fetch/reader actif ni de setMessages après démontage. Filet : test de démontage.
-- `useRecipeVersions.useRestoreVersion` : n'invalide pas `['recipes']`.
+- `useVoiceMode` : pas de cleanup au démontage (Scribe reste connecté, file audio continue).
+- 🟡 `savePendingRecipe` (`useHomeChat`) : ✅ invalide désormais `['recipe', id]` après sauvegarde
+  (branche `fix/medium-tanstack-invalidation`). **Reste (altitude, §B.3)** : réimplémente encore les
+  mutations en `supabase` brut au lieu de router vers `useCreateRecipe`/`useUpdateRecipe`.
+- 🟡 `useWebhookToken` : ✅ `isLoading` ne reste plus bloqué à `true` sans utilisateur
+  (branche `fix/medium-tanstack-invalidation`). **Reste (altitude)** : migration complète vers TanStack Query.
+- `useChatEngine` : `AbortController` non abandonné au démontage.
+- ✅ `useRecipeVersions.useRestoreVersion` : invalide désormais `['recipes']` **et** `['recipe', id]`
+  (branche `fix/medium-tanstack-invalidation`, test dédié).
 - `StepsEditor.tsx:57` : `steps.sort()` **mute la prop** pendant le rendu → `[...steps].sort()`.
 - `MealPlanning`/`Profile` : appels `supabase` directs → extraire des hooks (`useMealPlans`, `useProfile`).
 - `Auth.tsx` : messages d'erreur calculés mais jamais affichés (uniquement `console.error`).
