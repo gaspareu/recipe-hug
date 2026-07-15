@@ -54,7 +54,7 @@ export function StepsEditor({ steps, onChange }: StepsEditorProps) {
       )}
 
       <div className="space-y-2">
-        {steps
+        {[...steps]
           .sort((a, b) => a.order - b.order)
           .map((step, index) => (
             <div key={index} className="flex items-start gap-2 p-2 border rounded-lg bg-muted/30">

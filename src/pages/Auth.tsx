@@ -31,6 +31,7 @@ export default function Auth() {
   const [resetEmail, setResetEmail] = useState('');
   const [showResetForm, setShowResetForm] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -56,12 +57,14 @@ export default function Auth() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setError(null);
+
     try {
       emailSchema.parse(loginEmail);
       passwordSchema.parse(loginPassword);
     } catch (err) {
       if (err instanceof z.ZodError) {
+        setError(err.issues[0]?.message ?? 'Champs invalides');
         return;
       }
     }
@@ -73,7 +76,7 @@ export default function Auth() {
     if (error) {
       let message = 'Erreur de connexion';
       const errorMsg = error.message.toLowerCase();
-      
+
       if (errorMsg.includes('invalid login credentials') || errorMsg.includes('invalid_credentials')) {
         message = 'Email ou mot de passe incorrect';
       } else if (errorMsg.includes('email not confirmed')) {
@@ -85,18 +88,20 @@ export default function Auth() {
       } else if (errorMsg.includes('user not found')) {
         message = 'Aucun compte trouvé avec cet email';
       }
-      
-      console.error('Login error:', message);
+
+      setError(message);
     }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setError(null);
+
     try {
       emailSchema.parse(resetEmail);
     } catch (err) {
       if (err instanceof z.ZodError) {
+        setError(err.issues[0]?.message ?? 'Email invalide');
         return;
       }
     }
@@ -108,14 +113,14 @@ export default function Auth() {
     if (error) {
       let message = 'Erreur lors de la réinitialisation';
       const errorMsg = error.message.toLowerCase();
-      
+
       if (errorMsg.includes('rate limit') || errorMsg.includes('too many requests')) {
         message = 'Trop de demandes. Veuillez réessayer dans quelques minutes';
       } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
         message = 'Erreur de connexion réseau';
       }
-      
-      console.error('Reset password error:', message);
+
+      setError(message);
     } else {
       setShowResetForm(false);
       setResetEmail('');
@@ -124,12 +129,14 @@ export default function Auth() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setError(null);
+
     try {
       emailSchema.parse(signupEmail);
       passwordSchema.parse(signupPassword);
     } catch (err) {
       if (err instanceof z.ZodError) {
+        setError(err.issues[0]?.message ?? 'Champs invalides');
         return;
       }
     }
@@ -141,7 +148,7 @@ export default function Auth() {
     if (error) {
       let message = "Erreur lors de l'inscription";
       const errorMsg = error.message.toLowerCase();
-      
+
       if (errorMsg.includes('already registered') || errorMsg.includes('already exists')) {
         message = 'Un compte existe déjà avec cet email';
       } else if (errorMsg.includes('weak password') || errorMsg.includes('password')) {
@@ -153,10 +160,19 @@ export default function Auth() {
       } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
         message = 'Erreur de connexion réseau';
       }
-      
-      console.error('Signup error:', message);
+
+      setError(message);
     }
   };
+
+  const errorAlert = error ? (
+    <div
+      role="alert"
+      className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+    >
+      {error}
+    </div>
+  ) : null;
 
   if (loading) {
     return (
@@ -213,7 +229,7 @@ export default function Auth() {
           </div>
         </CardContent>
         
-        <Tabs defaultValue="login" className="w-full">
+        <Tabs defaultValue="login" className="w-full" onValueChange={() => setError(null)}>
           <TabsList className="grid w-full grid-cols-2 mx-6" style={{ width: 'calc(100% - 3rem)' }}>
             <TabsTrigger value="login">Connexion</TabsTrigger>
             <TabsTrigger value="signup">Inscription</TabsTrigger>
@@ -223,6 +239,7 @@ export default function Auth() {
             {showResetForm ? (
               <form onSubmit={handleResetPassword}>
                 <CardContent className="space-y-4">
+                  {errorAlert}
                   <div className="space-y-2">
                     <Label htmlFor="reset-email">Email</Label>
                     <Input
@@ -245,9 +262,12 @@ export default function Auth() {
                   </Button>
                   <Button 
                     type="button" 
-                    variant="ghost" 
+                    variant="ghost"
                     className="w-full"
-                    onClick={() => setShowResetForm(false)}
+                    onClick={() => {
+                      setError(null);
+                      setShowResetForm(false);
+                    }}
                   >
                     Retour à la connexion
                   </Button>
@@ -256,6 +276,7 @@ export default function Auth() {
             ) : (
               <form onSubmit={handleLogin}>
                 <CardContent className="space-y-4">
+                  {errorAlert}
                   <div className="space-y-2">
                     <Label htmlFor="login-email">Email</Label>
                     <Input
@@ -274,7 +295,10 @@ export default function Auth() {
                         type="button"
                         variant="link" 
                         className="px-0 h-auto text-xs text-muted-foreground"
-                        onClick={() => setShowResetForm(true)}
+                        onClick={() => {
+                          setError(null);
+                          setShowResetForm(true);
+                        }}
                       >
                         Mot de passe oublié ?
                       </Button>
@@ -302,6 +326,7 @@ export default function Auth() {
           <TabsContent value="signup">
             <form onSubmit={handleSignup}>
               <CardContent className="space-y-4">
+                {errorAlert}
                 <div className="space-y-2">
                   <Label htmlFor="signup-name">Nom d'affichage (optionnel)</Label>
                   <Input

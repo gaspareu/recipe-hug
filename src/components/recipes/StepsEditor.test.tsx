@@ -269,6 +269,25 @@ describe("StepsEditor — réorganisation", () => {
 });
 
 // ──────────────────────────────────────────────────────────
+// Immutabilité de la prop
+// ──────────────────────────────────────────────────────────
+
+describe("StepsEditor — immutabilité", () => {
+  it("ne mute pas le tableau steps passé en prop lors du rendu", () => {
+    const steps: Step[] = [
+      { order: 2, text: "Deuxième" },
+      { order: 1, text: "Première" },
+    ];
+    const snapshot = steps.map((s) => ({ ...s }));
+
+    setup(steps);
+
+    // Le rendu ne doit pas trier le tableau en place (effet de bord sur la prop).
+    expect(steps).toEqual(snapshot);
+  });
+});
+
+// ──────────────────────────────────────────────────────────
 // Placeholder des textareas
 // ──────────────────────────────────────────────────────────
 
