@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Camera, User, Sun, ChefHat, Webhook, Cpu, UtensilsCrossed } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { useProfile, useUpdateProfile, useUploadAvatar } from '@/hooks/useProfile';
 import { CollapsibleSection } from '@/components/profile/CollapsibleSection';
 import { CulinaryPreferencesContent } from '@/components/profile/CulinaryPreferencesContent';
 import { WebhookIntegrationContent } from '@/components/profile/WebhookIntegrationContent';
@@ -22,40 +22,23 @@ export default function Profile() {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const { data: profile, isLoading } = useProfile(user?.id);
+  const updateProfile = useUpdateProfile();
+  const uploadAvatar = useUploadAvatar();
+
   const [displayName, setDisplayName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  // Override d'affichage après upload (URL avec cache-buster pour forcer le
+  // rafraîchissement) ; sinon on suit la valeur du profil chargé.
+  const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
 
-  const fetchProfile = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles_safe')
-        .select('display_name, avatar_url')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (data) {
-        setDisplayName(data.display_name || '');
-        setAvatarUrl(data.avatar_url);
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user]);
-
+  // Alimente le champ éditable dès que le profil est chargé.
   useEffect(() => {
-    if (user) {
-      fetchProfile();
-    }
-  }, [user, fetchProfile]);
+    if (profile) setDisplayName(profile.display_name || '');
+  }, [profile]);
+
+  const avatarUrl = avatarOverride ?? profile?.avatar_url ?? null;
+  const isUploading = uploadAvatar.isPending;
+  const isSaving = updateProfile.isPending;
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -71,38 +54,12 @@ export default function Profile() {
       return;
     }
 
-    setIsUploading(true);
-
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/avatar.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-
-      // Add cache buster to force refresh
-      const urlWithCacheBuster = `${publicUrl}?t=${Date.now()}`;
-      setAvatarUrl(urlWithCacheBuster);
-
-      // Update profile with new avatar URL
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: publicUrl })
-        .eq('id', user.id);
-
-      if (updateError) throw updateError;
-
+      const publicUrl = await uploadAvatar.mutateAsync({ userId: user.id, file });
+      // Cache buster pour forcer le rechargement de l'image mise à jour.
+      setAvatarOverride(`${publicUrl}?t=${Date.now()}`);
     } catch (error) {
       console.error('Error uploading avatar:', error);
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -110,20 +67,10 @@ export default function Profile() {
     e.preventDefault();
     if (!user) return;
 
-    setIsSaving(true);
-
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ display_name: displayName.trim() || null })
-        .eq('id', user.id);
-
-      if (error) throw error;
-
+      await updateProfile.mutateAsync({ userId: user.id, displayName: displayName.trim() || null });
     } catch (error) {
       console.error('Error updating profile:', error);
-    } finally {
-      setIsSaving(false);
     }
   };
 

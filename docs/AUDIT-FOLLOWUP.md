@@ -112,7 +112,10 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
 - ✅ `useRecipeVersions.useRestoreVersion` : invalide désormais `['recipes']` **et** `['recipe', id]`
   (branche `fix/medium-tanstack-invalidation`, test dédié).
 - `StepsEditor.tsx:57` : `steps.sort()` **mute la prop** pendant le rendu → `[...steps].sort()`.
-- `MealPlanning`/`Profile` : appels `supabase` directs → extraire des hooks (`useMealPlans`, `useProfile`).
+- ✅ `MealPlanning`/`Profile` : appels `supabase` directs extraits en hooks TanStack Query
+  (branche `refactor/medium-extract-page-hooks`) — `useMealPlans`/`useAddMealPlan`/`useDeleteMealPlan`
+  et `useProfile`/`useUpdateProfile`/`useUploadAvatar` (10 tests). Comportement préservé (cache-buster
+  avatar, undo optimiste). Reste : vérif E2E Playwright de ces écrans (→ §E).
 - `Auth.tsx` : messages d'erreur calculés mais jamais affichés (uniquement `console.error`).
 - Token webhook affiché en clair dans les exemples/`.md` de `WebhookIntegrationContent`.
 
