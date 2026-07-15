@@ -82,4 +82,20 @@ describe('useVoiceMode', () => {
     expect(track.stop).toHaveBeenCalledTimes(1);
     expect(scribeConnect).toHaveBeenCalledTimes(1);
   });
+
+  it('déconnecte Scribe au démontage (pas de captation micro orpheline)', async () => {
+    installGetUserMedia([makeTrack()]);
+
+    const { result, unmount } = renderHook(() => useVoiceMode());
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+
+    scribeDisconnect.mockClear();
+    unmount();
+
+    // Sans cleanup, Scribe resterait connecté après le démontage du composant.
+    expect(scribeDisconnect).toHaveBeenCalledTimes(1);
+  });
 });

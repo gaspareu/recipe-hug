@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useScribe, CommitStrategy } from '@elevenlabs/react';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -30,6 +30,11 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       }
     },
   });
+
+  // Référence à jour de scribe : le cleanup de démontage (deps []) doit
+  // déconnecter le scribe courant, pas celui capturé au premier rendu.
+  const scribeRef = useRef(scribe);
+  scribeRef.current = scribe;
 
   // Play next audio in queue
   const playNextInQueue = useCallback(async () => {
@@ -230,10 +235,26 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
   // Enable voice AND start listening in one synchronous user gesture
   const enableAndListen = useCallback(() => {
     setVoiceEnabled(true);
-    
+
     // Call doStartListening directly — no setTimeout, preserves user gesture
     doStartListening();
   }, [doStartListening]);
+
+  // Cleanup au démontage : sans cela, Scribe resterait connecté (captation
+  // micro orpheline, RGPD) et la file audio continuerait à jouer. Teardown
+  // impératif (pas de setState après démontage).
+  useEffect(() => {
+    return () => {
+      audioQueueRef.current = [];
+      if (audioRef.current) {
+        audioRef.current.pause();
+        URL.revokeObjectURL(audioRef.current.src);
+        audioRef.current = null;
+      }
+      isPlayingRef.current = false;
+      scribeRef.current.disconnect();
+    };
+  }, []);
 
   return {
     voiceEnabled,

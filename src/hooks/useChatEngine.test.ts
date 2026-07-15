@@ -1,4 +1,4 @@
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import {
   contentEvent,
@@ -370,5 +370,36 @@ describe("resetChat", () => {
     expect(result.current.messages[0]).toMatchObject({ id: "welcome", content: "Bienvenue !" });
     expect(result.current.pendingRecipe).toBeNull();
     expect(result.current.searchResults).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cleanup au démontage
+// ---------------------------------------------------------------------------
+describe("useChatEngine — démontage", () => {
+  it("abandonne la requête en cours au démontage", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    // fetch capture le signal ; le stream ne se termine jamais (read() pend),
+    // simulant une génération en cours au moment du démontage.
+    fetchMock.mockImplementation((_url: string, opts: { signal?: AbortSignal }) => {
+      capturedSignal = opts.signal;
+      return Promise.resolve({
+        ok: true,
+        body: { getReader: () => ({ read: () => new Promise(() => {}) }) },
+      });
+    });
+
+    const { result, unmount } = setup();
+
+    act(() => {
+      void result.current.sendMessage("Salut");
+    });
+
+    await waitFor(() => expect(capturedSignal).toBeDefined());
+    expect(capturedSignal?.aborted).toBe(false);
+
+    unmount();
+
+    expect(capturedSignal?.aborted).toBe(true);
   });
 });
