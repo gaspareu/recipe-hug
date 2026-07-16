@@ -93,10 +93,25 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
     `verify_jwt = true` sauf `webhook-recipe` (auth par token UUID). Le front envoie déjà le JWT sur
     tous les appels (vérifié call-site par call-site) → sûr. `config.toml` ajouté au trigger du
     workflow de déploiement (sinon non redéployé). Doc `functions/CLAUDE.md` alignée.
-  - **Reste (🟠/🔴, déploiements coordonnés requis) :** `webhook_token` stocké en clair (stocker un hash) ;
-    policy storage du bucket `recipes` incohérente (INSERT dossier partagé vs UPDATE/DELETE en `uid`) ;
-    vues `*_safe` sans `REVOKE` colonne (defense-in-depth — casse `select('*')` front) ;
-    buckets publics (`avatars` = PII → URLs signées, casse les avatars existants sans déploiement atomique).
+  - `get_user_id_by_phone` **exécutable par `anon`** — **✅ fait (branche `fix/c-db-storage-hardening`).**
+    Recon MCP : la fonction `SECURITY DEFINER` (lit `auth.users`) restait appelable sans auth (oracle
+    d'énumération par téléphone) — l'ACL prod montrait `{postgres, anon, service_role}`, la migration
+    d'origine ayant révoqué PUBLIC/authenticated mais **pas** `anon`. Migration `REVOKE ... FROM anon`
+    → réservée au `service_role`. ⚠️ Peut casser un flux n8n l'appelant via la clé anon (réversible).
+  - Policy storage bucket `recipes` incohérente — **✅ fait (branche `fix/c-db-storage-hardening`).**
+    INSERT autorisait le dossier partagé `recipe-images/` alors qu'UPDATE/DELETE exigent `<uid>/`
+    (images orphelines, espace partagé). Migration alignant l'INSERT sur `<uid>/` + front (RecipeDetail)
+    écrivant via `buildRecipeImageObjectPath(user.id, …)` (helper testé). Images existantes toujours
+    lisibles (bucket public). ⚠️ Migration + front à merger ensemble.
+  - **Reste (🟠/🔴, cassant — écarté par décision produit) :**
+    - `webhook_token` en clair → hash : invaliderait tous les tokens, imposerait une UI « montré une
+      seule fois » + un changement de `webhook-recipe`. Token = UUID aléatoire (pas un mot de passe).
+      **Écarté** (gain modéré vs rupture UX).
+    - Bucket `avatars` public (PII) → privé + URLs signées : casse toutes les URLs d'avatars stockées,
+      migration data + `createSignedUrl` partout, déploiement atomique. **Écarté** (rupture).
+    - Vues `*_safe` sans `REVOKE` colonne : `profiles_safe` **exclut déjà** `webhook_token` ; le REVOKE
+      colonne sur la table de base est defense-in-depth de très faible valeur (RLS scope à sa propre
+      ligne, le token est le sien). **Écarté** (faible valeur).
 - **Validation des sorties LLM** (« ne jamais faire confiance aux données externes ») :
   - `analyze-recipe` — **✅ fait (branche `fix/medium-validation-llm`).** La sortie du modèle est
     validée contre un schéma Zod (`_shared/analyze-output.ts` → `parseAnalysis`) avant d'être renvoyée
