@@ -1,0 +1,13 @@
+-- §C — Ferme l'oracle d'énumération par téléphone.
+--
+-- `get_user_id_by_phone(text)` est SECURITY DEFINER et lit `auth.users` : il
+-- permet de savoir si un numéro de téléphone correspond à un compte. La
+-- migration d'origine (20260318000000) révoquait EXECUTE de PUBLIC et
+-- `authenticated`, mais PAS de `anon` — or le grant par défaut Supabase avait
+-- accordé EXECUTE à `anon`. Résultat (confirmé via l'ACL réel) : la fonction
+-- restait appelable sans authentification via /rest/v1/rpc/get_user_id_by_phone.
+--
+-- On la réserve au `service_role` (edge functions / flux serveur, ex. n8n via
+-- la clé service). Réversible si un flux légitime l'appelle en anon :
+--   GRANT EXECUTE ON FUNCTION public.get_user_id_by_phone(text) TO anon;
+REVOKE EXECUTE ON FUNCTION public.get_user_id_by_phone(text) FROM anon;
