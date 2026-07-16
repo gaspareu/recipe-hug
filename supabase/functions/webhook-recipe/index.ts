@@ -4,26 +4,11 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { buildSimpleRequest, extractContentFromResponse } from "../_shared/ai-providers.ts";
 import { generateAndStoreRecipeImage } from "../_shared/generate-image.ts";
+import { parseWebhookRecipe } from "../_shared/webhook-recipe-parse.ts";
 
 // Validation schemas
 const WebhookPayloadSchema = z.object({
   text: z.string().min(1, "Text is required").max(10000, "Text too long"),
-});
-
-const ExtractedRecipeSchema = z.object({
-  title: z.string(),
-  servings: z.number().nullable().optional(),
-  ingredients: z.array(z.object({
-    name: z.string(),
-    quantity: z.number().nullable().optional(),
-    unit: z.string().nullable().optional(),
-  })),
-  steps: z.array(z.object({
-    order: z.number(),
-    text: z.string(),
-  })),
-  season: z.string().nullable().optional(),
-  nutrition_tags: z.array(z.string()).optional(),
 });
 
 // Background image generation function (source unique : _shared/generate-image.ts)
@@ -192,46 +177,15 @@ RÉPONDS UNIQUEMENT AVEC LE JSON, sans markdown ni explication.`;
 
     console.log("AI response received");
 
-    let extractedRecipe;
-    try {
-      // Tolère d'éventuelles clôtures markdown autour du JSON.
-      const cleanJson = aiContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      extractedRecipe = JSON.parse(cleanJson);
-    } catch (parseError) {
-      console.error("Failed to parse AI response as JSON:", parseError);
+    const parsed = parseWebhookRecipe(aiContent);
+    if (!parsed.ok) {
+      console.error("Failed to parse AI response as JSON");
       return new Response(
-        JSON.stringify({ error: "Failed to parse AI response" }),
+        JSON.stringify({ error: parsed.error }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    // Normalize steps
-    if (Array.isArray(extractedRecipe.steps)) {
-      extractedRecipe.steps = extractedRecipe.steps.map((step: unknown, index: number) => {
-        if (typeof step === "string") {
-          return { order: index + 1, text: step };
-        }
-        const s = step as { order?: number; text?: string; instruction?: string };
-        if (s.instruction && !s.text) {
-          return { order: s.order || index + 1, text: s.instruction };
-        }
-        return { order: s.order || index + 1, text: s.text || "" };
-      });
-    }
-
-    const recipeValidation = ExtractedRecipeSchema.safeParse(extractedRecipe);
-    if (!recipeValidation.success) {
-      extractedRecipe = {
-        title: extractedRecipe.title || "Recette sans titre",
-        servings: extractedRecipe.servings ?? extractedRecipe.portions ?? null,
-        ingredients: Array.isArray(extractedRecipe.ingredients) ? extractedRecipe.ingredients : [],
-        steps: Array.isArray(extractedRecipe.steps) ? extractedRecipe.steps : [],
-        season: extractedRecipe.season || null,
-        nutrition_tags: Array.isArray(extractedRecipe.nutrition_tags) ? extractedRecipe.nutrition_tags : null,
-      };
-    } else {
-      extractedRecipe = recipeValidation.data;
-    }
+    const extractedRecipe = parsed.recipe;
 
     const { data: newRecipe, error: insertError } = await supabaseAdmin
       .from("recipes")
