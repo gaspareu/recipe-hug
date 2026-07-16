@@ -35,3 +35,8 @@ dist-ssr
 *.sw?
 __pycache__/
 test-results/
+
+# Playwright
+e2e/.auth/
+test-results/
+playwright-report/
