@@ -1,6 +1,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import { createSupabaseMock, type SupabaseMockOptions } from "@/test/supabase-mock";
+import { createQueryWrapper } from "@/test/query-client";
 
 const { mockSupabase } = vi.hoisted(() => ({
   mockSupabase: { from: vi.fn(), rpc: vi.fn(), functions: { invoke: vi.fn() }, auth: {} },
@@ -29,7 +30,7 @@ describe("useWebhookToken", () => {
     const sb = installSupabase({
       rpcResultsByName: { get_my_webhook_token: { data: "tok-123", error: null } },
     });
-    const { result } = renderHook(() => useWebhookToken());
+    const { result } = renderHook(() => useWebhookToken(), { wrapper: createQueryWrapper() });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(sb.rpc).toHaveBeenCalledWith("get_my_webhook_token");
@@ -39,7 +40,7 @@ describe("useWebhookToken", () => {
   it("ne récupère rien et n'est pas en chargement sans utilisateur", () => {
     mockAuth.user = null;
     const sb = installSupabase();
-    const { result } = renderHook(() => useWebhookToken());
+    const { result } = renderHook(() => useWebhookToken(), { wrapper: createQueryWrapper() });
 
     expect(sb.rpc).not.toHaveBeenCalled();
     // Rien à charger sans utilisateur : isLoading ne doit pas rester bloqué à true.
@@ -55,7 +56,7 @@ describe("useWebhookToken", () => {
         generate_webhook_token: { data: "new-tok", error: null },
       },
     });
-    const { result } = renderHook(() => useWebhookToken());
+    const { result } = renderHook(() => useWebhookToken(), { wrapper: createQueryWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     let returned: string | null = null;
@@ -76,7 +77,7 @@ describe("useWebhookToken", () => {
         generate_webhook_token: { data: null, error: { message: "boom" } },
       },
     });
-    const { result } = renderHook(() => useWebhookToken());
+    const { result } = renderHook(() => useWebhookToken(), { wrapper: createQueryWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     const returned = await result.current.generateToken();
@@ -89,7 +90,7 @@ describe("useWebhookToken", () => {
     const writeText = vi.fn(() => Promise.resolve());
     Object.assign(navigator, { clipboard: { writeText } });
 
-    const { result } = renderHook(() => useWebhookToken());
+    const { result } = renderHook(() => useWebhookToken(), { wrapper: createQueryWrapper() });
     await result.current.copyToClipboard("hello");
 
     expect(writeText).toHaveBeenCalledWith("hello");
