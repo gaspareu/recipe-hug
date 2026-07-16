@@ -55,11 +55,11 @@ export function useAsyncAction<TArgs extends unknown[]>(
       }, loaderDelayMs);
       try {
         await fn(...args);
-        if (successMessage) toast(successMessage);
+        if (successMessage) toast.success(successMessage);
       } catch (error) {
         const message =
           errorMessage ?? (error instanceof Error ? error.message : 'Une erreur est survenue');
-        toast(message);
+        toast.error(message);
         console.error('Action échouée:', error);
       } finally {
         if (timerRef.current) clearTimeout(timerRef.current);

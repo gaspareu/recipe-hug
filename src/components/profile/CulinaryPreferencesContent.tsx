@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from '@/components/ui/sonner';
+import { notifySaveSuccess, notifySaveError } from '@/lib/notify';
 
 import { 
   useUserPreferences, 
@@ -248,14 +248,12 @@ export function CulinaryPreferencesContent() {
       onSuccess: () => {
         setHasChanges(false);
         setLocalPrefs(null);
-        toast.success('Préférences enregistrées');
+        notifySaveSuccess('Préférences enregistrées');
       },
       onError: () => {
         // Log détaillé fait par updateMutation.onError (source unique) ;
         // ici on surface l'échec à l'utilisateur.
-        toast.error("Échec de l'enregistrement des préférences", {
-          description: 'Vérifie ta connexion et réessaie.',
-        });
+        notifySaveError("Échec de l'enregistrement des préférences");
       },
     });
   };
