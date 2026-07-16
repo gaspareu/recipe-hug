@@ -100,24 +100,36 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
     retirées, marqueurs `isUpdate`/`originalRecipeId` préservés ; payload invalide → no-op sûr. Filet :
     14 tests Vitest. Front pur (pas de redéploiement). `/security-review` : 0 finding.
 
-### D. Correctness / conventions MEDIUM (review initiale)
+### D. Correctness / conventions MEDIUM (review initiale) — ✅ traité (5 lots, TDD)
 
-- `useVoiceMode` : pas de cleanup au démontage (Scribe reste connecté, file audio continue).
-- 🟡 `savePendingRecipe` (`useHomeChat`) : ✅ invalide désormais `['recipe', id]` après sauvegarde
-  (branche `fix/medium-tanstack-invalidation`). **Reste (altitude, §B.3)** : réimplémente encore les
-  mutations en `supabase` brut au lieu de router vers `useCreateRecipe`/`useUpdateRecipe`.
-- 🟡 `useWebhookToken` : ✅ `isLoading` ne reste plus bloqué à `true` sans utilisateur
-  (branche `fix/medium-tanstack-invalidation`). **Reste (altitude)** : migration complète vers TanStack Query.
-- `useChatEngine` : `AbortController` non abandonné au démontage.
-- ✅ `useRecipeVersions.useRestoreVersion` : invalide désormais `['recipes']` **et** `['recipe', id]`
-  (branche `fix/medium-tanstack-invalidation`, test dédié).
-- `StepsEditor.tsx:57` : `steps.sort()` **mute la prop** pendant le rendu → `[...steps].sort()`.
-- ✅ `MealPlanning`/`Profile` : appels `supabase` directs extraits en hooks TanStack Query
-  (branche `refactor/medium-extract-page-hooks`) — `useMealPlans`/`useAddMealPlan`/`useDeleteMealPlan`
-  et `useProfile`/`useUpdateProfile`/`useUploadAvatar` (10 tests). Comportement préservé (cache-buster
-  avatar, undo optimiste). Reste : vérif E2E Playwright de ces écrans (→ §E).
-- `Auth.tsx` : messages d'erreur calculés mais jamais affichés (uniquement `console.error`).
-- ✅ Token webhook affiché en clair dans les exemples de `WebhookIntegrationContent`
+Traité en 5 lots, une branche par lot, chacun conclu par `/security-review` (0 finding)
++ `/simplify`. **Front pur → aucun redéploiement edge.** Branches non mergées (PR sur demande).
+
+- **✅ `StepsEditor.tsx` mute la prop pendant le rendu** (branche `fix/medium-correctness-ui-feedback`) —
+  `steps.sort()` → `[...steps].sort()` (copie avant tri). Filet : test d'immutabilité de la prop.
+- **✅ `Auth.tsx` : erreurs jamais affichées** (branche `fix/medium-correctness-ui-feedback`) —
+  état `error` + `<div role="alert">` dans les 3 formulaires, surfaçage des erreurs Zod, reset
+  au changement d'onglet/mode. Filet : 4 tests.
+- **✅ `useVoiceMode` : pas de cleanup au démontage** (branche `fix/medium-cleanup-lifecycle`) —
+  effet de démontage déconnecte Scribe (RGPD : plus de connexion résiduelle), vide la file audio,
+  révoque l'URL du blob et met en pause l'audio. Filet : test « déconnecte Scribe au démontage ».
+- **✅ `useChatEngine` : `AbortController` non abandonné au démontage** (branche
+  `fix/medium-cleanup-lifecycle`) — effet de démontage `abort()` la requête en cours.
+  Filet : test « abandonne la requête en cours au démontage ».
+- **✅ `useRecipeVersions.useRestoreVersion` : n'invalide pas `['recipes']`** (branche
+  `fix/medium-tanstack-invalidation`) — invalidation ajoutée en `onSuccess`. Filet : 2 tests.
+- **✅ `savePendingRecipe` (`useHomeChat`) : n'invalide pas `['recipe', id]` après update** (branche
+  `fix/medium-tanstack-invalidation`) — `invalidateQueries(['recipe', recipeId])` après refetch.
+  Filet : mock `invalidateQueries`. *Dette résiduelle : réimplémente encore les mutations hors
+  TanStack Query (`supabase` brut) → à router vers `useCreateRecipe`/`useUpdateRecipe`, voir §B.3.*
+- **✅ `useWebhookToken` : `isLoading` bloqué à `true` si non connecté** (branche
+  `fix/medium-tanstack-invalidation`) — branche `else` remet `isLoading` à `false`. Filet : test.
+  *Dette résiduelle : migration TanStack Query complète, voir §B.3.*
+- **✅ `MealPlanning`/`Profile` : appels `supabase` directs** (branche `refactor/medium-extract-page-hooks`) —
+  extraits en hooks `useMealPlans` (query + `useAddMealPlan`/`useDeleteMealPlan`) et `useProfile`
+  (query + `useUpdateProfile`/`useUploadAvatar`). Comportement inchangé (cache-buster avatar,
+  undo optimiste de suppression préservés). Filet : 10 tests.
+- **✅ Token webhook affiché en clair dans les exemples de `WebhookIntegrationContent`**
   (branche `fix/medium-webhook-token-clear`) — les exemples cURL/Raccourcis et le header inline
   affichent désormais `<votre-token>` ; les boutons « copier » injectent le vrai token (utilité
   préservée). Le champ token reste `type="password"`. Guide `.md` téléchargé inchangé (action
@@ -142,20 +154,24 @@ tags/saisons/statuts entre pages/composants ; `ChatInterface` (539 l) à découp
 ## Prompt de reprise (à coller en nouvelle session)
 
 ```
-Contexte : la branche fix/high-fuites-securite a corrigé les 9 findings HIGH d'un
-audit (voir docs/AUDIT-FOLLOWUP.md). Enchaîne maintenant, en TDD, avec une passe
-/security-review + /simplify en fin de chaque itération, dans cet ordre :
+Contexte : audit sécurité de recipe-hug (voir docs/AUDIT-FOLLOWUP.md). Tous les HIGH,
+les refactors §A/§B.1/§B.2, les MEDIUM §C traitables sans base live et l'intégralité
+de §D (correctness) sont faits — §C et §D sur branches non mergées (PR sur demande).
+Continue en TDD, une branche par lot, avec /security-review + /simplify en fin de
+chaque itération. Ordre selon le contexte de session :
 
-1. Découper src/components/profile/AIProviderSettings.tsx (853 l > 800) : extraire
-   les sous-composants inline (ProviderCard, AgentConfigRow au minimum) en fichiers
-   dédiés, sans changer le comportement. AIProviderSettings.test.tsx garde le filet.
-2. Chantier Gemini streaming + builder de chunk OpenAI partagé, et gestion d'erreur
-   mi-stream commune aux deux transforms (transformGeminiStreamToOpenAI avale encore
-   les erreurs). Voir docs/AUDIT-FOLLOWUP.md §B.1.
-3. Injecter activeRecipe dans onToolCall de useChatEngine pour supprimer le
-   contournement activeRecipeRef dupliqué (§B.2).
+- §E (tests) : couvrir resolveAIConfig (routage provider + clé — CRITIQUE),
+  webhook-recipe (endpoint externe), manage-ai-keys (chiffrement) ; ajouter des E2E
+  Playwright (auth, création via chat, liste de courses) — dont la vérif E2E des écrans
+  Profile/MealPlanning refactorés en §D.
+- §B.3 (helpers partagés) : notifySaveError/notifySaveSuccess ; centraliser
+  json()/corsHeaders/requireEncryptionSecret dans _shared/ ; helper pending-recipe
+  commun à useHomeChat/useRecipeChat (dette d'altitude §D : savePendingRecipe encore
+  en supabase brut ; useWebhookToken à migrer sur TanStack Query).
+- §C DB/RLS restant (🟠/🔴, RGPD) : webhook_token haché, policy storage bucket recipes,
+  REVOKE colonnes sur vues *_safe, bucket avatars privé (URLs signées) — idéalement
+  avec MCP Supabase authentifié pour inspecter le schéma réel.
 
-Puis attaquer la sécurité MEDIUM (§C) : share-recipe (énumération), claim-shares
-(email non vérifié), durcissement DB (verify_jwt, webhook_token haché, policy storage).
-Rappel : redéployer les edge functions modifiées après merge.
+Rappel : committer ≠ déployer — redéployer les edge functions modifiées après merge.
+Jamais de commit/push sur main (hook). PR uniquement sur demande explicite.
 ```
