@@ -23,12 +23,15 @@ import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipe
 import { useGenerateRecipeImage } from '@/hooks/useGenerateRecipeImage';
 import { useAsyncAction } from '@/hooks/useAsyncAction';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { buildRecipeImageObjectPath } from '@/lib/storage-paths';
 import type { RecipeStatus, Step } from '@/types/recipe';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
+  const { user } = useAuth();
   const { data: recipe, isLoading } = useRecipe(id || '');
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
@@ -56,10 +59,12 @@ export default function RecipeDetail() {
 
   const imageChange = useAsyncAction(
     async (file: File) => {
-      if (!recipe) return;
+      if (!recipe || !user) return;
       const fileExt = file.name.split('.').pop();
       const fileName = `${recipe.id}-${Date.now()}.${fileExt}`;
-      const filePath = `recipe-images/${fileName}`;
+      // Chemin scopé par uid : la policy storage du bucket `recipes` exige que
+      // le 1er segment soit l'uid (INSERT/UPDATE/DELETE cohérents).
+      const filePath = buildRecipeImageObjectPath(user.id, fileName);
       const { error: uploadError } = await supabase.storage.from('recipes').upload(filePath, file, { upsert: true });
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('recipes').getPublicUrl(filePath);
