@@ -10,7 +10,7 @@ import type { Ingredient } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
 import { triggerRecipeCompletion } from '@/lib/recipe-completion';
 import { applyPreferenceOperations } from '@/lib/preference-operations';
-import { parseRecipePayload, parsePreferenceOperations } from '@/lib/chat-tool-payloads';
+import { buildPendingRecipeFromToolCall, parsePreferenceOperations } from '@/lib/chat-tool-payloads';
 
 // Re-export types
 export type { ChatMessage, MessageContent, PendingRecipe, ActiveRecipeData, RecipeCard } from './useChatEngine';
@@ -140,19 +140,11 @@ export function useHomeChat() {
         catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }
 
-      case 'save_recipe': {
-        const recipe = parseRecipePayload(action.data);
-        if (recipe) engine.setPendingRecipe(recipe);
-        return null;
-      }
-      case 'extract_modified_recipe': {
-        const recipe = parseRecipePayload(action.data);
-        if (recipe) engine.setPendingRecipe({ ...recipe, isUpdate: true, originalRecipeId: activeRecipe?.id });
-        return null;
-      }
+      case 'save_recipe':
+      case 'extract_modified_recipe':
       case 'create_new_recipe': {
-        const recipe = parseRecipePayload(action.data);
-        if (recipe) engine.setPendingRecipe({ ...recipe, relationToOriginal: action.data.relation_to_original as string });
+        const pending = buildPendingRecipeFromToolCall(action, activeRecipe);
+        if (pending) engine.setPendingRecipe(pending);
         return null;
       }
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { PendingRecipe } from '@/hooks/useChatEngine';
+import type { PendingRecipe, ToolCallAction, ActiveRecipeData } from '@/hooks/useChatEngine';
 import type { PreferenceOperation } from '@/lib/preference-operations';
 
 // Validation des payloads d'outils émis par le LLM (via le stream de
@@ -63,6 +63,35 @@ export function parseRecipePayload(data: unknown): PendingRecipe | null {
   // la tool definition : on conserve la valeur telle quelle (comportement
   // historique), la validation ne garantit que la structure.
   return result.data as unknown as PendingRecipe;
+}
+
+/**
+ * Construit la recette « en attente » à partir d'un appel d'outil du LLM
+ * (`save_recipe` / `extract_modified_recipe` / `create_new_recipe`). Logique
+ * commune à `useHomeChat` et `useRecipeChat` (auparavant dupliquée) :
+ * - `save_recipe` : recette telle quelle (peut porter ses propres marqueurs) ;
+ * - `extract_modified_recipe` : marquée comme mise à jour de la recette active ;
+ * - `create_new_recipe` : porte `relationToOriginal` issu du payload.
+ * Retourne `null` si le payload est invalide ou le type d'action non géré
+ * (aucune recette n'est alors mise en attente).
+ */
+export function buildPendingRecipeFromToolCall(
+  action: ToolCallAction,
+  activeRecipe: ActiveRecipeData | null,
+): PendingRecipe | null {
+  const recipe = parseRecipePayload(action.data);
+  if (!recipe) return null;
+
+  switch (action.type) {
+    case 'save_recipe':
+      return recipe;
+    case 'extract_modified_recipe':
+      return { ...recipe, isUpdate: true, originalRecipeId: activeRecipe?.id };
+    case 'create_new_recipe':
+      return { ...recipe, relationToOriginal: action.data.relation_to_original as string };
+    default:
+      return null;
+  }
 }
 
 /**

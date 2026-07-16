@@ -60,12 +60,22 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
    regressions #5, verts ; ESLint clean, 0 nouvelle erreur de type. `/security-review` : 0 finding.
    `/simplify` : « ship it » (3/4 angles clean). Front pur, pas de redéploiement.
    Prochaine étape : §C (sécurité MEDIUM).
-3. **Helpers partagés** — `notifySaveError(label)`/`notifySaveSuccess(label)` (aligner `useAsyncAction`
-   sur `toast.error`/`toast.success`) ; centraliser `json()` + `corsHeaders` + un guard
-   `requireEncryptionSecret()` dans `supabase/functions/_shared/` (aujourd'hui dupliqués/inline).
-   Révélé par le Lot 3 : les 3 branches pending-recipe (`save_recipe`/`extract_modified_recipe`/
-   `create_new_recipe`) sont désormais identiques entre `useHomeChat` et `useRecipeChat` →
-   extractibles en helper commun.
+3. **Helpers partagés — ✅ fait (branche `refactor/b3-notify-helpers`).**
+   - **notify** : `src/lib/notify.ts` (`notifySaveSuccess`/`notifySaveError`, variantes verte/rouge +
+     description corrective) ; `useAsyncAction` passe de `toast()` neutre à `toast.error`/`toast.success`
+     (distinction visuelle succès/erreur) ; `AIProviderSettings` + `CulinaryPreferencesContent` migrés.
+   - **helper pending-recipe commun** : `buildPendingRecipeFromToolCall` (chat-tool-payloads) factorise les
+     3 branches `save_recipe`/`extract_modified_recipe`/`create_new_recipe`, jusqu'ici identiques entre
+     `useHomeChat` et `useRecipeChat`.
+   - **useWebhookToken** migré sur TanStack Query (query `['webhook_token', userId]` + RPC sécurisée,
+     mutation de génération) ; contrat public inchangé.
+   - Filet : +8 tests notify/useAsyncAction, +6 builder, useWebhookToken 5/5. Front pur, pas de redéploiement.
+   - **Écarté (décision)** : centraliser `json()`/`requireEncryptionSecret` dans `_shared/` — gain DRY minime
+     (2-3 fonctions) pour un vrai coût : le bundler MCP impose d'inliner `_shared` au déploiement → piège
+     d'un déploiement cassé sur 3 fonctions sensibles (auth/chiffrement). `corsHeaders` est déjà dans `_shared`.
+   - **Dette d'altitude §D laissée (justifiée)** : `savePendingRecipe` (`useHomeChat`) reste en `supabase`
+     brut — le router via `useCreateRecipe` ajouterait un `toast` d'erreur EN PLUS du message de chat dans le
+     flux de création (zone de la régression #5).
 
 ### C. Sécurité MEDIUM (review initiale)
 

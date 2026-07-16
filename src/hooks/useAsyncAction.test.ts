@@ -3,14 +3,17 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAsyncAction } from './useAsyncAction';
 import { toast } from '@/components/ui/sonner';
 
-vi.mock('@/components/ui/sonner', () => ({ toast: vi.fn() }));
+vi.mock('@/components/ui/sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
 
 describe('useAsyncAction', () => {
   beforeEach(() => {
-    vi.mocked(toast).mockClear();
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
   });
 
-  it('affiche un toast d\'erreur en cas d\'échec', async () => {
+  it('affiche un toast d\'erreur (variante rouge) en cas d\'échec', async () => {
     const { result } = renderHook(() =>
       useAsyncAction(async () => {
         throw new Error('boom');
@@ -19,7 +22,8 @@ describe('useAsyncAction', () => {
     await act(async () => {
       await result.current.run();
     });
-    expect(toast).toHaveBeenCalledWith('Échec');
+    expect(toast.error).toHaveBeenCalledWith('Échec');
+    expect(toast.success).not.toHaveBeenCalled();
     expect(result.current.isPending).toBe(false);
     expect(result.current.showLoader).toBe(false);
   });
@@ -33,17 +37,18 @@ describe('useAsyncAction', () => {
     await act(async () => {
       await result.current.run();
     });
-    expect(toast).toHaveBeenCalledWith('détail technique');
+    expect(toast.error).toHaveBeenCalledWith('détail technique');
   });
 
-  it('affiche un toast de succès optionnel', async () => {
+  it('affiche un toast de succès (variante verte) optionnel', async () => {
     const { result } = renderHook(() =>
       useAsyncAction(async () => undefined, { successMessage: 'OK' }),
     );
     await act(async () => {
       await result.current.run();
     });
-    expect(toast).toHaveBeenCalledWith('OK');
+    expect(toast.success).toHaveBeenCalledWith('OK');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('n\'affiche pas de loader pour une action instantanée (anti-flicker)', async () => {

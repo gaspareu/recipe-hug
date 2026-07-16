@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { parseRecipePayload, parsePreferenceOperations } from './chat-tool-payloads';
+import {
+  parseRecipePayload,
+  parsePreferenceOperations,
+  buildPendingRecipeFromToolCall,
+} from './chat-tool-payloads';
 
 // Les payloads viennent du LLM (via le stream d'outils) : données externes non
 // fiables. On valide la STRUCTURE en restant tolérant sur les types que le
@@ -131,5 +135,70 @@ describe('parsePreferenceOperations', () => {
     expect(
       parsePreferenceOperations([{ operation: 'add', category: 'taste_preferences', values: ['x'] }]),
     ).toBeNull();
+  });
+});
+
+describe('buildPendingRecipeFromToolCall', () => {
+  const validData = {
+    title: 'Tarte Tatin',
+    servings: 6,
+    ingredients: [{ name: 'Pomme', quantity: '6' }],
+    steps: [{ text: 'Caraméliser' }],
+  };
+  const activeRecipe = { id: 'recipe-42', title: 'Base', servings: 4 };
+
+  it('save_recipe → recette telle quelle (sans marqueur de mise à jour)', () => {
+    const pending = buildPendingRecipeFromToolCall(
+      { type: 'save_recipe', data: validData },
+      null,
+    );
+    expect(pending).not.toBeNull();
+    expect(pending!.title).toBe('Tarte Tatin');
+    expect(pending!.isUpdate).toBeUndefined();
+    expect(pending!.relationToOriginal).toBeUndefined();
+  });
+
+  it('extract_modified_recipe → isUpdate=true + originalRecipeId = id de la recette active', () => {
+    const pending = buildPendingRecipeFromToolCall(
+      { type: 'extract_modified_recipe', data: validData },
+      activeRecipe,
+    );
+    expect(pending).not.toBeNull();
+    expect(pending!.isUpdate).toBe(true);
+    expect(pending!.originalRecipeId).toBe('recipe-42');
+  });
+
+  it('extract_modified_recipe sans recette active → originalRecipeId undefined', () => {
+    const pending = buildPendingRecipeFromToolCall(
+      { type: 'extract_modified_recipe', data: validData },
+      null,
+    );
+    expect(pending!.isUpdate).toBe(true);
+    expect(pending!.originalRecipeId).toBeUndefined();
+  });
+
+  it('create_new_recipe → relationToOriginal repris du payload', () => {
+    const pending = buildPendingRecipeFromToolCall(
+      { type: 'create_new_recipe', data: { ...validData, relation_to_original: 'variante' } },
+      activeRecipe,
+    );
+    expect(pending!.relationToOriginal).toBe('variante');
+    expect(pending!.isUpdate).toBeUndefined();
+  });
+
+  it('payload invalide → null (aucune recette mise en attente)', () => {
+    const pending = buildPendingRecipeFromToolCall(
+      { type: 'save_recipe', data: { title: '', ingredients: [], steps: [] } },
+      null,
+    );
+    expect(pending).toBeNull();
+  });
+
+  it('type d\'action non géré → null', () => {
+    const pending = buildPendingRecipeFromToolCall(
+      { type: 'search_recipes', data: validData },
+      null,
+    );
+    expect(pending).toBeNull();
   });
 });
