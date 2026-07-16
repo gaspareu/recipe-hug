@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 import { supabase } from '@/integrations/supabase/client';
 import type { Ingredient, Step } from '@/types/recipe';
@@ -354,6 +354,15 @@ export function useChatEngine(config: ChatEngineConfig) {
   // Interrompt la réponse en cours de génération.
   const stopGeneration = useCallback(() => {
     abortControllerRef.current?.abort();
+  }, []);
+
+  // Cleanup au démontage : abandonne toute requête de streaming en cours pour
+  // ne pas laisser un fetch/reader actif ni déclencher de setMessages après
+  // le démontage du composant.
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, []);
 
   // Send a message

@@ -28,6 +28,11 @@ export function useWebhookToken() {
   useEffect(() => {
     if (user) {
       fetchToken();
+    } else {
+      // Sans utilisateur, il n'y a rien à charger : ne pas laisser isLoading
+      // bloqué à true (état de chargement infini côté UI).
+      setWebhookToken(null);
+      setIsLoading(false);
     }
   }, [user, fetchToken]);
 

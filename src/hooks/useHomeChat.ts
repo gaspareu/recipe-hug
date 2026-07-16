@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useRecipes } from './useRecipes';
 import { useUserPreferences } from './useUserPreferences';
@@ -33,6 +34,7 @@ async function triggerBackgroundImageGeneration(
 
 export function useHomeChat() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: recipes = [], refetch: refetchRecipes } = useRecipes();
   const { preferences, updatePreferencesAsync } = useUserPreferences();
 
@@ -220,6 +222,11 @@ export function useHomeChat() {
       }
 
       await refetchRecipes();
+      // Rafraîchit aussi la fiche détail en cache (['recipe', id]) : refetchRecipes
+      // ne couvre que la liste (['recipes']).
+      if (recipeId) {
+        queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
+      }
       engine.setPendingRecipe(null);
       engine.setActiveRecipe(null);
       engine.setMessages(prev => [...prev, {
@@ -241,7 +248,7 @@ export function useHomeChat() {
       setIsSavingRecipe(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
-  }, [engine.pendingRecipe, refetchRecipes]);
+  }, [engine.pendingRecipe, refetchRecipes, queryClient]);
 
   const cancelPendingRecipe = useCallback(() => {
     if (isSavingRecipe) return;

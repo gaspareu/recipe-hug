@@ -10,11 +10,9 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRecipes } from '@/hooks/useRecipes';
-import type { Ingredient } from '@/types/recipe';
+import { useMealPlans, useAddMealPlan, useDeleteMealPlan, type MealPlansData } from '@/hooks/useMealPlans';
 import { GroceryListSheet } from '@/components/meal-planning/GroceryListSheet';
 import { toast } from '@/components/ui/sonner';
 
@@ -26,64 +24,17 @@ const MEAL_TYPES = [
 
 const DAY_NAMES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-interface MealPlanEntry {
-  id: string;
-  day_of_week: number;
-  meal_type: string;
-  recipe_id: string | null;
-  custom_meal: string | null;
-  notes: string | null;
-  recipe_title?: string;
-}
-
-interface RecipeWithIngredients {
-  id: string;
-  title: string;
-  ingredients: Ingredient[];
-}
-
 interface AddingMeal {
   dayIndex: number;
   mealType: string;
 }
 
-function useMealPlans(weekStart: string) {
-  return useQuery({
-    queryKey: ['meal_plans', weekStart],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('meal_plans')
-        .select('id, day_of_week, meal_type, recipe_id, custom_meal, notes')
-        .eq('week_start', weekStart);
-      if (error) throw error;
-
-      const recipeIds = (data || []).filter(m => m.recipe_id).map(m => m.recipe_id!);
-      let recipesMap: Record<string, RecipeWithIngredients> = {};
-      if (recipeIds.length > 0) {
-        const { data: recipes } = await supabase
-          .from('recipes')
-          .select('id, title, ingredients')
-          .in('id', recipeIds);
-        if (recipes) {
-          recipesMap = Object.fromEntries(recipes.map(r => [r.id, r as unknown as RecipeWithIngredients]));
-        }
-      }
-
-      const entries = (data || []).map(m => ({
-        ...m,
-        recipe_title: m.recipe_id ? recipesMap[m.recipe_id]?.title : undefined,
-      })) as MealPlanEntry[];
-
-      return { entries, recipesMap };
-    },
-  });
-}
-
 export default function MealPlanning() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const reduceMotion = useReducedMotion();
+  const addMealPlan = useAddMealPlan();
+  const deleteMealPlan = useDeleteMealPlan();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const weekStart = useMemo(() => {
@@ -102,7 +53,7 @@ export default function MealPlanning() {
   const [recipeSearch, setRecipeSearch] = useState('');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [customMealText, setCustomMealText] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
+  const isAdding = addMealPlan.isPending;
 
   const filteredRecipes = useMemo(() => {
     if (!recipeSearch.trim()) return allRecipes.slice(0, 8);
@@ -126,31 +77,18 @@ export default function MealPlanning() {
 
   const addMealPlanEntry = async () => {
     if (!addingMeal || (!selectedRecipeId && !customMealText.trim())) return;
-    setIsAdding(true);
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) throw new Error('Non authentifié');
-
-      const entry = {
-        user_id: authUser.id,
-        week_start: weekStart,
-        day_of_week: addingMeal.dayIndex,
-        meal_type: addingMeal.mealType,
-        recipe_id: selectedRecipeId ?? null,
-        custom_meal: selectedRecipeId ? null : customMealText.trim(),
-        notes: null,
-      };
-
-      const { error } = await supabase.from('meal_plans').insert([entry]);
-      if (error) throw error;
-
-      queryClient.invalidateQueries({ queryKey: ['meal_plans', weekStart] });
+      await addMealPlan.mutateAsync({
+        weekStart,
+        dayIndex: addingMeal.dayIndex,
+        mealType: addingMeal.mealType,
+        recipeId: selectedRecipeId ?? null,
+        customMeal: selectedRecipeId ? null : customMealText.trim(),
+      });
       closeAddDialog();
     } catch (err) {
       console.error('Erreur ajout repas:', err);
       toast('Erreur lors de l\'ajout du repas');
-    } finally {
-      setIsAdding(false);
     }
   };
 
@@ -189,15 +127,26 @@ export default function MealPlanning() {
     return meals.find(m => m.day_of_week === dayIndex && m.meal_type === mealType);
   };
 
-  const deleteMeal = async (mealId: string, mealLabel: string) => {
+  const deleteMeal = (mealId: string) => {
     // Snapshot for undo
     const previousData = queryClient.getQueryData(['meal_plans', weekStart]);
 
     // Optimistic remove
-    queryClient.setQueryData(['meal_plans', weekStart], (old: typeof data) => {
+    queryClient.setQueryData(['meal_plans', weekStart], (old: MealPlansData | undefined) => {
       if (!old) return old;
       return { ...old, entries: old.entries.filter(e => e.id !== mealId) };
     });
+
+    // Suppression réelle une fois le toast clos (sauf si l'utilisateur annule).
+    const commitDelete = async () => {
+      try {
+        await deleteMealPlan.mutateAsync(mealId);
+      } catch (error) {
+        console.error('Erreur suppression:', error);
+        queryClient.setQueryData(['meal_plans', weekStart], previousData);
+        toast('Erreur lors de la suppression');
+      }
+    };
 
     toast('Repas supprimé', {
       action: {
@@ -206,22 +155,8 @@ export default function MealPlanning() {
           queryClient.setQueryData(['meal_plans', weekStart], previousData);
         },
       },
-      onDismiss: async () => {
-        const { error } = await supabase.from('meal_plans').delete().eq('id', mealId);
-        if (error) {
-          console.error('Erreur suppression:', error);
-          queryClient.setQueryData(['meal_plans', weekStart], previousData);
-          toast('Erreur lors de la suppression');
-        }
-      },
-      onAutoClose: async () => {
-        const { error } = await supabase.from('meal_plans').delete().eq('id', mealId);
-        if (error) {
-          console.error('Erreur suppression:', error);
-          queryClient.setQueryData(['meal_plans', weekStart], previousData);
-          toast('Erreur lors de la suppression');
-        }
-      },
+      onDismiss: commitDelete,
+      onAutoClose: commitDelete,
       duration: 4000,
     });
   };
@@ -326,7 +261,7 @@ export default function MealPlanning() {
                                 </span>
                               </div>
                               <button
-                                onClick={() => deleteMeal(meal.id, title)}
+                                onClick={() => deleteMeal(meal.id)}
                                 aria-label={`Supprimer ${title}`}
                                 className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors shrink-0"
                               >

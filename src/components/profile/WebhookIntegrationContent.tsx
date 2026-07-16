@@ -15,22 +15,31 @@ export function WebhookIntegrationContent() {
 
   const webhookUrl = `${SUPABASE_URL}/functions/v1/webhook-recipe`;
 
-  const curlExample = `curl -X POST "${webhookUrl}" \\
+  // Placeholder affiché à l'écran (le token est secret et masqué dans son champ) ;
+  // les boutons « copier » injectent le vrai token pour rester directement utilisables.
+  const TOKEN_PLACEHOLDER = '<votre-token>';
+  const copyToken = webhookToken || TOKEN_PLACEHOLDER;
+
+  const buildCurl = (token: string) => `curl -X POST "${webhookUrl}" \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer ${webhookToken || '<votre-token>'}" \\
+  -H "Authorization: Bearer ${token}" \\
   -d '{
     "text": "Votre recette ici..."
   }'`;
+  const curlExampleDisplay = buildCurl(TOKEN_PLACEHOLDER);
+  const curlExampleCopy = buildCurl(copyToken);
 
-  const shortcutsExample = `URL: ${webhookUrl}
+  const buildShortcuts = (token: string) => `URL: ${webhookUrl}
 Méthode: POST
 Headers:
   Content-Type: application/json
-  Authorization: Bearer ${webhookToken || '<votre-token>'}
+  Authorization: Bearer ${token}
 Corps (JSON):
 {
   "text": "[Texte de la recette]"
 }`;
+  const shortcutsExampleDisplay = buildShortcuts(TOKEN_PLACEHOLDER);
+  const shortcutsExampleCopy = buildShortcuts(copyToken);
 
   const downloadShortcutGuide = () => {
     if (!webhookToken) {
@@ -196,12 +205,12 @@ Généré le ${new Date().toLocaleDateString('fr-FR')}
                 cURL / Terminal
               </h4>
               <div className="relative">
-                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto text-foreground whitespace-pre-wrap">{curlExample}</pre>
+                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto text-foreground whitespace-pre-wrap">{curlExampleDisplay}</pre>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="absolute top-2 right-2 h-6 w-6"
-                  onClick={() => copyToClipboard(curlExample)}
+                  onClick={() => copyToClipboard(curlExampleCopy)}
                 >
                   <Copy className="h-3 w-3" />
                 </Button>
@@ -215,12 +224,12 @@ Généré le ${new Date().toLocaleDateString('fr-FR')}
                 Raccourcis iOS / macOS
               </h4>
               <div className="relative">
-                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto text-foreground whitespace-pre-wrap">{shortcutsExample}</pre>
+                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto text-foreground whitespace-pre-wrap">{shortcutsExampleDisplay}</pre>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="absolute top-2 right-2 h-6 w-6"
-                  onClick={() => copyToClipboard(shortcutsExample)}
+                  onClick={() => copyToClipboard(shortcutsExampleCopy)}
                 >
                   <Copy className="h-3 w-3" />
                 </Button>
@@ -264,7 +273,7 @@ Généré le ${new Date().toLocaleDateString('fr-FR')}
 }`}
               </pre>
               <p className="text-xs text-muted-foreground">
-                Le token doit être envoyé dans le header <code className="bg-muted px-1 rounded">Authorization: Bearer {webhookToken || '<token>'}</code>
+                Le token doit être envoyé dans le header <code className="bg-muted px-1 rounded">Authorization: Bearer {TOKEN_PLACEHOLDER}</code>
               </p>
             </div>
           </CollapsibleContent>

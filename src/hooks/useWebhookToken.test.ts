@@ -36,13 +36,14 @@ describe("useWebhookToken", () => {
     expect(result.current.webhookToken).toBe("tok-123");
   });
 
-  it("ne récupère rien et reste en chargement sans utilisateur", () => {
+  it("ne récupère rien et n'est pas en chargement sans utilisateur", () => {
     mockAuth.user = null;
     const sb = installSupabase();
     const { result } = renderHook(() => useWebhookToken());
 
     expect(sb.rpc).not.toHaveBeenCalled();
-    expect(result.current.isLoading).toBe(true);
+    // Rien à charger sans utilisateur : isLoading ne doit pas rester bloqué à true.
+    expect(result.current.isLoading).toBe(false);
     expect(result.current.webhookToken).toBeNull();
   });
 

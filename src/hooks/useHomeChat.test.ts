@@ -5,17 +5,23 @@ import { sseResponse, toolCallEvent, contentEvent } from "@/test/sse";
 import type { Recipe } from "@/types/recipe";
 import type { UserCulinaryPreferences } from "./useUserPreferences";
 
-const { mockSupabase, mockNavigate, mockRefetch, mockUpdatePreferencesAsync, hookState } = vi.hoisted(
+const { mockSupabase, mockNavigate, mockRefetch, mockUpdatePreferencesAsync, mockInvalidate, hookState } = vi.hoisted(
   () => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockSupabase: { from: vi.fn(), auth: { getSession: vi.fn(), getUser: vi.fn() } } as any,
     mockNavigate: vi.fn(),
     mockRefetch: vi.fn(() => Promise.resolve()),
     mockUpdatePreferencesAsync: vi.fn(() => Promise.resolve()),
+    mockInvalidate: vi.fn(),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     hookState: { recipes: [] as any[], preferences: null as any },
   }),
 );
+
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return { ...actual, useQueryClient: () => ({ invalidateQueries: mockInvalidate }) };
+});
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 vi.mock("react-router-dom", () => ({ useNavigate: () => mockNavigate }));
@@ -258,6 +264,8 @@ describe("useHomeChat — édition de recette", () => {
     expect(lastMessage(result.current.messages).content).toContain(
       '✅ J\'ai mis à jour ta recette "Tarte Tatin"',
     );
+    // La fiche recette ouverte doit être rafraîchie après un update via le chat.
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["recipe", "r1"] });
   });
 
   it("extract_modified_recipe sans recette active retombe sur une création (limitation du chat d'accueil)", async () => {

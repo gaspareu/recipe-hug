@@ -128,6 +128,8 @@ export function useRestoreVersion() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['recipe', variables.recipeId] });
+      // La liste (titre, portions, tags) reflète aussi la recette restaurée.
+      queryClient.invalidateQueries({ queryKey: ['recipes'] });
     },
   });
 }
