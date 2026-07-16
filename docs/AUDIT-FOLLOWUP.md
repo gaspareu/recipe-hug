@@ -171,11 +171,14 @@ Traité en 5 lots, une branche par lot, chacun conclu par `/security-review` (0 
 - **`manage-ai-keys` (chiffrement)** — le cœur (`encryptValue`/`decryptValue`/`decryptProviderKeys` dont
   **le repli plaintext**, `maskApiKey`) est **déjà couvert** par `decrypt-keys_test.ts`. L'orchestration
   Deno.serve (CRUD/auth) reste non testée (peu testable sans mock lourd) — non traité.
-- **E2E Playwright — ✅ harnais fait (local).** `playwright.config.ts` + `e2e/` : `auth.setup.ts`
-  (login → storageState) + `smoke.spec.ts` (protection des routes + rendu Home/Dashboard/Profil/Planning,
-  déterministe, sans IA ni écriture), 6/6 verts en local. Script `test:e2e`. Session/secret gitignorés.
-  **Volontairement exclus** (voir `e2e/README.md`) : création via chat (LLM non déterministe + tokens +
-  écritures), liste de courses (écritures), et **câblage CI** (secrets + compte jetable requis).
+- **E2E Playwright — ✅ fait (local).** `playwright.config.ts` + `e2e/` : `auth.setup.ts` (login →
+  storageState), `smoke.spec.ts` (protection des routes + rendu Home/Dashboard/Profil/Planning),
+  `recipe-creation.spec.ts` (**flux de création** : échange `home-assistant` simulé une fois via SSE figée
+  avec tool call `save_recipe` → clic « Créer » → **écriture réelle** vérifiée + nettoyée ; endpoints de fond
+  stubés) et `grocery-list.spec.ts` (repas ajouté via UI → agrégation liste de courses, écriture réelle +
+  nettoyage). **8/8 verts en local.** Principe : on teste le flux applicatif, pas le LLM (simulé). Script
+  `test:e2e`, session/secret gitignorés, 0 donnée orpheline (nettoyage vérifié).
+  **Reste exclu** (voir `e2e/README.md`) : **câblage CI** (secrets + compte jetable requis).
 - Non traités (partiels de la review) : transform Gemini + builders de requête, `useAuth`.
 
 ### F. LOW (durcissement)

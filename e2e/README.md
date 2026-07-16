@@ -29,13 +29,22 @@ lancé sur `http://localhost:8080` ; surcharger via `E2E_BASE_URL`).
   (gitignored : contient un jeton de session).
 - `smoke.spec.ts` — protection des routes + rendu des pages clés (déterministe,
   sans IA ni écriture).
+- `recipe-creation.spec.ts` — **flux de création** de recette : l'échange avec
+  `home-assistant` est **simulé une fois** (réponse SSE figée avec un tool call
+  `save_recipe`, zéro token, déterministe) ; on teste le clic « Créer » avec
+  **écriture réelle** en base, vérification de la persistance, puis nettoyage.
+  Les endpoints de fond (`generate-recipe-image`, `analyze-recipe`) sont stubés.
+- `grocery-list.spec.ts` — **flux liste de courses** (sans IA) : une recette avec
+  un ingrédient connu est ajoutée au planning via l'UI (écriture réelle), puis on
+  vérifie l'agrégation dans la liste. Nettoyage ensuite.
+- `helpers/supabase.ts` — client authentifié comme le compte test (RLS) pour
+  vérifier/nettoyer les données créées.
 
-## Volontairement exclus (à décider)
+> Principe : on ne teste **pas** que le chat/LLM fonctionne (non déterministe,
+> coûteux), mais le **flux applicatif** déclenché ensuite. L'échange IA est simulé.
 
-- **Création de recette via le chat** : passe par le LLM (`home-assistant`) →
-  sortie non déterministe + coût en tokens + écriture de recettes. À stabiliser
-  (mock du endpoint ou assertions tolérantes) avant d'en faire un test fiable.
-- **Liste de courses** : nécessite de créer un planning de repas (écritures) puis
-  de nettoyer. À cadrer.
-- **Câblage CI** : demanderait des secrets (compte test) + un compte jetable pour
-  éviter la pollution de données.
+## Volontairement exclus
+
+- **Câblage CI** : demanderait des secrets (compte test) + idéalement un compte
+  jetable. Ces tests écrivent des données réelles (nettoyées en fin de test) sur
+  le compte configuré — d'où l'exécution locale pour l'instant.

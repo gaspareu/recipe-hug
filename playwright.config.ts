@@ -1,17 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-// Charge .env.test (gitignored) — TEST_EMAIL / TEST_PASSWORD du compte de test.
-// dotenv n'est pas une dépendance du projet : parsing manuel minimal.
-try {
-  const raw = readFileSync(new URL('.env.test', import.meta.url), 'utf8');
-  for (const line of raw.split('\n')) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+// Charge .env (VITE_SUPABASE_*) et .env.test (TEST_EMAIL/TEST_PASSWORD), tous deux
+// gitignored, dans process.env. dotenv n'est pas une dépendance : parsing manuel.
+function loadEnvFile(name: string) {
+  try {
+    const raw = readFileSync(new URL(name, import.meta.url), 'utf8');
+    for (const line of raw.split('\n')) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+    }
+  } catch {
+    // Fichier absent : les tests concernés échoueront avec un message explicite.
   }
-} catch {
-  // .env.test absent : les tests d'auth échoueront avec un message explicite (voir auth.setup.ts).
 }
+loadEnvFile('.env');
+loadEnvFile('.env.test');
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
 
