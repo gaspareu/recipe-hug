@@ -14,7 +14,7 @@ import {
   AgentConfig,
   ProviderApiKeys
 } from '@/hooks/useAISettings';
-import { toast } from '@/components/ui/sonner';
+import { notifySaveSuccess, notifySaveError } from '@/lib/notify';
 import { ProviderCard } from './ai-provider/ProviderCard';
 import { AgentConfigRow } from './ai-provider/AgentConfigRow';
 
@@ -194,13 +194,11 @@ export function AIProviderSettings() {
 
       // Clear typed keys after successful save (they're now encrypted in DB)
       setProviderApiKeys({});
-      toast.success('Configuration IA enregistrée');
+      notifySaveSuccess('Configuration IA enregistrée');
     } catch {
       // Le log détaillé est fait par updateSettings.onError (source unique) ;
       // ici on surface l'échec à l'utilisateur.
-      toast.error("Échec de l'enregistrement de la configuration IA", {
-        description: 'Vérifie ta connexion et réessaie.',
-      });
+      notifySaveError("Échec de l'enregistrement de la configuration IA");
     } finally {
       setIsSaving(false);
       setSavePhase('idle');

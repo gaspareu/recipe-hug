@@ -1,75 +1,67 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
-
+/**
+ * Token webhook personnel de l'utilisateur, géré via TanStack Query :
+ * - lecture par la RPC sécurisée `get_my_webhook_token` (jamais un `SELECT`
+ *   direct qui exposerait le token dans des requêtes générales) ;
+ * - (re)génération via `generate_webhook_token`, le cache étant mis à jour à
+ *   la volée.
+ */
 export function useWebhookToken() {
   const { user } = useAuth();
-  const [webhookToken, setWebhookToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const queryClient = useQueryClient();
+  const userId = user?.id;
+  const tokenQueryKey = ['webhook_token', userId] as const;
 
-  const fetchToken = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      // Use secure RPC function instead of direct SELECT to avoid exposing token in general queries
+  const { data: webhookToken = null, isLoading } = useQuery({
+    queryKey: tokenQueryKey,
+    queryFn: async () => {
       const { data, error } = await supabase.rpc('get_my_webhook_token');
-
       if (error) throw error;
-      setWebhookToken(data || null);
-    } catch (error) {
-      console.error('Error fetching webhook token:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user]);
+      return data ?? null;
+    },
+    enabled: !!userId,
+  });
 
-  useEffect(() => {
-    if (user) {
-      fetchToken();
-    } else {
-      // Sans utilisateur, il n'y a rien à charger : ne pas laisser isLoading
-      // bloqué à true (état de chargement infini côté UI).
-      setWebhookToken(null);
-      setIsLoading(false);
-    }
-  }, [user, fetchToken]);
-
-  const generateToken = async () => {
-    if (!user) return;
-
-    setIsGenerating(true);
-    try {
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      if (!userId) throw new Error('Utilisateur non authentifié');
       const { data, error } = await supabase.rpc('generate_webhook_token', {
-        user_uuid: user.id,
+        user_uuid: userId,
       });
-
       if (error) throw error;
+      return data as string;
+    },
+    onSuccess: (token) => {
+      queryClient.setQueryData(tokenQueryKey, token);
+    },
+  });
 
-      setWebhookToken(data);
-
-      return data;
+  const generateToken = useCallback(async (): Promise<string | null> => {
+    if (!userId) return null;
+    try {
+      return await generateMutation.mutateAsync();
     } catch (error) {
       console.error('Error generating webhook token:', error);
       return null;
-    } finally {
-      setIsGenerating(false);
     }
-  };
+  }, [userId, generateMutation]);
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = useCallback(async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
     } catch (error) {
       console.error('Copy failed:', error);
     }
-  };
+  }, []);
 
   return {
     webhookToken,
     isLoading,
-    isGenerating,
+    isGenerating: generateMutation.isPending,
     generateToken,
     copyToClipboard,
   };
