@@ -160,12 +160,23 @@ Traité en 5 lots, une branche par lot, chacun conclu par `/security-review` (0 
   préservée). Le champ token reste `type="password"`. Guide `.md` téléchargé inchangé (action
   explicite de l'utilisateur, avertissement « ne partagez jamais »). Filet : 2 tests.
 
-### E. Tests (review initiale) — zones critiques non couvertes
+### E. Tests (review initiale) — ✅ en grande partie traité (branche `test/e-resolve-ai-config`)
 
-- **0 test** : `resolveAIConfig` (routage provider + clé — CRITIQUE), `webhook-recipe` (endpoint externe),
-  `manage-ai-keys` (chiffrement).
-- Partiels : `decryptProviderKeys` (branche repli plaintext), transform Gemini + builders de requête, `useAuth`.
-- **Aucun E2E** malgré `@playwright/test` installé (auth, création via chat, liste de courses).
+- **`resolveAIConfig` — ✅ fait.** 12 tests Deno (`_shared/ai-config_test.ts`, rejoués par la CI) :
+  priorité agent config → global → défaut ; clé serveur vs clé user (`provider_api_keys`, repli legacy) ;
+  validation des capabilities (repli si non supportée) ; repli si clé manquante. + `getApiKeyForProvider`.
+- **`webhook-recipe` — ✅ fait.** Logique de parsing/normalisation de la recette LLM extraite vers
+  `_shared/webhook-recipe-parse.ts` (nettoyage fences + `JSON.parse` + normalisation steps + validation Zod
+  avec repli défensif) → 8 tests Deno (CI). Refactor iso-comportement. ⚠️ Edge → redéploiement auto au merge.
+- **`manage-ai-keys` (chiffrement)** — le cœur (`encryptValue`/`decryptValue`/`decryptProviderKeys` dont
+  **le repli plaintext**, `maskApiKey`) est **déjà couvert** par `decrypt-keys_test.ts`. L'orchestration
+  Deno.serve (CRUD/auth) reste non testée (peu testable sans mock lourd) — non traité.
+- **E2E Playwright — ✅ harnais fait (local).** `playwright.config.ts` + `e2e/` : `auth.setup.ts`
+  (login → storageState) + `smoke.spec.ts` (protection des routes + rendu Home/Dashboard/Profil/Planning,
+  déterministe, sans IA ni écriture), 6/6 verts en local. Script `test:e2e`. Session/secret gitignorés.
+  **Volontairement exclus** (voir `e2e/README.md`) : création via chat (LLM non déterministe + tokens +
+  écritures), liste de courses (écritures), et **câblage CI** (secrets + compte jetable requis).
+- Non traités (partiels de la review) : transform Gemini + builders de requête, `useAuth`.
 
 ### F. LOW (durcissement)
 
