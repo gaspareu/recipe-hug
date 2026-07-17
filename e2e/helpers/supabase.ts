@@ -1,5 +1,15 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+// `createClient` instancie un RealtimeClient qui exige un `WebSocket` global,
+// absent en Node < 21 (la CI tourne en Node 20). On ne se sert **jamais** du
+// realtime ici (auth + REST uniquement) : un stub inoffensif suffit à éviter
+// l'erreur « Node.js detected without native WebSocket support » au construct.
+if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === 'undefined') {
+  (globalThis as { WebSocket?: unknown }).WebSocket = class {
+    close() {}
+  };
+}
+
 /**
  * Client Supabase authentifié comme le compte de test, pour les E2E « écriture
  * réelle » : vérifier qu'une donnée a bien été créée puis la nettoyer. Utilise

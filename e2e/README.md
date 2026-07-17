@@ -45,15 +45,13 @@ lancé sur `http://localhost:8080` ; surcharger via `E2E_BASE_URL`).
 
 ## Exécution en CI
 
-Le job `e2e` de `.github/workflows/ci.yml` lance ces tests **au push sur `main`**
-(post-merge). Les identifiants du compte test sont des **secrets de l'environnement
-GitHub `production`** (`TEST_EMAIL` / `TEST_PASSWORD`) — le job s'y rattache via
-`environment: production`. Les valeurs `VITE_*` (publiques) sont dans le workflow.
+Le job `e2e` de `.github/workflows/ci.yml` lance ces tests **au push sur `main`
+(post-merge) uniquement**. Les identifiants du compte test sont des **secrets de dépôt**
+(`TEST_EMAIL` / `TEST_PASSWORD`) ; les valeurs `VITE_*` (publiques) sont dans le workflow.
 
-- **Pourquoi au push sur `main` et pas sur les PR** : les secrets sont portés par
-  l'environnement `production` ; une PR depuis une branche n'y a pas forcément accès
-  (et éviterait une éventuelle approbation manuelle). Pour faire tourner l'E2E sur
-  les PR, ajouter les identifiants en secrets **de dépôt** (ou un environnement non
-  restreint) et retirer le garde `if:` du job.
+- **Pourquoi pas sur les PR** : le job exécute des scripts contrôlés par la PR
+  (`npm ci`, `npm run …`). Les faire tourner avec les secrets exposerait le compte test
+  au code d'une PR arbitraire (« pwn request »). On garde donc l'E2E post-merge.
+  Un échec est alors visible sur `main` juste après le merge.
 - Ces tests **écrivent des données réelles** (nettoyées en fin de test) sur le compte
   configuré. Idéalement, utiliser un **compte jetable** dédié à la CI.

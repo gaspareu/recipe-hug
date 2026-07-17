@@ -178,9 +178,10 @@ Traité en 5 lots, une branche par lot, chacun conclu par `/security-review` (0 
   stubés) et `grocery-list.spec.ts` (repas ajouté via UI → agrégation liste de courses, écriture réelle +
   nettoyage). **8/8 verts en local.** Principe : on teste le flux applicatif, pas le LLM (simulé). Script
   `test:e2e`, session/secret gitignorés, 0 donnée orpheline (nettoyage vérifié).
-  **✅ Câblé en CI** : job `e2e` (`.github/workflows/ci.yml`) au **push sur `main`**
-  (environnement GitHub `production` pour `TEST_EMAIL`/`TEST_PASSWORD`). Pour l'étendre
-  aux PR : secrets de dépôt + retrait du garde `if:` (voir `e2e/README.md`).
+  **✅ Câblé en CI** : job `e2e` (`.github/workflows/ci.yml`) au **push sur `main`
+  (post-merge) uniquement** — jamais sur les PR, pour ne pas exposer les secrets du
+  compte test au code d'une PR (« pwn request »). `TEST_EMAIL`/`TEST_PASSWORD` en
+  secrets de dépôt, `VITE_*` publiques dans le workflow (voir `e2e/README.md`).
 - Non traités (partiels de la review) : transform Gemini + builders de requête, `useAuth`.
 
 ### F. LOW (durcissement)
