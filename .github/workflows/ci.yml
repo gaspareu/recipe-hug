@@ -71,3 +71,47 @@ jobs:
       #   via Deno.env pour vérifier le comportement fail-closed.
       - name: Tests Deno (modules partagés)
         run: deno test --allow-env --node-modules-dir=none supabase/functions/_shared/
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    # Les identifiants du compte test sont des secrets de l'environnement
+    # "production" : ce job doit s'y rattacher pour y accéder. Restreint au push
+    # sur `main` (post-merge) — les PR depuis une branche n'ont pas forcément
+    # accès aux secrets d'environnement. Ces E2E écrivent des données réelles
+    # sur le compte test (nettoyées en fin de test).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+    env:
+      # Valeurs publiques (clé anon, déjà exposée dans le bundle client).
+      VITE_SUPABASE_URL: https://ifpqsyyvytfpossqycpc.supabase.co
+      VITE_SUPABASE_PROJECT_ID: ifpqsyyvytfpossqycpc
+      VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmcHFzeXl2eXRmcG9zc3F5Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTA2MzIsImV4cCI6MjA5NjA4NjYzMn0.8bJ-S00EJG8nrKyfsBbOPPr3BrHtti5lOgBvIXBQ6xE
+      # Compte de test (secrets d'environnement "production").
+      TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+      TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright (chromium + deps)
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests E2E
+        run: npm run test:e2e
+
+      - name: Rapport Playwright (en cas d'échec)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

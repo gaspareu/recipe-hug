@@ -43,8 +43,17 @@ lancé sur `http://localhost:8080` ; surcharger via `E2E_BASE_URL`).
 > Principe : on ne teste **pas** que le chat/LLM fonctionne (non déterministe,
 > coûteux), mais le **flux applicatif** déclenché ensuite. L'échange IA est simulé.
 
-## Volontairement exclus
+## Exécution en CI
 
-- **Câblage CI** : demanderait des secrets (compte test) + idéalement un compte
-  jetable. Ces tests écrivent des données réelles (nettoyées en fin de test) sur
-  le compte configuré — d'où l'exécution locale pour l'instant.
+Le job `e2e` de `.github/workflows/ci.yml` lance ces tests **au push sur `main`**
+(post-merge). Les identifiants du compte test sont des **secrets de l'environnement
+GitHub `production`** (`TEST_EMAIL` / `TEST_PASSWORD`) — le job s'y rattache via
+`environment: production`. Les valeurs `VITE_*` (publiques) sont dans le workflow.
+
+- **Pourquoi au push sur `main` et pas sur les PR** : les secrets sont portés par
+  l'environnement `production` ; une PR depuis une branche n'y a pas forcément accès
+  (et éviterait une éventuelle approbation manuelle). Pour faire tourner l'E2E sur
+  les PR, ajouter les identifiants en secrets **de dépôt** (ou un environnement non
+  restreint) et retirer le garde `if:` du job.
+- Ces tests **écrivent des données réelles** (nettoyées en fin de test) sur le compte
+  configuré. Idéalement, utiliser un **compte jetable** dédié à la CI.
