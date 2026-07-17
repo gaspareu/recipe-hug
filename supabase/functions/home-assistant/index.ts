@@ -32,12 +32,26 @@ const IngredientSchema = z.object({
   quantity: z.union([z.string(), z.number()]).nullable().optional(),
   unit: z.string().nullable().optional(),
   category: z.string().optional(),
+  preparation: z.string().nullable().optional(),
+});
+
+// Paramètres machine TM7 d'une étape réinjectée en contexte (tolérant : on
+// préserve la structure pour ne pas perdre les réglages lors d'une modification).
+const Tm7ParamsSchema = z.object({
+  mode: z.string().optional(),
+  seconds: z.number().nullable().optional(),
+  temperature: z.union([z.number(), z.string()]).nullable().optional(),
+  speed: z.union([z.string(), z.number()]).nullable().optional(),
+  reverse: z.boolean().nullable().optional(),
+  accessory: z.string().nullable().optional(),
 });
 
 const StepSchema = z.object({
   order: z.number(),
   text: z.string(),
   completed: z.boolean().optional(),
+  duration_minutes: z.number().nullable().optional(),
+  tm7: Tm7ParamsSchema.nullable().optional(),
 });
 
 const ActiveRecipeSchema = z.object({

@@ -9,12 +9,16 @@
  * /created-recipes (reverse-engineerés, non-officiels).
  */
 
+import type { Tm7StepParams } from "../thermomix/reference.ts";
+
 // ── Modèle recipe-hug (miroir de src/types/recipe.ts) ────────────────────────
 export interface Ingredient {
   name: string;
   category?: string;
   quantity: number | null;
   unit: string;
+  /** Préparation (« émincé », « en dés »…) — enrichit le rendu guided cooking. */
+  preparation?: string;
 }
 
 export interface Step {
@@ -22,6 +26,8 @@ export interface Step {
   text: string;
   duration_minutes?: number;
   parallel_with?: number[];
+  /** Paramètres machine TM7 (miroir de src/types/recipe.ts). */
+  tm7?: Tm7StepParams;
 }
 
 export interface Recipe {
