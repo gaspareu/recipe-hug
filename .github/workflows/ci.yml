@@ -75,19 +75,18 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    # Les identifiants du compte test sont des secrets de l'environnement
-    # "production" : ce job doit s'y rattacher pour y accéder. Restreint au push
-    # sur `main` (post-merge) — les PR depuis une branche n'ont pas forcément
-    # accès aux secrets d'environnement. Ces E2E écrivent des données réelles
-    # sur le compte test (nettoyées en fin de test).
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
+    # Tourne sur les PR (même dépôt) et au push sur `main`. Les PR de fork sont
+    # exclues : les secrets de dépôt ne leur sont pas transmis. Ces E2E écrivent
+    # des données réelles sur le compte test (nettoyées en fin de test).
+    if: >-
+      github.event.pull_request.head.repo.fork != true &&
+      (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
     env:
       # Valeurs publiques (clé anon, déjà exposée dans le bundle client).
       VITE_SUPABASE_URL: https://ifpqsyyvytfpossqycpc.supabase.co
       VITE_SUPABASE_PROJECT_ID: ifpqsyyvytfpossqycpc
       VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmcHFzeXl2eXRmcG9zc3F5Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTA2MzIsImV4cCI6MjA5NjA4NjYzMn0.8bJ-S00EJG8nrKyfsBbOPPr3BrHtti5lOgBvIXBQ6xE
-      # Compte de test (secrets d'environnement "production").
+      # Compte de test (secrets de dépôt).
       TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
       TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
     steps:
