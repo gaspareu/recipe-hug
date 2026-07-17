@@ -98,9 +98,17 @@ ${lines.join("\n")}
 export interface ActiveRecipeContext {
   id: string;
   title: string;
-  servings?: number;
-  season?: string;
-  ingredients?: Array<{ quantity?: string | number; unit?: string; name: string; category?: string }>;
+  // Champs optionnels tolérant `null` : ils proviennent de schémas Zod nullable
+  // (activeRecipe côté home-assistant). Les usages ci-dessous gèrent déjà null.
+  servings?: number | null;
+  season?: string | null;
+  ingredients?: Array<{
+    quantity?: string | number | null;
+    unit?: string | null;
+    name: string;
+    category?: string | null;
+    preparation?: string | null;
+  }>;
   steps?: Array<{ order: number; text: string; completed?: boolean }>;
   completedSteps?: number[];
 }
