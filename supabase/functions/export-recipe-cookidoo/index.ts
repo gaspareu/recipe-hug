@@ -21,7 +21,7 @@ import {
 import { mapRecipeToCookidoo } from "../_shared/cookidoo/mapper.ts";
 import type { Recipe, ThermomixTool } from "../_shared/cookidoo/types.ts";
 
-const VALID_TOOLS: ThermomixTool[] = ["TM7", "TM6", "TM5", "TM31"];
+const VALID_TOOLS: ThermomixTool[] = ["TM7"];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

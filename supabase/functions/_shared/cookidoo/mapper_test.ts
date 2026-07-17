@@ -56,10 +56,10 @@ Deno.test("mapRecipeToCookidoo: structure complète + tri des étapes", () => {
     ],
   };
 
-  const payload = mapRecipeToCookidoo(recipe, { tools: ["TM6"] });
+  const payload = mapRecipeToCookidoo(recipe, { tools: ["TM7"] });
 
   assertEquals(payload.name, "Soupe");
-  assertEquals(payload.tools, ["TM6"]);
+  assertEquals(payload.tools, ["TM7"]);
   assertEquals(payload.yield, { value: 6, unitText: "portion" });
   assertEquals(payload.ingredients.length, 2);
   assertEquals(payload.ingredients[0], { type: "INGREDIENT", text: "500 g carottes" });

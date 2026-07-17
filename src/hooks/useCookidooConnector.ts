@@ -2,8 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
-// Outils Thermomix supportés par l'export Cookidoo.
-export type ThermomixTool = 'TM7' | 'TM6' | 'TM5' | 'TM31';
+// Outil Thermomix supporté par l'export Cookidoo (scope réduit au TM7).
+export type ThermomixTool = 'TM7';
 
 export interface CookidooStatus {
   configured: boolean;

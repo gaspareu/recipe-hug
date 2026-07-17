@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { UtensilsCrossed, Loader2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -13,14 +12,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useCookidooConnector, type ThermomixTool } from '@/hooks/useCookidooConnector';
-
-const TOOLS: { value: ThermomixTool; label: string }[] = [
-  { value: 'TM7', label: 'TM7' },
-  { value: 'TM6', label: 'TM6' },
-  { value: 'TM5', label: 'TM5' },
-  { value: 'TM31', label: 'TM31' },
-];
+import { useCookidooConnector } from '@/hooks/useCookidooConnector';
 
 // Messages d'erreur lisibles pour les échecs classifiés par l'edge function.
 const ERROR_MESSAGES: Record<string, string> = {
@@ -49,13 +41,12 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
     if (!isControlled) setInternalOpen(value);
     onOpenChange?.(value);
   };
-  const [tool, setTool] = useState<ThermomixTool>('TM7');
 
   const configured = status.data?.configured;
 
   const handleExport = async () => {
     try {
-      const result = await exportRecipe.mutateAsync({ recipeId, tools: [tool] });
+      const result = await exportRecipe.mutateAsync({ recipeId, tools: ['TM7'] });
       if (result.ok) {
         toast.success('Recette envoyée vers Cookidoo', {
           description: result.url ? 'Disponible dans « Mes recettes créées ».' : undefined,
@@ -118,22 +109,10 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Appareil Thermomix</Label>
-              <div className="flex flex-wrap gap-2">
-                {TOOLS.map((t) => (
-                  <Button
-                    key={t.value}
-                    type="button"
-                    variant={tool === t.value ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setTool(t.value)}
-                  >
-                    {t.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Optimisée pour votre <span className="font-medium text-foreground">Thermomix TM7</span> :
+              étapes guidées, temps, températures et vitesses prêts à l'emploi.
+            </p>
             <Button onClick={handleExport} disabled={exportRecipe.isPending} className="w-full">
               {exportRecipe.isPending ? (
                 <>

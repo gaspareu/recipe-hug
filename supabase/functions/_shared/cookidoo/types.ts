@@ -32,7 +32,9 @@ export interface Recipe {
 }
 
 // ── Payload Cookidoo (/created-recipes) ──────────────────────────────────────
-export type ThermomixTool = "TM7" | "TM6" | "TM5" | "TM31";
+// Scope volontairement réduit au TM7 (cf. plan « export qualité expert TM7 ») :
+// l'app n'optimise et n'exporte que pour le Thermomix TM7.
+export type ThermomixTool = "TM7";
 
 export interface CookidooIngredient {
   type: "INGREDIENT";
