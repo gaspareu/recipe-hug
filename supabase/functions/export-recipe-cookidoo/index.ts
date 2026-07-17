@@ -16,6 +16,7 @@ import {
   createRecipe,
   fillRecipe,
   recipeWebUrl,
+  setRecipeImage,
   type ClientCtx,
 } from "../_shared/cookidoo/client.ts";
 import { mapRecipeToCookidoo } from "../_shared/cookidoo/mapper.ts";
@@ -100,7 +101,7 @@ serve(async (req) => {
     // ── Lecture de la recette (RLS : propriété garantie côté DB) ────────────
     const { data: recipeRow, error: recipeError } = await supabase
       .from("recipes")
-      .select("title, servings, ingredients, steps")
+      .select("title, servings, ingredients, steps, source_image_url")
       .eq("id", recipeId)
       .maybeSingle();
     if (recipeError) return json({ error: "db_error", message: recipeError.message }, 500);
@@ -134,7 +135,11 @@ serve(async (req) => {
       ingredients: (recipeRow.ingredients ?? []) as Recipe["ingredients"],
       steps: (recipeRow.steps ?? []) as Recipe["steps"],
     };
-    const payload = mapRecipeToCookidoo(recipe, { tools });
+    const imageUrl =
+      typeof recipeRow.source_image_url === "string" && recipeRow.source_image_url.trim()
+        ? recipeRow.source_image_url.trim()
+        : undefined;
+    const payload = mapRecipeToCookidoo(recipe, { tools, imageUrl });
 
     // ── Auth + upload Cookidoo (zone à risque IP) ──────────────────────────
     try {
@@ -145,11 +150,26 @@ serve(async (req) => {
       await sleep(5000); // Cookidoo exige un délai avant les PATCH de remplissage
       await fillRecipe(ctx, id, payload);
 
+      // Image : PATCH isolé best-effort — un échec n'invalide pas l'export.
+      const warnings: string[] = [];
+      if (payload.image) {
+        try {
+          await sleep(2000);
+          await setRecipeImage(ctx, id, payload.image);
+        } catch (imgErr) {
+          console.error("[export-recipe-cookidoo] image", imgErr);
+          warnings.push("image_not_transferred");
+        }
+      } else {
+        warnings.push("no_image");
+      }
+
       return json({
         ok: true,
         cookidoo_recipe_id: id,
         url: recipeWebUrl(ctx, id),
         tools,
+        warnings,
       });
     } catch (err) {
       const classified = classifyError(err);

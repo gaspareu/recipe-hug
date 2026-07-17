@@ -202,3 +202,14 @@ Deno.test("mapRecipeToCookidoo: défauts (TM7, 4 portions) si non précisés", (
   assertEquals(payload.tools, ["TM7"]);
   assertEquals(payload.yield.value, 4);
 });
+
+Deno.test("mapRecipeToCookidoo: image transmise via imageUrl", () => {
+  const base: Recipe = { title: "Test", ingredients: [], steps: [] };
+  const withImg = mapRecipeToCookidoo(base, { imageUrl: "https://cdn.example/img.png" });
+  assertEquals(withImg.image, "https://cdn.example/img.png");
+  assertEquals(withImg.isImageOwnedByUser, true);
+
+  const noImg = mapRecipeToCookidoo(base);
+  assertEquals(noImg.image, null);
+  assertEquals(noImg.isImageOwnedByUser, false);
+});

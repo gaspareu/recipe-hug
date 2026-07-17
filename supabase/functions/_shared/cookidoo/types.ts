@@ -63,7 +63,8 @@ export interface CookidooStep {
 
 export interface CookidooRecipePayload {
   name: string;
-  image: null;
+  /** URL publique de l'image du plat (bucket `recipe-images`), ou null. */
+  image: string | null;
   isImageOwnedByUser: boolean;
   tools: ThermomixTool[];
   yield: { value: number; unitText: string };

@@ -89,6 +89,16 @@ export async function fillRecipe(
   });
 }
 
+/**
+ * Associe l'image du plat à une recette (PATCH isolé, best-effort).
+ * ⚠️ Endpoints non-officiels : la forme du champ `image` reste à confirmer par
+ * le spike (hypothèse actuelle = URL publique directe). Appelé séparément du
+ * remplissage pour qu'un échec n'invalide pas le reste de l'export.
+ */
+export function setRecipeImage(ctx: ClientCtx, id: string, imageUrl: string): Promise<unknown> {
+  return patchFields(ctx, id, { image: imageUrl, isImageOwnedByUser: true });
+}
+
 export function getRecipe(ctx: ClientCtx, id: string): Promise<unknown> {
   return request(ctx, "GET", `/created-recipes/${ctx.lang}/${id}`);
 }

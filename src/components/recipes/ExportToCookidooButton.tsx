@@ -23,6 +23,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   not_configured: 'Identifiants Cookidoo non configurés.',
 };
 
+// Avertissements non bloquants renvoyés en cas de succès (l'export a réussi).
+const WARNING_MESSAGES: Record<string, string> = {
+  no_image: 'Astuce : ajoutez une image à la recette pour l’afficher sur Cookidoo.',
+  image_not_transferred: 'L’image n’a pas pu être transférée cette fois.',
+};
+
 interface ExportToCookidooButtonProps {
   recipeId: string;
   /** Ouverture contrôlée (pour piloter le dialog depuis un menu externe). */
@@ -48,8 +54,13 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
     try {
       const result = await exportRecipe.mutateAsync({ recipeId, tools: ['TM7'] });
       if (result.ok) {
+        const warnings = (result.warnings ?? [])
+          .map((w) => WARNING_MESSAGES[w])
+          .filter(Boolean);
+        const base = result.url ? 'Disponible dans « Mes recettes créées ».' : undefined;
+        const description = [base, ...warnings].filter(Boolean).join(' ') || undefined;
         toast.success('Recette envoyée vers Cookidoo', {
-          description: result.url ? 'Disponible dans « Mes recettes créées ».' : undefined,
+          description,
           action: result.url
             ? { label: 'Ouvrir', onClick: () => window.open(result.url, '_blank') }
             : undefined,

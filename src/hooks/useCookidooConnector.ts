@@ -25,6 +25,8 @@ export interface CookidooExportResult {
   tools?: ThermomixTool[];
   error?: string;
   message?: string;
+  /** Avertissements non bloquants (ex. image absente ou non transférée). */
+  warnings?: string[];
 }
 
 /**
