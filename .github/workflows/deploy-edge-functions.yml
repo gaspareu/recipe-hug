@@ -40,7 +40,7 @@ jobs:
             exit 1
           fi
 
-      - uses: supabase/setup-cli@v2
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
 
