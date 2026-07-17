@@ -129,8 +129,14 @@ export async function createRecipe(ctx: ClientCtx, name: string): Promise<string
   return id;
 }
 
+/** Encode l'id dans le chemin : il transite par la base et ne doit jamais
+ *  pouvoir s'échapper du segment d'URL (défense en profondeur). */
+function recipePath(ctx: ClientCtx, id: string): string {
+  return `/created-recipes/${ctx.lang}/${encodeURIComponent(id)}`;
+}
+
 function patchFields(ctx: ClientCtx, id: string, fields: Record<string, unknown>): Promise<unknown> {
-  return request(ctx, "PATCH", `/created-recipes/${ctx.lang}/${id}`, fields);
+  return request(ctx, "PATCH", recipePath(ctx, id), fields);
 }
 
 /**
@@ -177,14 +183,14 @@ export function setRecipeImage(ctx: ClientCtx, id: string, imageUrl: string): Pr
 }
 
 export function getRecipe(ctx: ClientCtx, id: string): Promise<unknown> {
-  return request(ctx, "GET", `/created-recipes/${ctx.lang}/${id}`);
+  return request(ctx, "GET", recipePath(ctx, id));
 }
 
 export function deleteRecipe(ctx: ClientCtx, id: string): Promise<unknown> {
-  return request(ctx, "DELETE", `/created-recipes/${ctx.lang}/${id}`);
+  return request(ctx, "DELETE", recipePath(ctx, id));
 }
 
 /** URL web de la recette créée (consultable dans un navigateur). */
 export function recipeWebUrl(ctx: ClientCtx, id: string): string {
-  return `${API_BASE}/created-recipes/${ctx.lang}/${id}`;
+  return `${API_BASE}${recipePath(ctx, id)}`;
 }

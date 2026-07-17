@@ -147,9 +147,10 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
 
 - **Référentiel TM7** : `_shared/thermomix/reference.ts` — la « base de référence » machine
   (vitesses 0.5-10 + Turbo/mijotage, températures 37-160 °C, Varoma = **mode** vapeur, modes,
-  accessoires, barème de conversion action → réglage) + normalisation/validation. Miroir front
-  strictement synchronisé : `src/lib/thermomix/reference.ts` (garde-fou `reference.sync.test.ts`).
-  Alimente le prompt IA, le mapper et la validation.
+  accessoires, barème de conversion action → réglage) + normalisation (`normalizeSpeed`,
+  `clampTemperature`). Miroir front strictement synchronisé : `src/lib/thermomix/reference.ts`
+  (garde-fou `reference.sync.test.ts`). Alimente le prompt IA et le mapper, qui applique les
+  contraintes machine (plages, plafond de vitesse en vapeur, durée maximale).
 - **Source unique** : `_shared/cookidoo/{auth,client,mapper,types,validate}.ts`. Le CLI
   `connector/cookidoo/cli.ts` importe **ces mêmes modules** (entrypoint mince, zéro duplication).
 - **Modules** :

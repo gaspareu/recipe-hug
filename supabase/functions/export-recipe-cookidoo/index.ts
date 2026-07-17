@@ -27,8 +27,6 @@ import { mapRecipeToCookidoo } from "../_shared/cookidoo/mapper.ts";
 import { validateCookidooPayload } from "../_shared/cookidoo/validate.ts";
 import type { Recipe, ThermomixTool } from "../_shared/cookidoo/types.ts";
 
-const VALID_TOOLS: ThermomixTool[] = ["TM7"];
-
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -96,17 +94,13 @@ serve(async (req) => {
     if (!recipeId) {
       return fail("invalid_input", "recipe_id requis");
     }
-    let tools: ThermomixTool[] = ["TM7"];
-    if (Array.isArray(body.tools)) {
-      const filtered = body.tools.filter((t: unknown): t is ThermomixTool =>
-        typeof t === "string" && VALID_TOOLS.includes(t as ThermomixTool));
-      if (filtered.length > 0) tools = filtered;
-    }
+    // Scope mono-appareil : l'export cible toujours le TM7 (cf. type ThermomixTool).
+    const tools: ThermomixTool[] = ["TM7"];
 
     // ── Lecture de la recette (RLS : propriété garantie côté DB) ────────────
     const { data: recipeRow, error: recipeError } = await supabase
       .from("recipes")
-      .select("title, servings, ingredients, steps, source_image_url")
+      .select("title, servings, ingredients, steps, source_image_url, cookidoo_recipe_id")
       .eq("id", recipeId)
       .maybeSingle();
     if (recipeError) return json({ error: "db_error", message: recipeError.message }, 500);
@@ -155,18 +149,9 @@ serve(async (req) => {
     }
 
     // ── Anti-doublon : identifiant Cookidoo déjà associé à cette recette ? ──
-    // Lecture tolérante : si la colonne n'existe pas encore (migration non
-    // appliquée), on dégrade proprement vers une création normale.
-    let existingId: string | null = null;
-    {
-      const { data: mapRow } = await supabase
-        .from("recipes")
-        .select("cookidoo_recipe_id")
-        .eq("id", recipeId)
-        .maybeSingle();
-      const raw = (mapRow as { cookidoo_recipe_id?: unknown } | null)?.cookidoo_recipe_id;
-      if (typeof raw === "string" && raw.trim()) existingId = raw.trim();
-    }
+    const rawExistingId = (recipeRow as { cookidoo_recipe_id?: unknown }).cookidoo_recipe_id;
+    const existingId =
+      typeof rawExistingId === "string" && rawExistingId.trim() ? rawExistingId.trim() : null;
 
     // ── Auth + upload Cookidoo (zone à risque IP) ──────────────────────────
     try {

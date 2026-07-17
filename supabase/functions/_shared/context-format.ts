@@ -129,7 +129,8 @@ export function formatRecipeContext(recipe: ActiveRecipeContext | null | undefin
     for (const ing of ingredients) {
       const qty = ing.quantity ?? "";
       const unit = ing.unit ?? "";
-      context += `- ${qty} ${unit} ${ing.name}${ing.category ? ` (${ing.category})` : ""}\n`;
+      const prep = ing.preparation ? `, ${ing.preparation}` : "";
+      context += `- ${qty} ${unit} ${ing.name}${prep}${ing.category ? ` (${ing.category})` : ""}\n`;
     }
   }
 

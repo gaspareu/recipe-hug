@@ -6,7 +6,6 @@ import {
   buildTm7ReferenceForPrompt,
   clampTemperature,
   normalizeSpeed,
-  validateTm7Params,
   VAROMA,
 } from "./reference.ts";
 
@@ -49,33 +48,6 @@ Deno.test("clampTemperature: bornage doux et rejet des valeurs absurdes", () => 
   assertEquals(clampTemperature(500), null); // absurde → rejeté
   assertEquals(clampTemperature(-10), null);
   assertEquals(clampTemperature(undefined), null);
-});
-
-// ── validateTm7Params ────────────────────────────────────────────────────────
-
-Deno.test("validateTm7Params: paramètres cohérents → ok", () => {
-  assertEquals(validateTm7Params({ mode: "chop", speed: "7", seconds: 5 }).ok, true);
-  assertEquals(
-    validateTm7Params({ mode: "steam", temperature: VAROMA, speed: "1", seconds: 900 }).ok,
-    true,
-  );
-});
-
-Deno.test("validateTm7Params: vitesse trop élevée en cuisson vapeur", () => {
-  const res = validateTm7Params({ mode: "steam", speed: "8" });
-  assertEquals(res.ok, false);
-  assertStringIncludes(res.errors.join(" "), "vapeur");
-});
-
-Deno.test("validateTm7Params: température et vitesse hors plage", () => {
-  assertEquals(validateTm7Params({ mode: "cook", temperature: 500 }).ok, false);
-  assertEquals(validateTm7Params({ mode: "cook", speed: "25" }).ok, false);
-  assertEquals(validateTm7Params({ mode: "cook", seconds: -1 }).ok, false);
-});
-
-Deno.test("validateTm7Params: mode inconnu rejeté", () => {
-  // @ts-expect-error mode volontairement invalide
-  assertEquals(validateTm7Params({ mode: "teleportation" }).ok, false);
 });
 
 // ── buildTm7ReferenceForPrompt ───────────────────────────────────────────────

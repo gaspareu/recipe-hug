@@ -21,7 +21,13 @@ import type {
   Step,
   ThermomixTool,
 } from "./types.ts";
-import { clampTemperature, normalizeSpeed, VAROMA } from "../thermomix/reference.ts";
+import {
+  clampTemperature,
+  normalizeSpeed,
+  TM7_MAX_SECONDS,
+  TM7_STEAM_SPEED_MAX,
+  VAROMA,
+} from "../thermomix/reference.ts";
 import type { Tm7StepParams } from "../thermomix/reference.ts";
 
 export interface MapOptions {
@@ -116,24 +122,48 @@ function extractVaroma(text: string): Found | null {
   return { start: m.index, end: m.index + m[0].length };
 }
 
-/**
- * Empan des paramètres machine dans le texte (« 8 min/100°C/vitesse 2 »), ou
- * `null` si le texte n'en contient aucun. Sert à positionner l'annotation TTS
- * sur le seul segment concerné : les annotations INGREDIENT occupent d'autres
- * segments de la phrase et ne doivent pas être chevauchées.
- */
-function paramsSpan(text: string): { offset: number; length: number } | null {
-  const spans = [
-    extractTime(text)?.span,
-    extractSpeed(text)?.span,
-    extractTemperature(text)?.span,
-    extractVaroma(text),
-  ].filter((s): s is Found => !!s);
-  if (spans.length === 0) return null;
+type Span = { offset: number; length: number };
 
+interface TextParams {
+  time: { seconds: number; span: Found } | null;
+  speed: { speed: string; span: Found } | null;
+  temp: { value: string; span: Found } | null;
+  varoma: Found | null;
+  /** Empan couvrant tous les réglages trouvés, ou `null` si le texte n'en a aucun. */
+  position: Span | null;
+}
+
+function spanOf(spans: Found[]): Span | null {
+  if (spans.length === 0) return null;
   const start = Math.min(...spans.map((s) => s.start));
   const end = Math.max(...spans.map((s) => s.end));
   return { offset: start, length: end - start };
+}
+
+/**
+ * Extrait en UNE passe les réglages machine présents dans le texte, avec leur
+ * empan global. L'empan positionne l'annotation TTS sur le seul segment de
+ * réglages : les annotations INGREDIENT occupent d'autres segments de la phrase
+ * et ne doivent pas être chevauchées.
+ */
+function extractTextParams(text: string): TextParams {
+  const time = extractTime(text);
+  const speed = extractSpeed(text);
+  const temp = extractTemperature(text);
+  const varoma = extractVaroma(text);
+  const spans = [time?.span, speed?.span, temp?.span, varoma].filter((s): s is Found => !!s);
+  return { time, speed, temp, varoma, position: spanOf(spans) };
+}
+
+/** Annotation TTS dérivée des réglages lus dans le texte. */
+function annotationsFromText(p: TextParams): Annotation[] {
+  if (!p.position) return [];
+  const data: Record<string, unknown> = {};
+  if (p.time) data.time = p.time.seconds;
+  if (p.speed) data.speed = p.speed.speed;
+  if (p.varoma) data.temperature = { value: "varoma" };
+  else if (p.temp) data.temperature = { value: p.temp.value, unit: "C" };
+  return [{ type: "TTS", data, position: p.position }];
 }
 
 /**
@@ -142,26 +172,7 @@ function paramsSpan(text: string): { offset: number; length: number } | null {
  * empan (TTS). « Varoma » → `temperature: { value: "varoma" }`.
  */
 export function parseStepAnnotations(text: string): Annotation[] {
-  const position = paramsSpan(text);
-  if (!position) return [];
-
-  const time = extractTime(text);
-  const speed = extractSpeed(text);
-  const temp = extractTemperature(text);
-  const varoma = extractVaroma(text);
-
-  if (varoma) {
-    const data: Record<string, unknown> = { temperature: { value: "varoma" } };
-    if (time) data.time = time.seconds;
-    if (speed) data.speed = speed.speed;
-    return [{ type: "TTS", data, position }];
-  }
-
-  const data: Record<string, unknown> = {};
-  if (time) data.time = time.seconds;
-  if (speed) data.speed = speed.speed;
-  if (temp) data.temperature = { value: temp.value, unit: "C" };
-  return [{ type: "TTS", data, position }];
+  return annotationsFromText(extractTextParams(text));
 }
 
 // ── Annotation TTS depuis les paramètres structurés TM7 ──────────────────────
@@ -171,19 +182,30 @@ export function parseStepAnnotations(text: string): Annotation[] {
  * Les valeurs sont normalisées via le référentiel TM7 ; un paramètre invalide
  * est simplement omis (dégradation propre) plutôt que d'émettre du bruit.
  */
-function ttsFromTm7(text: string, tm7: Tm7StepParams): Annotation | null {
+function ttsFromTm7(text: string, tm7: Tm7StepParams, span: Span | null): Annotation | null {
   const data: Record<string, unknown> = {};
 
-  if (tm7.seconds !== undefined && Number.isFinite(tm7.seconds) && tm7.seconds > 0) {
+  // Durée bornée au maximum plausible d'une opération (garde-fou du référentiel).
+  if (
+    tm7.seconds !== undefined && Number.isFinite(tm7.seconds) &&
+    tm7.seconds > 0 && tm7.seconds <= TM7_MAX_SECONDS
+  ) {
     data.time = Math.round(tm7.seconds);
   }
-
-  const speed = normalizeSpeed(tm7.speed);
-  if (speed) data.speed = speed;
 
   // Varoma : mode vapeur, température « Varoma » explicite, ou accessoire Varoma.
   const usesVaroma =
     tm7.mode === "steam" || tm7.temperature === VAROMA || tm7.accessory === "varoma";
+
+  const speed = normalizeSpeed(tm7.speed);
+  if (speed) {
+    // Contrainte matérielle du TM7 : en cuisson vapeur, la vitesse est plafonnée.
+    const value = parseFloat(speed);
+    data.speed = usesVaroma && Number.isFinite(value) && value > TM7_STEAM_SPEED_MAX
+      ? String(TM7_STEAM_SPEED_MAX)
+      : speed;
+  }
+
   if (usesVaroma) {
     data.temperature = { value: "varoma" };
   } else {
@@ -199,11 +221,10 @@ function ttsFromTm7(text: string, tm7: Tm7StepParams): Annotation | null {
   }
 
   if (Object.keys(data).length === 0) return null;
-  // Positionner sur le segment de paramètres du texte (« 8 min/100°C/vitesse 2 »,
+  // Positionné sur le segment de réglages du texte (« 8 min/100°C/vitesse 2 »,
   // format demandé à l'IA) pour ne pas chevaucher les annotations INGREDIENT ;
-  // à défaut, couvrir l'étape entière.
-  const position = paramsSpan(text) ?? { offset: 0, length: text.length };
-  return { type: "TTS", data, position };
+  // à défaut, l'étape entière.
+  return { type: "TTS", data, position: span ?? { offset: 0, length: text.length } };
 }
 
 // ── Annotations INGREDIENT (liaison texte ↔ ingrédient) ──────────────────────
@@ -251,8 +272,9 @@ function ingredientAnnotations(text: string, ingredients: Ingredient[]): Annotat
 /** Annotations complètes d'une étape : TTS (structuré ou regex) + INGREDIENT. */
 function buildStepAnnotations(step: Step, ingredients: Ingredient[]): Annotation[] {
   const text = step.text.trim();
-  const tts = step.tm7 ? ttsFromTm7(text, step.tm7) : null;
-  const ttsList = tts ? [tts] : parseStepAnnotations(text);
+  const params = extractTextParams(text); // une seule passe de regex par étape
+  const tts = step.tm7 ? ttsFromTm7(text, step.tm7, params.position) : null;
+  const ttsList = tts ? [tts] : annotationsFromText(params);
   return [...ttsList, ...ingredientAnnotations(text, ingredients)];
 }
 

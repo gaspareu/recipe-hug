@@ -187,7 +187,7 @@ export const TM7_CONVERSION_CHEATSHEET: Tm7ConversionHint[] = [
   { action: "Émulsionner une mayonnaise", guidance: "vitesse 4 / fouet papillon, ajout d'huile en filet" },
 ];
 
-// ── Normalisation / validation (fonctions pures) ─────────────────────────────
+// ── Normalisation (fonctions pures) ──────────────────────────────────────────
 
 function normalizeSpeedNumber(n: number): string | null {
   if (!Number.isFinite(n)) return null;
@@ -226,55 +226,6 @@ export function clampTemperature(
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   if (value < 0 || value > 300) return null;
   return Math.min(TM7_TEMP_MAX, Math.max(TM7_TEMP_MIN, value));
-}
-
-export interface Tm7ValidationResult {
-  ok: boolean;
-  errors: string[];
-}
-
-/**
- * Contrôle la cohérence d'un jeu de paramètres machine. Ne modifie rien ;
- * renvoie la liste des anomalies (vide si tout est valide).
- */
-export function validateTm7Params(params: Tm7StepParams): Tm7ValidationResult {
-  const errors: string[] = [];
-
-  const spec = TM7_MODES[params.mode];
-  if (!spec) errors.push(`Mode TM7 inconnu : « ${String(params.mode)} »`);
-
-  if (params.speed !== undefined) {
-    const norm = normalizeSpeed(params.speed);
-    if (norm === null) {
-      errors.push(
-        `Vitesse invalide : « ${params.speed} » (attendu ${TM7_SPEED_MIN}–${TM7_SPEED_MAX}, « mijotage » ou « Turbo »)`,
-      );
-    } else if (params.mode === "steam") {
-      const n = parseFloat(norm);
-      if (Number.isFinite(n) && n > TM7_STEAM_SPEED_MAX) {
-        errors.push(`Vitesse ${norm} trop élevée en cuisson vapeur (max ${TM7_STEAM_SPEED_MAX})`);
-      }
-    }
-  }
-
-  if (params.temperature !== undefined && params.temperature !== VAROMA) {
-    const t = params.temperature;
-    if (typeof t !== "number" || !Number.isFinite(t)) {
-      errors.push(`Température invalide : ${String(t)}`);
-    } else if (t < TM7_TEMP_MIN || t > TM7_TEMP_MAX) {
-      errors.push(`Température ${t} °C hors plage TM7 (${TM7_TEMP_MIN}–${TM7_TEMP_MAX} °C)`);
-    }
-  }
-
-  if (params.seconds !== undefined) {
-    if (!Number.isFinite(params.seconds) || params.seconds <= 0) {
-      errors.push(`Durée invalide : ${String(params.seconds)} s`);
-    } else if (params.seconds > TM7_MAX_SECONDS) {
-      errors.push(`Durée ${params.seconds} s irréaliste (> 3 h)`);
-    }
-  }
-
-  return { ok: errors.length === 0, errors };
 }
 
 // ── Génération du bloc de référence pour le prompt IA ────────────────────────

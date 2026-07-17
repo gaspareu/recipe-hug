@@ -100,6 +100,17 @@ Deno.test("mapRecipeToCookidoo: TTS structuré positionné sur le segment de par
   assertEquals(ing.position.offset + ing.position.length <= tts.position.offset, true);
 });
 
+Deno.test("mapRecipeToCookidoo: vitesse plafonnée en cuisson vapeur (contrainte TM7)", () => {
+  const payload = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [],
+    steps: [{ order: 1, text: "Cuire à la vapeur.", tm7: { mode: "steam", seconds: 900, speed: "8" } }],
+  });
+  const tts = payload.instructions[0].annotations.find((a) => a.type === "TTS")!;
+  assertEquals(tts.data.speed, "5"); // TM7_STEAM_SPEED_MAX
+  assertEquals(tts.data.temperature, { value: "varoma" });
+});
+
 Deno.test("mapRecipeToCookidoo: vitesse hors plage omise (dégradation propre)", () => {
   const payload = mapRecipeToCookidoo({
     title: "Test",

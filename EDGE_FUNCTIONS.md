@@ -14,7 +14,7 @@
 | `ai-config.ts` | `resolveAIConfig`, `getUserAISettings`, `getApiKeyForProvider` | Résolution hiérarchique : Agent Config → Global → Default (Anthropic) |
 | `ai-providers.ts` | `callAINonStreaming`, `callAIStreaming`, `buildToolCallRequest`, `extractToolCallResult`, `buildVisionRequest`, `buildSimpleRequest`, `buildRequestHeaders`, `extractContentFromResponse` | Appels IA unifiés, transforms de stream, helpers tool-calling et vision |
 | `decrypt-keys.ts` | `encryptValue`, `decryptValue`, `decryptProviderKeys`, `maskApiKey` | Chiffrement/déchiffrement AES-GCM des clés API |
-| `thermomix/reference.ts` | `TM7_MODES`, `TM7_CONVERSION_CHEATSHEET`, `normalizeSpeed`, `clampTemperature`, `validateTm7Params`, `buildTm7ReferenceForPrompt` | **Référentiel machine TM7** (vitesses, températures, modes, accessoires, barème). Miroir front synchronisé : `src/lib/thermomix/reference.ts` |
+| `thermomix/reference.ts` | `TM7_MODES`, `TM7_CONVERSION_CHEATSHEET`, `normalizeSpeed`, `clampTemperature`, `buildTm7ReferenceForPrompt` | **Référentiel machine TM7** (vitesses, températures, modes, accessoires, barème). Miroir front synchronisé : `src/lib/thermomix/reference.ts` |
 | `cookidoo/{mapper,validate,client,auth,types}.ts` | `mapRecipeToCookidoo`, `validateCookidooPayload`, `createRecipe`, `fillRecipe`, `setRecipeImage`, `login` | Connecteur Cookidoo (export TM7, annotations guided cooking). Détail : `supabase/functions/CLAUDE.md` |
 
 ### Résolution de configuration (`resolveAIConfig`)
