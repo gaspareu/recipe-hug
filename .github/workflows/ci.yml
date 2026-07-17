@@ -75,12 +75,11 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    # Tourne sur les PR (même dépôt) et au push sur `main`. Les PR de fork sont
-    # exclues : les secrets de dépôt ne leur sont pas transmis. Ces E2E écrivent
-    # des données réelles sur le compte test (nettoyées en fin de test).
-    if: >-
-      github.event.pull_request.head.repo.fork != true &&
-      (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+    # Restreint au push sur `main` (post-merge) : on ne veut JAMAIS exposer les
+    # secrets du compte test au code d'une PR (le job lance `npm ci`/`npm run`,
+    # contrôlés par la PR → vecteur "pwn request"). Ces E2E écrivent des données
+    # réelles sur le compte test (nettoyées en fin de test).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     env:
       # Valeurs publiques (clé anon, déjà exposée dans le bundle client).
       VITE_SUPABASE_URL: https://ifpqsyyvytfpossqycpc.supabase.co
