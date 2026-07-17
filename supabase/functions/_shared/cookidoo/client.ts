@@ -14,6 +14,18 @@ import type { CookidooRecipePayload } from "./types.ts";
 
 const API_BASE = "https://cookidoo.fr";
 
+/**
+ * Erreur HTTP Cookidoo, porteuse du statut : permet aux appelants de distinguer
+ * un 404 (ressource absente) d'une erreur transitoire (429, 5xx) sans parser le
+ * message.
+ */
+export class CookidooHttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = "CookidooHttpError";
+  }
+}
+
 export interface RetryPolicy {
   maxAttempts: number; // nombre total de tentatives (initiale incluse)
   base429Ms: number; // backoff de base sur 429
@@ -96,7 +108,10 @@ async function request<T>(
       attempt++;
       continue;
     }
-    throw new Error(`${method} ${path} → HTTP ${status} : ${text.slice(0, 300)}`);
+    throw new CookidooHttpError(
+      status,
+      `${method} ${path} → HTTP ${status} : ${text.slice(0, 300)}`,
+    );
   }
 }
 

@@ -19,8 +19,8 @@ import type {
   Ingredient,
   Recipe,
   Step,
+  ThermomixTool,
 } from "./types.ts";
-import type { ThermomixTool } from "./types.ts";
 import { clampTemperature, normalizeSpeed, VAROMA } from "../thermomix/reference.ts";
 import type { Tm7StepParams } from "../thermomix/reference.ts";
 
@@ -47,7 +47,7 @@ function isMeasureUnit(unit: string): boolean {
 }
 
 function startsWithVowelOrMuteH(word: string): boolean {
-  return /^[aeiouyàâäéèêëïîôöûü h]/i.test(word.trim());
+  return /^[aeiouyàâäéèêëïîôöûüh]/i.test(word.trim());
 }
 
 /** « 200 g de farine », « 1 L d'eau », « 2 œufs », « sel, à volonté ». */
@@ -95,8 +95,12 @@ function extractTime(text: string): { seconds: number; span: Found } | null {
 function extractSpeed(text: string): { speed: string; span: Found } | null {
   const m = text.match(/(?:vitesse|vit\.?)\s*([\wéè.,/-]+)/i);
   if (!m || m.index === undefined) return null;
-  const speed = m[1].replace(/[.,;]+$/, "").trim();
-  return { speed, span: { start: m.index, end: m.index + m[0].length } };
+  const raw = m[1];
+  const speed = raw.replace(/[.,;]+$/, "").trim();
+  // La classe de caractères capture la ponctuation finale (« vitesse 1. ») : on
+  // la retire aussi de l'empan, pour que l'annotation couvre le seul réglage.
+  const trailing = raw.length - speed.length;
+  return { speed, span: { start: m.index, end: m.index + m[0].length - trailing } };
 }
 
 /** « 100°C », « 37° », « 90 °C » → "100" / "37" / "90". */
@@ -113,24 +117,38 @@ function extractVaroma(text: string): Found | null {
 }
 
 /**
+ * Empan des paramètres machine dans le texte (« 8 min/100°C/vitesse 2 »), ou
+ * `null` si le texte n'en contient aucun. Sert à positionner l'annotation TTS
+ * sur le seul segment concerné : les annotations INGREDIENT occupent d'autres
+ * segments de la phrase et ne doivent pas être chevauchées.
+ */
+function paramsSpan(text: string): { offset: number; length: number } | null {
+  const spans = [
+    extractTime(text)?.span,
+    extractSpeed(text)?.span,
+    extractTemperature(text)?.span,
+    extractVaroma(text),
+  ].filter((s): s is Found => !!s);
+  if (spans.length === 0) return null;
+
+  const start = Math.min(...spans.map((s) => s.start));
+  const end = Math.max(...spans.map((s) => s.end));
+  return { offset: start, length: end - start };
+}
+
+/**
  * Construit l'annotation machine d'une étape à partir de son TEXTE (fallback
  * pour les recettes sans `tm7`). Regroupe temps/vitesse/température dans un seul
  * empan (TTS). « Varoma » → `temperature: { value: "varoma" }`.
  */
 export function parseStepAnnotations(text: string): Annotation[] {
+  const position = paramsSpan(text);
+  if (!position) return [];
+
   const time = extractTime(text);
   const speed = extractSpeed(text);
   const temp = extractTemperature(text);
   const varoma = extractVaroma(text);
-
-  const spans = [time?.span, speed?.span, temp?.span, varoma].filter(
-    (s): s is Found => !!s,
-  );
-  if (spans.length === 0) return [];
-
-  const start = Math.min(...spans.map((s) => s.start));
-  const end = Math.max(...spans.map((s) => s.end));
-  const position = { offset: start, length: end - start };
 
   if (varoma) {
     const data: Record<string, unknown> = { temperature: { value: "varoma" } };
@@ -181,7 +199,11 @@ function ttsFromTm7(text: string, tm7: Tm7StepParams): Annotation | null {
   }
 
   if (Object.keys(data).length === 0) return null;
-  return { type: "TTS", data, position: { offset: 0, length: text.length } };
+  // Positionner sur le segment de paramètres du texte (« 8 min/100°C/vitesse 2 »,
+  // format demandé à l'IA) pour ne pas chevaucher les annotations INGREDIENT ;
+  // à défaut, couvrir l'étape entière.
+  const position = paramsSpan(text) ?? { offset: 0, length: text.length };
+  return { type: "TTS", data, position };
 }
 
 // ── Annotations INGREDIENT (liaison texte ↔ ingrédient) ──────────────────────

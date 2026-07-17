@@ -13,6 +13,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptValue } from "../_shared/decrypt-keys.ts";
 import { login, countryToLang } from "../_shared/cookidoo/auth.ts";
 import {
+  CookidooHttpError,
   createRecipe,
   deleteRecipe,
   fillRecipe,
@@ -179,16 +180,32 @@ serve(async (req) => {
         try {
           await getRecipe(ctx, existingId);
           reuseId = existingId;
-        } catch {
-          reuseId = null;
+        } catch (lookupErr) {
+          // 404 → la recette a été supprimée côté Cookidoo : on la recrée.
+          // Toute autre erreur (429, 5xx, réseau) : on NE recrée PAS — ce serait
+          // fabriquer le doublon que ce mécanisme doit justement éviter.
+          if (lookupErr instanceof CookidooHttpError && lookupErr.status === 404) {
+            reuseId = null;
+          } else {
+            throw lookupErr;
+          }
         }
       }
 
+      const warnings: string[] = [];
       let id: string;
       if (reuseId) {
         id = reuseId;
-        await renameRecipe(ctx, id, payload.name);
-        await sleep(2000);
+        // Le champ de renommage en PATCH n'est pas confirmé (endpoints
+        // non-officiels) → best-effort : un échec ne doit pas empêcher la mise à
+        // jour du contenu.
+        try {
+          await renameRecipe(ctx, id, payload.name);
+          await sleep(2000);
+        } catch (renameErr) {
+          console.error("[export-recipe-cookidoo] rename", renameErr);
+          warnings.push("title_not_updated");
+        }
         await fillRecipe(ctx, id, payload);
       } else {
         id = await createRecipe(ctx, payload.name);
@@ -210,7 +227,6 @@ serve(async (req) => {
       }
 
       // Image : PATCH isolé best-effort — un échec n'invalide pas l'export.
-      const warnings: string[] = [];
       if (payload.image) {
         try {
           await sleep(2000);

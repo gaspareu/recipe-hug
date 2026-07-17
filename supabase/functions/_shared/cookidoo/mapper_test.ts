@@ -83,6 +83,23 @@ Deno.test("mapRecipeToCookidoo: tm7 mode steam → Varoma + sens inverse", () =>
   assertEquals(tts.data.reverse, true);
 });
 
+Deno.test("mapRecipeToCookidoo: TTS structuré positionné sur le segment de paramètres", () => {
+  const text = "Ajouter les carottes, cuire 20 min/100°C/vitesse 1.";
+  const payload = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [{ name: "carottes", quantity: 500, unit: "g" }],
+    steps: [{ order: 1, text, tm7: { mode: "cook", seconds: 1200, temperature: 100, speed: "1" } }],
+  });
+  const anns = payload.instructions[0].annotations;
+  const tts = anns.find((a) => a.type === "TTS")!;
+  const ing = anns.find((a) => a.type === "INGREDIENT")!;
+
+  // Le TTS couvre les seuls paramètres, pas toute la phrase…
+  assertEquals(text.substr(tts.position.offset, tts.position.length), "20 min/100°C/vitesse 1");
+  // …et ne chevauche donc pas l'annotation ingrédient.
+  assertEquals(ing.position.offset + ing.position.length <= tts.position.offset, true);
+});
+
 Deno.test("mapRecipeToCookidoo: vitesse hors plage omise (dégradation propre)", () => {
   const payload = mapRecipeToCookidoo({
     title: "Test",

@@ -3,9 +3,11 @@ import {
   assertRejects,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
+  CookidooHttpError,
   createRecipe,
   deleteRecipe,
   fillRecipe,
+  getRecipe,
   type ClientCtx,
   type RetryPolicy,
 } from "./client.ts";
@@ -60,6 +62,14 @@ Deno.test("createRecipe: 4xx non rejoué (auth/permission)", async () => {
   const ctx = testCtx(() => new Response("forbidden", { status: 403 }));
   await assertRejects(() => createRecipe(ctx, "Test"));
   assertEquals(ctx.calls(), 1);
+});
+
+Deno.test("CookidooHttpError expose le statut (404 distinguable d'un échec transitoire)", async () => {
+  const ctx = testCtx(() => new Response("not found", { status: 404 }));
+  const err = await assertRejects(() => getRecipe(ctx, "r1"));
+  assertEquals(err instanceof CookidooHttpError, true);
+  assertEquals((err as CookidooHttpError).status, 404);
+  assertEquals(ctx.calls(), 1); // 404 non rejoué
 });
 
 Deno.test("deleteRecipe: 5xx rejoué (idempotent) puis succès", async () => {

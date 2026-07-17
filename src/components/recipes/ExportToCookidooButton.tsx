@@ -27,6 +27,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 const WARNING_MESSAGES: Record<string, string> = {
   no_image: 'Astuce : ajoutez une image à la recette pour l’afficher sur Cookidoo.',
   image_not_transferred: 'L’image n’a pas pu être transférée cette fois.',
+  title_not_updated: 'Le titre n’a pas pu être mis à jour sur Cookidoo (contenu à jour).',
 };
 
 interface ExportToCookidooButtonProps {
