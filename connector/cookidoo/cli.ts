@@ -38,7 +38,7 @@ import {
 // ── Portabilité Deno / Node ──────────────────────────────────────────────────
 const g = globalThis as unknown as {
   Deno?: { env: { get(k: string): string | undefined }; args: string[] };
-  process?: { env: Record<string, string | undefined>; argv: string[] };
+  process?: { env: Record<string, string | undefined>; argv: string[]; exit?: (code: number) => never };
 };
 const isDeno = typeof g.Deno !== "undefined";
 const env = (k: string): string | undefined =>
