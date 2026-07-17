@@ -14,12 +14,16 @@ import { decryptValue } from "../_shared/decrypt-keys.ts";
 import { login, countryToLang } from "../_shared/cookidoo/auth.ts";
 import {
   createRecipe,
+  deleteRecipe,
   fillRecipe,
+  getRecipe,
   recipeWebUrl,
+  renameRecipe,
   setRecipeImage,
   type ClientCtx,
 } from "../_shared/cookidoo/client.ts";
 import { mapRecipeToCookidoo } from "../_shared/cookidoo/mapper.ts";
+import { validateCookidooPayload } from "../_shared/cookidoo/validate.ts";
 import type { Recipe, ThermomixTool } from "../_shared/cookidoo/types.ts";
 
 const VALID_TOOLS: ThermomixTool[] = ["TM7"];
@@ -141,14 +145,69 @@ serve(async (req) => {
         : undefined;
     const payload = mapRecipeToCookidoo(recipe, { tools, imageUrl });
 
+    // ── Validation avant tout appel réseau ─────────────────────────────────
+    // Échoue tôt et clairement, sans consommer d'authentification ni de budget
+    // de requêtes (rate limit Cookidoo ~10/min).
+    const validation = validateCookidooPayload(payload);
+    if (!validation.ok) {
+      return fail("invalid_payload", `Recette non exportable : ${validation.errors.join(", ")}.`);
+    }
+
+    // ── Anti-doublon : identifiant Cookidoo déjà associé à cette recette ? ──
+    // Lecture tolérante : si la colonne n'existe pas encore (migration non
+    // appliquée), on dégrade proprement vers une création normale.
+    let existingId: string | null = null;
+    {
+      const { data: mapRow } = await supabase
+        .from("recipes")
+        .select("cookidoo_recipe_id")
+        .eq("id", recipeId)
+        .maybeSingle();
+      const raw = (mapRow as { cookidoo_recipe_id?: unknown } | null)?.cookidoo_recipe_id;
+      if (typeof raw === "string" && raw.trim()) existingId = raw.trim();
+    }
+
     // ── Auth + upload Cookidoo (zone à risque IP) ──────────────────────────
     try {
       const jar = await login(creds.email, password, lang);
       const ctx: ClientCtx = { cookieHeader: jar.headerForUrl("https://cookidoo.fr"), lang };
 
-      const id = await createRecipe(ctx, payload.name);
-      await sleep(5000); // Cookidoo exige un délai avant les PATCH de remplissage
-      await fillRecipe(ctx, id, payload);
+      // Ré-export : mise à jour en place si la recette existe toujours côté
+      // Cookidoo (si elle y a été supprimée, on la recrée).
+      let reuseId: string | null = null;
+      if (existingId) {
+        try {
+          await getRecipe(ctx, existingId);
+          reuseId = existingId;
+        } catch {
+          reuseId = null;
+        }
+      }
+
+      let id: string;
+      if (reuseId) {
+        id = reuseId;
+        await renameRecipe(ctx, id, payload.name);
+        await sleep(2000);
+        await fillRecipe(ctx, id, payload);
+      } else {
+        id = await createRecipe(ctx, payload.name);
+        await sleep(5000); // Cookidoo exige un délai avant les PATCH de remplissage
+        try {
+          await fillRecipe(ctx, id, payload);
+        } catch (fillErr) {
+          // Rollback best-effort : ne pas laisser une recette vide sur Cookidoo.
+          try {
+            await deleteRecipe(ctx, id);
+          } catch {
+            return fail(
+              "partial_created",
+              `Recette partiellement créée sur Cookidoo (id ${id}) : le remplissage a échoué et la suppression automatique aussi. Supprimez-la depuis Cookidoo, ou via le CLI (--delete ${id}).`,
+            );
+          }
+          throw fillErr; // rollback OK → échec classé normalement, sans résidu
+        }
+      }
 
       // Image : PATCH isolé best-effort — un échec n'invalide pas l'export.
       const warnings: string[] = [];
@@ -164,12 +223,21 @@ serve(async (req) => {
         warnings.push("no_image");
       }
 
+      // Mémorise le mapping pour le prochain export (anti-doublon). Non bloquant :
+      // si la colonne n'existe pas encore, l'export reste un succès.
+      const { error: mapErr } = await supabase
+        .from("recipes")
+        .update({ cookidoo_recipe_id: id, cookidoo_exported_at: new Date().toISOString() })
+        .eq("id", recipeId);
+      if (mapErr) console.error("[export-recipe-cookidoo] mapping", mapErr.message);
+
       return json({
         ok: true,
         cookidoo_recipe_id: id,
         url: recipeWebUrl(ctx, id),
         tools,
         warnings,
+        updated: reuseId !== null,
       });
     } catch (err) {
       const classified = classifyError(err);

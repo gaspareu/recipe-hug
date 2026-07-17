@@ -5,15 +5,41 @@
  * Base URL : https://cookidoo.fr  (les cookies sont scopés à ce domaine)
  * Séquence d'upload : POST create → attendre ~5 s → PATCH (payload complet).
  * Rate limit observé ~10 req/min — espacer les envois.
+ *
+ * Résilience : `request()` ré-essaie les 429 (respecte `Retry-After`) et les 5xx
+ * (backoff exponentiel), sauf le POST de création sur 5xx (réponse ambiguë →
+ * risque de doublon). `fetch`/`sleep` sont injectables (tests) via ClientCtx.
  */
 import type { CookidooRecipePayload } from "./types.ts";
 
 const API_BASE = "https://cookidoo.fr";
 
-export interface ClientCtx {
-  cookieHeader: string;  // cookies sérialisés pour cookidoo.fr
-  lang: string;          // ex. "fr-FR"
+export interface RetryPolicy {
+  maxAttempts: number; // nombre total de tentatives (initiale incluse)
+  base429Ms: number; // backoff de base sur 429
+  base5xxMs: number; // backoff de base sur 5xx
+  maxDelayMs: number; // plafond d'un délai unitaire
 }
+
+export const DEFAULT_RETRY: RetryPolicy = {
+  maxAttempts: 3,
+  base429Ms: 6000, // ~1 req / 6 s pour tenir sous ~10 req/min
+  base5xxMs: 2000,
+  maxDelayMs: 30000,
+};
+
+export interface ClientCtx {
+  cookieHeader: string; // cookies sérialisés pour cookidoo.fr
+  lang: string; // ex. "fr-FR"
+  /** Injectable pour les tests (défaut : fetch global). */
+  fetchImpl?: typeof fetch;
+  /** Injectable pour les tests (défaut : setTimeout). */
+  sleepImpl?: (ms: number) => Promise<void>;
+  /** Politique de ré-essai (défaut : DEFAULT_RETRY). */
+  retry?: RetryPolicy;
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function headers(ctx: ClientCtx): Record<string, string> {
   return {
@@ -24,39 +50,69 @@ function headers(ctx: ClientCtx): Record<string, string> {
   };
 }
 
+function backoffDelay(status: number, resHeaders: Headers, attempt: number, policy: RetryPolicy): number {
+  if (status === 429) {
+    const ra = resHeaders.get("retry-after");
+    if (ra) {
+      const secs = parseInt(ra, 10);
+      if (Number.isFinite(secs) && secs >= 0) return Math.min(secs * 1000, policy.maxDelayMs);
+    }
+    return Math.min(policy.base429Ms * 2 ** attempt, policy.maxDelayMs);
+  }
+  return Math.min(policy.base5xxMs * 2 ** attempt, policy.maxDelayMs);
+}
+
+/**
+ * Requête HTTP avec ré-essais. `idempotent: false` (POST create) interdit le
+ * rejeu sur 5xx (la recette a pu être créée) mais autorise le rejeu sur 429.
+ */
 async function request<T>(
   ctx: ClientCtx,
   method: string,
   path: string,
   body?: unknown,
+  opts: { idempotent?: boolean } = {},
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
-  const res = await fetch(url, {
-    method,
-    headers: headers(ctx),
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`${method} ${path} → HTTP ${res.status} : ${text.slice(0, 300)}`);
+  const doFetch = ctx.fetchImpl ?? fetch;
+  const doSleep = ctx.sleepImpl ?? sleep;
+  const policy = ctx.retry ?? DEFAULT_RETRY;
+  const idempotent = opts.idempotent ?? true;
+
+  let attempt = 0;
+  while (true) {
+    const res = await doFetch(url, {
+      method,
+      headers: headers(ctx),
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const text = await res.text();
+    if (res.ok) return (text ? JSON.parse(text) : {}) as T;
+
+    const status = res.status;
+    const retriable = status === 429 || (status >= 500 && status < 600 && idempotent);
+    if (retriable && attempt < policy.maxAttempts - 1) {
+      await doSleep(backoffDelay(status, res.headers, attempt, policy));
+      attempt++;
+      continue;
+    }
+    throw new Error(`${method} ${path} → HTTP ${status} : ${text.slice(0, 300)}`);
   }
-  return (text ? JSON.parse(text) : {}) as T;
 }
 
-/** Crée une recette vide, renvoie son id. */
+/** Crée une recette vide, renvoie son id. Non idempotent (pas de rejeu sur 5xx). */
 export async function createRecipe(ctx: ClientCtx, name: string): Promise<string> {
   const data = await request<Record<string, string>>(
     ctx,
     "POST",
     `/created-recipes/${ctx.lang}`,
     { recipeName: name },
+    { idempotent: false },
   );
   const id = data.id ?? data.recipeId ?? data._id;
   if (!id) throw new Error(`Création OK mais aucun id renvoyé : ${JSON.stringify(data)}`);
   return id;
 }
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function patchFields(ctx: ClientCtx, id: string, fields: Record<string, unknown>): Promise<unknown> {
   return request(ctx, "PATCH", `/created-recipes/${ctx.lang}/${id}`, fields);
@@ -73,10 +129,11 @@ export async function fillRecipe(
   id: string,
   payload: CookidooRecipePayload,
 ): Promise<void> {
+  const doSleep = ctx.sleepImpl ?? sleep;
   await patchFields(ctx, id, { ingredients: payload.ingredients });
-  await sleep(2000);
+  await doSleep(2000);
   await patchFields(ctx, id, { instructions: payload.instructions });
-  await sleep(2000);
+  await doSleep(2000);
   await patchFields(ctx, id, {
     tools: payload.tools,
     yield: payload.yield,
@@ -87,6 +144,11 @@ export async function fillRecipe(
     workStatus: payload.workStatus,
     recipeMetadata: payload.recipeMetadata,
   });
+}
+
+/** Met à jour le nom d'une recette existante (ré-export « update-in-place »). */
+export function renameRecipe(ctx: ClientCtx, id: string, name: string): Promise<unknown> {
+  return patchFields(ctx, id, { recipeName: name });
 }
 
 /**

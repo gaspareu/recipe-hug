@@ -59,7 +59,7 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
           .filter(Boolean);
         const base = result.url ? 'Disponible dans « Mes recettes créées ».' : undefined;
         const description = [base, ...warnings].filter(Boolean).join(' ') || undefined;
-        toast.success('Recette envoyée vers Cookidoo', {
+        toast.success(result.updated ? 'Recette mise à jour sur Cookidoo' : 'Recette envoyée vers Cookidoo', {
           description,
           action: result.url
             ? { label: 'Ouvrir', onClick: () => window.open(result.url, '_blank') }

@@ -27,6 +27,8 @@ export interface CookidooExportResult {
   message?: string;
   /** Avertissements non bloquants (ex. image absente ou non transférée). */
   warnings?: string[];
+  /** true si la recette Cookidoo existante a été mise à jour (pas de doublon). */
+  updated?: boolean;
 }
 
 /**
