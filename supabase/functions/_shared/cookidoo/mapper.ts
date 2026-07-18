@@ -34,8 +34,6 @@ export interface MapOptions {
   tools?: ThermomixTool[]; // défaut ["TM7"]
   defaultServings?: number; // défaut 4
   hints?: string;
-  /** URL publique de l'image du plat à transmettre à Cookidoo (optionnel). */
-  imageUrl?: string;
 }
 
 // ── Formatage des ingrédients ────────────────────────────────────────────────
@@ -360,12 +358,13 @@ export function mapRecipeToCookidoo(
   // sont pas confirmées).
   const hasAnnotations = instructions.some((i) => i.annotations.length > 0);
 
-  const imageUrl = opts.imageUrl?.trim() || null;
 
   return {
     name: recipe.title.trim(),
-    image: imageUrl,
-    isImageOwnedByUser: imageUrl !== null,
+    // L'image n'est pas transmise ici : Cookidoo ré-héberge le fichier sur son
+    // CDN et attend un identifiant Cloudinary, posé ensuite par uploadRecipeImage.
+    image: null,
+    isImageOwnedByUser: false,
     tools,
     yield: { value: servings, unitText: "portion" },
     prepTime,

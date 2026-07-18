@@ -158,7 +158,10 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
     température, Varoma, sens inverse) construites en priorité depuis les champs structurés
     `step.tm7`, avec **repli regex** sur le texte pour les recettes existantes ; annotations
     **INGREDIENT** liant les noms d'ingrédients au texte (c'est ce qui rend une étape « guidée »).
-    Seuls les types `TTS` et `INGREDIENT` existent (pas de MODE/STEAMING).
+    Types d'annotation confirmés : `TTS` (`{time, speed, direction:"CCW", temperature:{value,unit}}`),
+    `MODE` (modes nommés : `name:"dough"|"browning"`, `{time, temperature?, power?}`) et
+    `INGREDIENT` (`{description: "20 g d'huile"}`). Le sens inverse s'exprime par `direction`,
+    la vitesse mijotage par `speed:"soft"`.
   - `validate.ts` (pur, testé) → contrôle structurel du payload **avant** tout appel réseau.
   - `auth.ts` → login PKCE/cookie (`_oauth2_proxy` + `v-authenticated`, **pas** de Bearer token).
   - `client.ts` → endpoints `/created-recipes` (create → attendre ~5 s → patch ; rate limit
@@ -175,14 +178,17 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
     ré-export la met à jour au lieu d'en recréer une (`updated: true` dans la réponse).
     **Rollback** : si le remplissage échoue après création, la recette est supprimée ; si la
     suppression échoue aussi → `partial_created` (id + commande CLI dans le message).
-    **Image** : `source_image_url` transmise par un PATCH isolé — un échec n'invalide pas l'export
-    (`warnings: ["image_not_transferred"]` / `["no_image"]`).
+    **Image** : Cookidoo ré-héberge l'image sur son CDN — flux confirmé par inspection réseau :
+    signature (`POST /created-recipes/{lang}/image/signature`) → upload multipart Cloudinary →
+    `PATCH {image: "<public_id>.<ext>"}` (le champ `image` attend un identifiant Cloudinary, **pas**
+    une URL). `uploadRecipeImage` télécharge les octets depuis le stockage Supabase, dont l'origine
+    est vérifiée (`isAllowedImageUrl`, anti-SSRF). Isolé et best-effort : un échec n'invalide pas
+    l'export (`warnings: ["image_not_transferred"]` / `["no_image"]`).
     **Échecs métier renvoyés en HTTP 200 avec `{ ok:false, error }`** (supabase-js met `data` à null sur non-2xx),
     erreurs classifiées : `auth_failed` / `ip_blocked` / `rate_limited` / `invalid_payload` / `partial_created`.
 - **⚠️ Risque IP** : Cookidoo peut bloquer les IP datacenter. Si `ip_blocked`, le CLI local
   (IP résidentielle) reste le plan B — il partage exactement le même code `_shared/cookidoo`.
-- **⚠️ À confirmer (spike)** : endpoints reverse-engineerés. La forme exacte du champ `image`
-  (hypothèse : URL publique directe, bucket `recipe-images` public) et des données d'annotation
-  `reverse`/`accessory` reste à valider — inspection réseau sur cookidoo.fr + `cli.ts --get <id>`.
-  D'ici là, `recipeMetadata.requiresAnnotationsCheck` vaut `true` (revue guided cooking côté Cookidoo).
+- **Contrat validé** (inspection réseau de l'éditeur cookidoo.fr, juillet 2026) : formats d'image
+  et d'annotations confirmés ci-dessus. `recipeMetadata.requiresAnnotationsCheck` reste à `true`
+  (revue guided cooking côté Cookidoo) tant qu'un export réel de bout en bout n'a pas été observé.
 - **Déploiement** : via CLI Supabase (les imports `../_shared/cookidoo/` sont suivis nativement).

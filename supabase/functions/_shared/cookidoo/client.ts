@@ -178,8 +178,84 @@ export function renameRecipe(ctx: ClientCtx, id: string, name: string): Promise<
  * le spike (hypothèse actuelle = URL publique directe). Appelé séparément du
  * remplissage pour qu'un échec n'invalide pas le reste de l'export.
  */
-export function setRecipeImage(ctx: ClientCtx, id: string, imageUrl: string): Promise<unknown> {
-  return patchFields(ctx, id, { image: imageUrl, isImageOwnedByUser: true });
+// ── Image : upload Cloudinary puis association à la recette ──────────────────
+//
+// Contrat confirmé par inspection réseau de l'éditeur cookidoo.fr :
+//   1. POST /created-recipes/{lang}/image/signature  {timestamp, source} → {signature}
+//   2. POST <Cloudinary>/image/upload (multipart, signé)                → {public_id, format}
+//   3. PATCH /created-recipes/{lang}/{id}  {image: "<public_id>.<format>"}
+// Le champ `image` attend donc l'identifiant Cloudinary, PAS une URL externe :
+// Cookidoo ré-héberge l'image sur son propre CDN.
+const CLOUDINARY_UPLOAD_URL = "https://api-eu.cloudinary.com/v1_1/vorwerk-users-gc/image/upload";
+const CLOUDINARY_UPLOAD_PRESET = "prod-customer-recipe-signed";
+/** Clé publique du widget Cloudinary de Vorwerk (non secrète, visible côté navigateur). */
+const CLOUDINARY_API_KEY = "993585863591145";
+const CLOUDINARY_SOURCE = "uw";
+
+/**
+ * N'autorise que les images servies par le stockage Supabase du projet : ces
+ * octets sont téléchargés côté serveur, une URL arbitraire exposerait la
+ * fonction à une SSRF (réseau interne, métadonnées cloud).
+ */
+export function isAllowedImageUrl(rawUrl: string, allowedHost: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === "https:" && url.hostname === allowedHost;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Télécharge l'image, l'envoie sur le Cloudinary de Cookidoo puis l'associe à
+ * la recette. `allowedImageHost` borne l'origine téléchargeable (anti-SSRF).
+ */
+export async function uploadRecipeImage(
+  ctx: ClientCtx,
+  id: string,
+  imageUrl: string,
+  allowedImageHost: string,
+): Promise<void> {
+  if (!isAllowedImageUrl(imageUrl, allowedImageHost)) {
+    throw new Error(`Origine d'image non autorisée : ${imageUrl}`);
+  }
+
+  const doFetch = ctx.fetchImpl ?? fetch;
+
+  const imgRes = await doFetch(imageUrl);
+  if (!imgRes.ok) throw new Error(`Téléchargement de l'image → HTTP ${imgRes.status}`);
+  const blob = await imgRes.blob();
+
+  // 1. Signature délivrée par Cookidoo (authentifiée par cookies).
+  const timestamp = Math.floor(Date.now() / 1000);
+  const { signature } = await request<{ signature: string }>(
+    ctx,
+    "POST",
+    `/created-recipes/${ctx.lang}/image/signature`,
+    { timestamp, source: CLOUDINARY_SOURCE },
+  );
+  if (!signature) throw new Error("Signature d'upload d'image non délivrée");
+
+  // 2. Upload multipart signé vers Cloudinary (hors domaine Cookidoo : pas de cookies).
+  const form = new FormData();
+  form.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  form.append("source", CLOUDINARY_SOURCE);
+  form.append("signature", signature);
+  form.append("timestamp", String(timestamp));
+  form.append("api_key", CLOUDINARY_API_KEY);
+  form.append("file", blob, "recipe.jpg");
+
+  const upRes = await doFetch(CLOUDINARY_UPLOAD_URL, { method: "POST", body: form });
+  const upText = await upRes.text();
+  if (!upRes.ok) {
+    throw new Error(`Upload Cloudinary → HTTP ${upRes.status} : ${upText.slice(0, 300)}`);
+  }
+  const uploaded = JSON.parse(upText) as { public_id?: string; format?: string };
+  if (!uploaded.public_id) throw new Error("Upload Cloudinary sans public_id");
+
+  // 3. Association : le champ `image` prend « <public_id>.<format> ».
+  const asset = uploaded.format ? `${uploaded.public_id}.${uploaded.format}` : uploaded.public_id;
+  await patchFields(ctx, id, { image: asset, isImageOwnedByUser: false });
 }
 
 export function getRecipe(ctx: ClientCtx, id: string): Promise<unknown> {

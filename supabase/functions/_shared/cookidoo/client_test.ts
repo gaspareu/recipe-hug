@@ -5,6 +5,7 @@ import {
 import {
   CookidooHttpError,
   createRecipe,
+  isAllowedImageUrl,
   deleteRecipe,
   fillRecipe,
   getRecipe,
@@ -107,4 +108,17 @@ Deno.test("fillRecipe: 3 PATCH, le 1er rejoué sur 5xx", async () => {
   await fillRecipe(ctx, "r1", payload);
   // 1 échec + 1 rejeu réussi, puis 2 PATCH restants = 4 appels
   assertEquals(ctx.calls(), 4);
+});
+
+// ── Garde-fou anti-SSRF de l'upload d'image ─────────────────────────────────
+
+Deno.test("isAllowedImageUrl: n'accepte que le stockage Supabase en https", () => {
+  const host = "abc.supabase.co";
+  assertEquals(isAllowedImageUrl("https://abc.supabase.co/storage/v1/img.png", host), true);
+  // Origines interdites : autre hôte, http, réseau interne, métadonnées cloud
+  assertEquals(isAllowedImageUrl("https://evil.example/img.png", host), false);
+  assertEquals(isAllowedImageUrl("http://abc.supabase.co/img.png", host), false);
+  assertEquals(isAllowedImageUrl("http://169.254.169.254/latest/meta-data/", host), false);
+  assertEquals(isAllowedImageUrl("http://localhost:8000/x", host), false);
+  assertEquals(isAllowedImageUrl("pas-une-url", host), false);
 });

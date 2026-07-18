@@ -20,7 +20,7 @@ import {
   getRecipe,
   recipeWebUrl,
   renameRecipe,
-  setRecipeImage,
+  uploadRecipeImage,
   type ClientCtx,
 } from "../_shared/cookidoo/client.ts";
 import { mapRecipeToCookidoo } from "../_shared/cookidoo/mapper.ts";
@@ -138,7 +138,7 @@ serve(async (req) => {
       typeof recipeRow.source_image_url === "string" && recipeRow.source_image_url.trim()
         ? recipeRow.source_image_url.trim()
         : undefined;
-    const payload = mapRecipeToCookidoo(recipe, { tools, imageUrl });
+    const payload = mapRecipeToCookidoo(recipe, { tools });
 
     // ── Validation avant tout appel réseau ─────────────────────────────────
     // Échoue tôt et clairement, sans consommer d'authentification ni de budget
@@ -211,11 +211,12 @@ serve(async (req) => {
         }
       }
 
-      // Image : PATCH isolé best-effort — un échec n'invalide pas l'export.
-      if (payload.image) {
+      // Image : upload Cloudinary isolé, best-effort — un échec n'invalide pas
+      // l'export (Cookidoo ré-héberge l'image, cf. uploadRecipeImage).
+      if (imageUrl) {
         try {
           await sleep(2000);
-          await setRecipeImage(ctx, id, payload.image);
+          await uploadRecipeImage(ctx, id, imageUrl, new URL(SUPABASE_URL).hostname);
         } catch (imgErr) {
           console.error("[export-recipe-cookidoo] image", imgErr);
           warnings.push("image_not_transferred");

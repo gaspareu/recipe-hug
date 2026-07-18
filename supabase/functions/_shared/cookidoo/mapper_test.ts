@@ -231,15 +231,10 @@ Deno.test("mapRecipeToCookidoo: défauts (TM7, 4 portions) si non précisés", (
   assertEquals(payload.yield.value, 4);
 });
 
-Deno.test("mapRecipeToCookidoo: image transmise via imageUrl", () => {
-  const base: Recipe = { title: "Test", ingredients: [], steps: [] };
-  const withImg = mapRecipeToCookidoo(base, { imageUrl: "https://cdn.example/img.png" });
-  assertEquals(withImg.image, "https://cdn.example/img.png");
-  assertEquals(withImg.isImageOwnedByUser, true);
-
-  const noImg = mapRecipeToCookidoo(base);
-  assertEquals(noImg.image, null);
-  assertEquals(noImg.isImageOwnedByUser, false);
+Deno.test("mapRecipeToCookidoo: image jamais posée par le mapper (upload séparé)", () => {
+  const p = mapRecipeToCookidoo({ title: "T", ingredients: [], steps: [] });
+  assertEquals(p.image, null);
+  assertEquals(p.isImageOwnedByUser, false);
 });
 
 // ── Conformité au contrat Cookidoo réel (inspection réseau) ──────────────────
