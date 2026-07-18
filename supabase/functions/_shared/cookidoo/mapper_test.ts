@@ -80,7 +80,7 @@ Deno.test("mapRecipeToCookidoo: tm7 mode steam → Varoma + sens inverse", () =>
   const tts = payload.instructions[0].annotations.find((a) => a.type === "TTS")!;
   assertEquals(tts.data.temperature, { value: "varoma" });
   assertEquals(tts.data.time, 900);
-  assertEquals(tts.data.reverse, true);
+  assertEquals(tts.data.direction, "CCW");
 });
 
 Deno.test("mapRecipeToCookidoo: TTS structuré positionné sur le segment de paramètres", () => {
@@ -240,4 +240,67 @@ Deno.test("mapRecipeToCookidoo: image transmise via imageUrl", () => {
   const noImg = mapRecipeToCookidoo(base);
   assertEquals(noImg.image, null);
   assertEquals(noImg.isImageOwnedByUser, false);
+});
+
+// ── Conformité au contrat Cookidoo réel (inspection réseau) ──────────────────
+
+Deno.test("tm7 reverse → TTS direction CCW (et pas reverse:true)", () => {
+  const p = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [],
+    steps: [{
+      order: 1,
+      text: "Cuire 15 min/100°C/vitesse mijotage.",
+      tm7: { mode: "slow_cook", seconds: 900, temperature: 100, speed: "mijotage", reverse: true },
+    }],
+  });
+  const a = p.instructions[0].annotations[0];
+  assertEquals(a.type, "TTS");
+  assertEquals(a.data.direction, "CCW");
+  assertEquals(a.data.reverse, undefined);
+  // « mijotage » s'écrit « soft » côté Cookidoo
+  assertEquals(a.data.speed, "soft");
+  assertEquals(a.data.time, 900);
+  assertEquals(a.data.temperature, { value: "100", unit: "C" });
+});
+
+Deno.test("mode Pétrin → annotation MODE name=dough", () => {
+  const p = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [],
+    steps: [{ order: 1, text: "Activer le mode Pétrin /10 min.", tm7: { mode: "knead", seconds: 600 } }],
+  });
+  const a = p.instructions[0].annotations[0];
+  assertEquals(a.type, "MODE");
+  assertEquals(a.name, "dough");
+  assertEquals(a.data.time, 600);
+});
+
+Deno.test("mode Rissoler → MODE name=browning avec température et puissance", () => {
+  const p = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [],
+    steps: [{
+      order: 1,
+      text: "Activer le mode Rissoler.",
+      tm7: { mode: "high_temp", seconds: 360, temperature: 160 },
+    }],
+  });
+  const a = p.instructions[0].annotations[0];
+  assertEquals(a.type, "MODE");
+  assertEquals(a.name, "browning");
+  assertEquals(a.data.time, 360);
+  assertEquals(a.data.temperature, { value: "160", unit: "C" });
+  assertEquals(a.data.power, "Intense");
+});
+
+Deno.test("annotation INGREDIENT: data.description est une chaîne simple", () => {
+  const p = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [{ name: "huile", quantity: 20, unit: "g" }],
+    steps: [{ order: 1, text: "Mettre l'huile dans le bol." }],
+  });
+  const ing = p.instructions[0].annotations.find((a) => a.type === "INGREDIENT");
+  assertEquals(typeof ing?.data.description, "string");
+  assertEquals(ing?.data.description, "20 g d'huile");
 });

@@ -48,8 +48,16 @@ export interface CookidooIngredient {
 }
 
 /** Annotation d'étape : c'est ce qui rend une étape « guided cooking » sur le TM7. */
+/**
+ * Annotation d'étape (formes confirmées par inspection réseau sur cookidoo.fr) :
+ *  - `TTS`        → réglages manuels : `{ time, speed, direction?, temperature }`
+ *  - `MODE`       → mode nommé (`name`: "dough", "browning"…) : `{ time, temperature?, power? }`
+ *  - `INGREDIENT` → liaison texte ↔ ingrédient : `{ description: "20 g d'huile" }`
+ */
 export interface Annotation {
-  type: "TTS" | "INGREDIENT";
+  type: "TTS" | "INGREDIENT" | "MODE";
+  /** Nom du mode Cookidoo — uniquement pour `type: "MODE"`. */
+  name?: string;
   data: Record<string, unknown>;
   /** Empan de caractères annoté dans le texte de l'étape. */
   position: { offset: number; length: number };

@@ -175,6 +175,22 @@ export function parseStepAnnotations(text: string): Annotation[] {
   return annotationsFromText(extractTextParams(text));
 }
 
+// ── Vocabulaire Cookidoo (confirmé par inspection réseau) ────────────────────
+
+/** La vitesse « mijotage » du TM7 s'écrit « soft » dans le payload Cookidoo. */
+function toCookidooSpeed(speed: string): string {
+  return speed === "mijotage" ? "soft" : speed;
+}
+
+/**
+ * Modes TM7 portant une annotation `MODE` nommée côté Cookidoo. Les autres
+ * réglages passent par une annotation `TTS` (temps/température/vitesse).
+ */
+const COOKIDOO_MODE_NAMES: Partial<Record<Tm7StepParams["mode"], string>> = {
+  knead: "dough",
+  high_temp: "browning",
+};
+
 // ── Annotation TTS depuis les paramètres structurés TM7 ──────────────────────
 
 /**
@@ -201,9 +217,10 @@ function ttsFromTm7(text: string, tm7: Tm7StepParams, span: Span | null): Annota
   if (speed) {
     // Contrainte matérielle du TM7 : en cuisson vapeur, la vitesse est plafonnée.
     const value = parseFloat(speed);
-    data.speed = usesVaroma && Number.isFinite(value) && value > TM7_STEAM_SPEED_MAX
+    const capped = usesVaroma && Number.isFinite(value) && value > TM7_STEAM_SPEED_MAX
       ? String(TM7_STEAM_SPEED_MAX)
       : speed;
+    data.speed = toCookidooSpeed(capped);
   }
 
   if (usesVaroma) {
@@ -213,18 +230,40 @@ function ttsFromTm7(text: string, tm7: Tm7StepParams, span: Span | null): Annota
     if (typeof temp === "number") data.temperature = { value: String(temp), unit: "C" };
   }
 
-  // Best-effort : formes à confirmer par le spike Cookidoo (cf. plan). Le sens
-  // inverse et l'accessoire restent aussi lisibles dans le texte de l'étape.
-  if (tm7.reverse) data.reverse = true;
-  if (tm7.accessory && tm7.accessory !== "blade" && tm7.accessory !== "varoma") {
-    data.accessory = tm7.accessory;
-  }
+  // Sens inverse : Cookidoo l'exprime par le sens de rotation du couteau.
+  // L'accessoire n'a pas d'équivalent dans le payload — il reste lisible dans
+  // le texte de l'étape.
+  if (tm7.reverse) data.direction = "CCW";
 
   if (Object.keys(data).length === 0) return null;
   // Positionné sur le segment de réglages du texte (« 8 min/100°C/vitesse 2 »,
   // format demandé à l'IA) pour ne pas chevaucher les annotations INGREDIENT ;
   // à défaut, l'étape entière.
   return { type: "TTS", data, position: span ?? { offset: 0, length: text.length } };
+}
+
+/**
+ * Annotation `MODE` pour les modes nommés du TM7 (Pétrin, Rissoler) : Cookidoo
+ * les distingue des réglages manuels temps/température/vitesse (`TTS`).
+ */
+function modeFromTm7(text: string, tm7: Tm7StepParams, span: Span | null): Annotation | null {
+  const name = COOKIDOO_MODE_NAMES[tm7.mode];
+  if (!name) return null;
+
+  const data: Record<string, unknown> = {};
+  if (
+    tm7.seconds !== undefined && Number.isFinite(tm7.seconds) &&
+    tm7.seconds > 0 && tm7.seconds <= TM7_MAX_SECONDS
+  ) {
+    data.time = Math.round(tm7.seconds);
+  }
+  const temp = clampTemperature(tm7.temperature);
+  if (typeof temp === "number") data.temperature = { value: String(temp), unit: "C" };
+  // Le rissolage porte une puissance ; « Intense » est le réglage courant.
+  if (tm7.mode === "high_temp") data.power = "Intense";
+
+  if (Object.keys(data).length === 0) return null;
+  return { type: "MODE", name, data, position: span ?? { offset: 0, length: text.length } };
 }
 
 // ── Annotations INGREDIENT (liaison texte ↔ ingrédient) ──────────────────────
@@ -269,13 +308,18 @@ function ingredientAnnotations(text: string, ingredients: Ingredient[]): Annotat
   return annotations;
 }
 
-/** Annotations complètes d'une étape : TTS (structuré ou regex) + INGREDIENT. */
+/**
+ * Annotations complètes d'une étape : annotation machine (MODE pour un mode
+ * nommé, sinon TTS — structuré si `tm7`, à défaut repli regex) + INGREDIENT.
+ */
 function buildStepAnnotations(step: Step, ingredients: Ingredient[]): Annotation[] {
   const text = step.text.trim();
   const params = extractTextParams(text); // une seule passe de regex par étape
-  const tts = step.tm7 ? ttsFromTm7(text, step.tm7, params.position) : null;
-  const ttsList = tts ? [tts] : annotationsFromText(params);
-  return [...ttsList, ...ingredientAnnotations(text, ingredients)];
+  const machine = step.tm7
+    ? modeFromTm7(text, step.tm7, params.position) ?? ttsFromTm7(text, step.tm7, params.position)
+    : null;
+  const machineList = machine ? [machine] : (step.tm7 ? [] : annotationsFromText(params));
+  return [...machineList, ...ingredientAnnotations(text, ingredients)];
 }
 
 // ── Mapping principal ────────────────────────────────────────────────────────
