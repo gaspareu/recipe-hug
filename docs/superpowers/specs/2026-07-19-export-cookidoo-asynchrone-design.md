@@ -108,15 +108,25 @@ Avec ça, une requête SQL suffit à répondre à « pourquoi mes recettes sont 
 configurées sur Cookidoo » : si `steps_with_tm7` est très inférieur à
 `steps_total`, le problème est en amont (génération IA), pas dans le connecteur.
 
-### Notification : Realtime
+### Notification : interrogation périodique
 
-Le client s'abonne aux changements de **sa** ligne via Supabase Realtime, puis
-affiche le toast final. Le toast apparaît même si l'utilisateur a navigué
-ailleurs dans l'application.
+Le client interroge sa ligne toutes les 2 secondes tant que le statut est
+`pending`, via `refetchInterval` de TanStack Query, et s'arrête dès que le
+statut est final. Le toast s'affiche alors, même si l'utilisateur a navigué
+ailleurs dans l'application (le hook vit au-dessus des pages).
 
-**Filet anti-course** : un export peut se terminer avant que l'abonnement soit
-actif. Juste après l'abonnement, le client relit la ligne une fois ; si elle est
-déjà terminée, il affiche le résultat et se désabonne.
+**Pourquoi pas Realtime.** C'était le choix initial, écarté après vérification :
+Realtime n'est utilisé nulle part dans ce projet. L'introduire pour une
+notification unique sur une opération de ~15 s coûterait une publication de
+réplication, une RLS Realtime à valider, un websocket, et un filet anti-course —
+l'export pouvant se terminer avant que l'abonnement soit actif. L'interrogation
+périodique réutilise un pattern déjà présent partout, tient en ~7 requêtes
+légères par export, et n'a pas de mode de panne « événement manqué ».
+
+**Fin de l'attente.** Au-delà de 2 minutes sur un statut `pending`,
+l'interrogation s'arrête et le résultat est déclaré inconnu — un isolate tué
+avant la fin laisse la ligne `pending` pour toujours, et il ne faut pas
+interroger indéfiniment.
 
 ### Retours utilisateur
 
@@ -141,8 +151,8 @@ orchestration réseau et gestion d'erreurs. L'asynchrone l'alourdirait encore.
 | `_shared/cookidoo/diagnostics.ts` *(nouveau)* | `buildExportDiagnostics(payload)` — fonction pure, sans réseau |
 | `_shared/cookidoo/run-export.ts` *(nouveau)* | Orchestration login → create/update → fill → image → contrôle, dépendances injectées |
 | `export-recipe-cookidoo/index.ts` *(allégé)* | Auth, validation, création du job, `waitUntil`, réponse |
-| `src/hooks/useCookidooConnector.ts` | Abonnement Realtime et rattrapage, hors des composants |
-| `supabase/migrations/…_cookidoo_exports.sql` *(nouveau)* | Table, RLS, publication Realtime |
+| `src/hooks/useCookidooExport.ts` *(nouveau)* | Déclenchement + interrogation périodique, hors des composants |
+| `supabase/migrations/…_cookidoo_exports.sql` *(nouveau)* | Table, RLS (lecture propriétaire, écriture service role) |
 
 Extraire `run-export.ts` rend l'orchestration testable, ce qu'elle n'est pas
 aujourd'hui.
@@ -168,7 +178,7 @@ aujourd'hui.
 |---|---|
 | Deno, pur | `buildExportDiagnostics` : comptages, étape sans `tm7`, recette sans image |
 | Deno, injecté | `run-export` : succès, échec au remplissage → rollback, échec du contrôle → export valide |
-| Vitest | `useCookidooConnector` : réception Realtime, rattrapage quand la ligne est déjà terminée, `pending` expiré |
+| Vitest | `useCookidooExport` : interrogation tant que `pending`, arrêt au statut final, abandon après 2 minutes |
 | Vitest | Toasts : succès avec lien, échec avec message |
 
 Les tests Deno doivent vivre sous `supabase/functions/_shared/` — la CI n'exécute
@@ -179,8 +189,7 @@ que ce répertoire.
 | Risque | Traitement |
 |---|---|
 | Limite wall-clock de l'isolate | Export mesuré ~15 s, marge confortable. `beforeunload` trace le cas limite. |
-| Événement Realtime manqué | Relecture systématique après abonnement. |
-| Realtime non activé sur la table | Inclus dans la migration (publication `supabase_realtime`). |
+| Ligne bloquée en `pending` (isolate tué) | L'interrogation abandonne après 2 minutes ; la ligne reste détectable en SQL (`finished_at` nul). |
 | Test local des tâches de fond | `[edge_runtime] policy = "per_worker"` dans `config.toml`, sinon l'instance est tuée à la fin de la requête. |
 | Perte du retour si l'onglet est fermé | Déjà le cas aujourd'hui ; le journal conserve désormais la trace. |
 
@@ -189,4 +198,4 @@ que ce répertoire.
 1. `fix/toaster-manquant` — prérequis, indépendant et déjà prêt.
 2. Migration `cookidoo_exports` + `diagnostics.ts` (pur, testable seul).
 3. `run-export.ts` extrait, `index.ts` allégé, passage en `waitUntil`.
-4. Abonnement Realtime et toasts côté front.
+4. Interrogation périodique et toasts côté front.
