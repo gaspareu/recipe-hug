@@ -299,3 +299,48 @@ Deno.test("annotation INGREDIENT: data.description est une chaîne simple", () =
   assertEquals(typeof ing?.data.description, "string");
   assertEquals(ing?.data.description, "20 g d'huile");
 });
+
+// ── Puissance du rissolage (MODE browning) ───────────────────────────────────
+// Vérifié sur sonde réelle (docs/COOKIDOO-CONTRAT.md §4) : `power` détermine
+// l'intention machine — "Intense" → HighTemperature_FullPower,
+// "Gentle" → HighTemperature_MediumPower. Le figer en dur forçait tous les
+// rissolages à pleine puissance.
+
+Deno.test("mapRecipeToCookidoo: rissolage — puissance par défaut « Intense »", () => {
+  const recipe: Recipe = {
+    title: "Test",
+    ingredients: [],
+    steps: [{ order: 1, text: "Rissoler 6 min/160°C.", tm7: { mode: "high_temp", seconds: 360, temperature: 160 } }],
+  };
+  const ann = mapRecipeToCookidoo(recipe).instructions[0].annotations
+    .find((a) => a.type === "MODE");
+  assertEquals(ann?.name, "browning");
+  assertEquals((ann?.data as Record<string, unknown>).power, "Intense");
+});
+
+Deno.test("mapRecipeToCookidoo: rissolage — puissance douce explicite", () => {
+  const recipe: Recipe = {
+    title: "Test",
+    ingredients: [],
+    steps: [{
+      order: 1,
+      text: "Rissoler doucement 6 min/140°C.",
+      tm7: { mode: "high_temp", seconds: 360, temperature: 140, power: "Gentle" },
+    }],
+  };
+  const ann = mapRecipeToCookidoo(recipe).instructions[0].annotations
+    .find((a) => a.type === "MODE");
+  assertEquals((ann?.data as Record<string, unknown>).power, "Gentle");
+});
+
+Deno.test("mapRecipeToCookidoo: `power` ignoré hors rissolage", () => {
+  const recipe: Recipe = {
+    title: "Test",
+    ingredients: [],
+    steps: [{ order: 1, text: "Pétrir 3 min.", tm7: { mode: "knead", seconds: 180, power: "Gentle" } }],
+  };
+  const ann = mapRecipeToCookidoo(recipe).instructions[0].annotations
+    .find((a) => a.type === "MODE");
+  assertEquals(ann?.name, "dough");
+  assertEquals((ann?.data as Record<string, unknown>).power, undefined);
+});

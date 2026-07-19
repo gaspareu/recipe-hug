@@ -45,6 +45,7 @@ const Tm7ParamsSchema = z.object({
   speed: z.union([z.string(), z.number()]).nullable().optional(),
   reverse: z.boolean().nullable().optional(),
   accessory: z.string().nullable().optional(),
+  power: z.string().nullable().optional(),
 });
 
 const StepSchema = z.object({
@@ -102,7 +103,7 @@ Format ingrédients : Catégories parmi "Légumes", "Viandes", "Poissons", "Épi
 
 Format étapes — TOUTES les recettes sont destinées au Thermomix TM7. Rédige comme un expert Cookidoo :
 - UNE action machine = UNE étape distincte (ne regroupe jamais deux opérations machine dans une même étape).
-- Pour chaque étape réalisée par l'appareil, renseigne l'objet "tm7" (mode, seconds, temperature, speed, reverse, accessory) ET rédige le texte au format Cookidoo, ex. "Mixer 8 min/100°C/vitesse 2".
+- Pour chaque étape réalisée par l'appareil, renseigne l'objet "tm7" (mode, seconds, temperature, speed, reverse, accessory, power) ET rédige le texte au format Cookidoo, ex. "Mixer 8 min/100°C/vitesse 2".
 - Étapes manuelles (éplucher, réserver, dresser) : PAS d'objet "tm7" ; renseigne "duration_minutes" si un temps d'attente s'applique.
 - Respecte STRICTEMENT le RÉFÉRENTIEL THERMOMIX TM7 (fourni plus bas) : n'invente jamais une fonction, une vitesse ou une température absente du TM7. "Varoma" = cuisson vapeur (pas de °C) ; "sens inverse" pour mélanger sans hacher.
 
@@ -184,6 +185,12 @@ const STEP_ITEMS_SCHEMA = {
         speed: { type: "string", description: "Vitesse : « 0.5 » à « 10 », « mijotage » ou « Turbo »" },
         reverse: { type: "boolean", description: "Sens inverse : mélange sans hacher" },
         accessory: { type: "string", enum: TM7_ACCESSORY_KEYS, description: "Accessoire utilisé" },
+        power: {
+          type: "string",
+          enum: ["Intense", "Gentle"],
+          description:
+            "Puissance du rissolage (mode « high_temp » uniquement) : « Intense » par défaut, « Gentle » pour un rissolage doux",
+        },
       },
       required: ["mode"],
     },

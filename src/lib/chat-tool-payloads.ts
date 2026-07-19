@@ -30,6 +30,7 @@ const Tm7ParamsPayloadSchema = z.object({
   speed: z.union([z.string(), z.number()]).nullable().optional(),
   reverse: z.boolean().nullable().optional(),
   accessory: z.string().nullable().optional(),
+  power: z.string().nullable().optional(),
 });
 
 const StepPayloadSchema = z.object({

@@ -257,8 +257,10 @@ function modeFromTm7(text: string, tm7: Tm7StepParams, span: Span | null): Annot
   }
   const temp = clampTemperature(tm7.temperature);
   if (typeof temp === "number") data.temperature = { value: String(temp), unit: "C" };
-  // Le rissolage porte une puissance ; « Intense » est le réglage courant.
-  if (tm7.mode === "high_temp") data.power = "Intense";
+  // Le rissolage porte une puissance, qui détermine l'intention machine côté TM7
+  // (« Intense » → FullPower, « Gentle » → MediumPower). Défaut : « Intense »,
+  // le réglage courant du rissolage.
+  if (tm7.mode === "high_temp") data.power = tm7.power ?? "Intense";
 
   if (Object.keys(data).length === 0) return null;
   return { type: "MODE", name, data, position: span ?? { offset: 0, length: text.length } };

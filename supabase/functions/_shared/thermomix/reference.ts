@@ -52,6 +52,13 @@ export type Tm7Accessory =
 export type Tm7Temperature = number | "Varoma";
 
 /**
+ * Puissance du rissolage (mode hautes températures). Détermine l'intention
+ * machine envoyée au TM7 : « Intense » → `HighTemperature_FullPower`,
+ * « Gentle » → `HighTemperature_MediumPower` (cf. docs/COOKIDOO-CONTRAT.md §4).
+ */
+export type Tm7Power = "Intense" | "Gentle";
+
+/**
  * Paramètres machine d'une étape TM7. Tous optionnels sauf `mode` : une étape
  * purement manuelle (éplucher, réserver) n'a pas de bloc `tm7` du tout.
  */
@@ -66,6 +73,8 @@ export interface Tm7StepParams {
   /** Rotation en sens inverse (mélange sans hacher). */
   reverse?: boolean;
   accessory?: Tm7Accessory;
+  /** Puissance du rissolage — n'a de sens que pour `mode: "high_temp"`. */
+  power?: Tm7Power;
 }
 
 // ── Constantes de plages (capacités réelles du TM7) ─────────────────────────
