@@ -46,6 +46,9 @@ describe('App — retour visuel global', () => {
   // au montage, seule la région ARIA « Notifications » existe. C'est donc elle
   // qui atteste du montage, et l'affichage réel d'un toast qui fait foi.
 
+  // Timeout élargi : ce test importe `App` à froid, donc tout l'arbre de routes
+  // lazy. Isolé il tient en ~0,5 s, mais en suite complète (55 fichiers en
+  // parallèle) il a déjà dépassé les 5 s par défaut.
   it('monte la région de notifications, sans quoi tout retour utilisateur est perdu', async () => {
     const { default: App } = await import('./App');
     render(<App />);
@@ -53,7 +56,7 @@ describe('App — retour visuel global', () => {
     await waitFor(() => {
       expect(document.querySelector('section[aria-label*="Notifications"]')).not.toBeNull();
     });
-  });
+  }, 20000);
 
   it('affiche effectivement un toast déclenché depuis un composant', async () => {
     const { default: App } = await import('./App');
