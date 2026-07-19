@@ -9,6 +9,15 @@ ai-providers.ts (394L)  callAIStreaming / callAINonStreaming / callAIVision
 ai-types.ts (98L)       types partagés (AIConfig, Message, Provider…)
 decrypt-keys.ts (63L)   AES-GCM decrypt des clés API user
 cors.ts (5L)            headers CORS
+
+thermomix/reference.ts (327L)  référentiel machine TM7 : vitesses, températures,
+                               modes, accessoires, barème + normalisation/validation
+                               (miroir front : src/lib/thermomix/reference.ts)
+cookidoo/mapper.ts (292L)      recette → payload Cookidoo (annotations TTS + INGREDIENT)
+cookidoo/auth.ts (186L)        login PKCE/cookie Cookidoo
+cookidoo/client.ts (175L)      endpoints /created-recipes (retry 429/5xx, rollback)
+cookidoo/types.ts (79L)        types payload + miroir du modèle recette
+cookidoo/validate.ts (30L)     contrôle du payload avant tout appel réseau
 ```
 
 ## AI Config Resolution
@@ -33,6 +42,8 @@ resolveAIConfig(agentType, userId)
 | `claim-shares` | 115 | Récupération recette partagée |
 | `analyze-recipe` | 109 | Analyse nutritionnelle/tags |
 | `elevenlabs-scribe-token` | 80 | Token STT ElevenLabs |
+| `export-recipe-cookidoo` | 251 | Export recette → Cookidoo (TM7, guided cooking, anti-doublon) |
+| `manage-cookidoo-credentials` | 109 | CRUD identifiants Cookidoo chiffrés (AES-GCM) |
 
 ## Pattern Unifié
 ```

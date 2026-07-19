@@ -13,15 +13,20 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptValue } from "../_shared/decrypt-keys.ts";
 import { login, countryToLang } from "../_shared/cookidoo/auth.ts";
 import {
+  CookidooHttpError,
   createRecipe,
+  findUnguidedSteps,
+  deleteRecipe,
   fillRecipe,
+  getRecipe,
   recipeWebUrl,
+  renameRecipe,
+  uploadRecipeImage,
   type ClientCtx,
 } from "../_shared/cookidoo/client.ts";
 import { mapRecipeToCookidoo } from "../_shared/cookidoo/mapper.ts";
+import { validateCookidooPayload } from "../_shared/cookidoo/validate.ts";
 import type { Recipe, ThermomixTool } from "../_shared/cookidoo/types.ts";
-
-const VALID_TOOLS: ThermomixTool[] = ["TM7", "TM6", "TM5", "TM31"];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -90,17 +95,13 @@ serve(async (req) => {
     if (!recipeId) {
       return fail("invalid_input", "recipe_id requis");
     }
-    let tools: ThermomixTool[] = ["TM7"];
-    if (Array.isArray(body.tools)) {
-      const filtered = body.tools.filter((t: unknown): t is ThermomixTool =>
-        typeof t === "string" && VALID_TOOLS.includes(t as ThermomixTool));
-      if (filtered.length > 0) tools = filtered;
-    }
+    // Scope mono-appareil : l'export cible toujours le TM7 (cf. type ThermomixTool).
+    const tools: ThermomixTool[] = ["TM7"];
 
     // ── Lecture de la recette (RLS : propriété garantie côté DB) ────────────
     const { data: recipeRow, error: recipeError } = await supabase
       .from("recipes")
-      .select("title, servings, ingredients, steps")
+      .select("title, servings, ingredients, steps, source_image_url, cookidoo_recipe_id")
       .eq("id", recipeId)
       .maybeSingle();
     if (recipeError) return json({ error: "db_error", message: recipeError.message }, 500);
@@ -134,22 +135,134 @@ serve(async (req) => {
       ingredients: (recipeRow.ingredients ?? []) as Recipe["ingredients"],
       steps: (recipeRow.steps ?? []) as Recipe["steps"],
     };
+    const imageUrl =
+      typeof recipeRow.source_image_url === "string" && recipeRow.source_image_url.trim()
+        ? recipeRow.source_image_url.trim()
+        : undefined;
     const payload = mapRecipeToCookidoo(recipe, { tools });
+
+    // ── Validation avant tout appel réseau ─────────────────────────────────
+    // Échoue tôt et clairement, sans consommer d'authentification ni de budget
+    // de requêtes (rate limit Cookidoo ~10/min).
+    const validation = validateCookidooPayload(payload);
+    if (!validation.ok) {
+      return fail("invalid_payload", `Recette non exportable : ${validation.errors.join(", ")}.`);
+    }
+
+    // ── Anti-doublon : identifiant Cookidoo déjà associé à cette recette ? ──
+    const rawExistingId = (recipeRow as { cookidoo_recipe_id?: unknown }).cookidoo_recipe_id;
+    const existingId =
+      typeof rawExistingId === "string" && rawExistingId.trim() ? rawExistingId.trim() : null;
 
     // ── Auth + upload Cookidoo (zone à risque IP) ──────────────────────────
     try {
       const jar = await login(creds.email, password, lang);
       const ctx: ClientCtx = { cookieHeader: jar.headerForUrl("https://cookidoo.fr"), lang };
 
-      const id = await createRecipe(ctx, payload.name);
-      await sleep(5000); // Cookidoo exige un délai avant les PATCH de remplissage
-      await fillRecipe(ctx, id, payload);
+      // Ré-export : mise à jour en place si la recette existe toujours côté
+      // Cookidoo (si elle y a été supprimée, on la recrée).
+      let reuseId: string | null = null;
+      if (existingId) {
+        try {
+          await getRecipe(ctx, existingId);
+          reuseId = existingId;
+        } catch (lookupErr) {
+          // 404 → la recette a été supprimée côté Cookidoo : on la recrée.
+          // Toute autre erreur (429, 5xx, réseau) : on NE recrée PAS — ce serait
+          // fabriquer le doublon que ce mécanisme doit justement éviter.
+          if (lookupErr instanceof CookidooHttpError && lookupErr.status === 404) {
+            reuseId = null;
+          } else {
+            throw lookupErr;
+          }
+        }
+      }
+
+      const warnings: string[] = [];
+      let id: string;
+      if (reuseId) {
+        id = reuseId;
+        // Le champ de renommage en PATCH n'est pas confirmé (endpoints
+        // non-officiels) → best-effort : un échec ne doit pas empêcher la mise à
+        // jour du contenu.
+        try {
+          await renameRecipe(ctx, id, payload.name);
+          await sleep(2000);
+        } catch (renameErr) {
+          console.error("[export-recipe-cookidoo] rename", renameErr);
+          warnings.push("title_not_updated");
+        }
+        await fillRecipe(ctx, id, payload);
+      } else {
+        id = await createRecipe(ctx, payload.name);
+        await sleep(5000); // Cookidoo exige un délai avant les PATCH de remplissage
+        try {
+          await fillRecipe(ctx, id, payload);
+        } catch (fillErr) {
+          // Rollback best-effort : ne pas laisser une recette vide sur Cookidoo.
+          try {
+            await deleteRecipe(ctx, id);
+          } catch {
+            return fail(
+              "partial_created",
+              `Recette partiellement créée sur Cookidoo (id ${id}) : le remplissage a échoué et la suppression automatique aussi. Supprimez-la depuis Cookidoo, ou via le CLI (--delete ${id}).`,
+            );
+          }
+          throw fillErr; // rollback OK → échec classé normalement, sans résidu
+        }
+      }
+
+      // Image : upload Cloudinary isolé, best-effort — un échec n'invalide pas
+      // l'export (Cookidoo ré-héberge l'image, cf. uploadRecipeImage).
+      if (imageUrl) {
+        try {
+          await sleep(2000);
+          await uploadRecipeImage(ctx, id, imageUrl, new URL(SUPABASE_URL).hostname);
+        } catch (imgErr) {
+          console.error("[export-recipe-cookidoo] image", imgErr);
+          warnings.push("image_not_transferred");
+        }
+      } else {
+        warnings.push("no_image");
+      }
+
+      // Contrôle du guided cooking : l'API accepte des annotations qu'elle dégrade
+      // ensuite en simple texte, sans erreur HTTP (cf. docs/COOKIDOO-CONTRAT.md §8).
+      // La vue « appareil » est le seul endroit où ce silence devient visible.
+      const expectedGuided = payload.instructions
+        .map((step, i) => (step.annotations.some((a) => a.type !== "INGREDIENT") ? i : -1))
+        .filter((i) => i >= 0);
+      if (expectedGuided.length > 0) {
+        try {
+          await sleep(2000);
+          const unguided = await findUnguidedSteps(ctx, id, expectedGuided);
+          if (unguided.length > 0) {
+            console.error(
+              `[export-recipe-cookidoo] étapes non guidées sur l'appareil : ${unguided.join(", ")}`,
+            );
+            warnings.push("steps_not_guided");
+          }
+        } catch (checkErr) {
+          // Contrôle best-effort : son échec ne remet pas en cause l'export.
+          console.error("[export-recipe-cookidoo] contrôle guided cooking", checkErr);
+        }
+      }
+
+      // Mémorise le mapping pour le prochain export (anti-doublon). Non bloquant :
+      // si la colonne n'existe pas encore, l'export reste un succès.
+      const { error: mapErr } = await supabase
+        .from("recipes")
+        .update({ cookidoo_recipe_id: id, cookidoo_exported_at: new Date().toISOString() })
+        .eq("id", recipeId);
+      if (mapErr) console.error("[export-recipe-cookidoo] mapping", mapErr.message);
 
       return json({
         ok: true,
         cookidoo_recipe_id: id,
         url: recipeWebUrl(ctx, id),
         tools,
+        warnings,
+        updated: reuseId !== null,
       });
     } catch (err) {
       const classified = classifyError(err);

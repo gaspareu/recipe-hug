@@ -60,7 +60,7 @@ Il n'y a pas de script `typecheck` dédié ; `npm run build` (`vite build`) effe
   - `useVoiceMode` — mode vocal (ElevenLabs TTS + Scribe)
   - `useInstallPrompt` / `useNetworkStatus` / `useTheme` / `use-mobile` — PWA, offline, thème, responsive
 - **`integrations/supabase/`** — `client.ts` (instance `supabase`) et `types.ts` (types DB générés). **Auto-générés, ne pas éditer.** Import : `import { supabase } from "@/integrations/supabase/client"`. L'authentification (email/mot de passe + OAuth Google) passe directement par `supabase.auth`.
-- **`types/recipe.ts`** — types métier source de vérité : `Recipe`, `Ingredient`, `Step`, `RecipeStatus` (`draft | tested | validated | archived`), `RecipeFormData`.
+- **`types/recipe.ts`** — types métier source de vérité : `Recipe`, `Ingredient`, `Step`, `RecipeStatus` (`draft | tested | validated | archived`), `RecipeFormData`. `Step.tm7` porte les paramètres machine Thermomix (mode, durée, température, vitesse, sens inverse, accessoire — cf. `src/lib/thermomix/reference.ts`) ; il est absent des étapes manuelles.
 - **`lib/utils.ts`** — `cn()` (clsx + tailwind-merge), utilisé partout pour les classes conditionnelles.
 - Alias d'import : `@/` → `src/`.
 
@@ -78,7 +78,7 @@ Voir **`EDGE_FUNCTIONS.md`** pour la doc complète. Architecture clé :
 - **Fonctions de traitement** (non-streaming) : `generate-recipe`, `analyze-recipe`, `extract-user-preferences`, `parse-recipe-image` (vision + protection SSRF), `generate-recipe-image`.
 - **Webhook externe** : `webhook-recipe` — authentifié par token (`profiles.webhook_token`), **pas** par JWT.
 - **Utilitaires (sans IA)** : `manage-ai-keys`, `validate-ai-key`, `elevenlabs-tts`, `elevenlabs-scribe-token`, `share-recipe`, `claim-shares`.
-- **Connecteur Cookidoo (export Thermomix)** : `manage-cookidoo-credentials` (identifiants chiffrés AES-GCM) + `export-recipe-cookidoo` (envoi d'une recette vers Cookidoo). Source unique partagée dans `supabase/functions/_shared/cookidoo/` — réutilisée par le CLI `connector/cookidoo/cli.ts` (fallback IP résidentielle). Voir `supabase/functions/CLAUDE.md`.
+- **Connecteur Cookidoo (export Thermomix TM7)** : `manage-cookidoo-credentials` (identifiants chiffrés AES-GCM) + `export-recipe-cookidoo` (envoi d'une recette vers Cookidoo, **scope TM7 uniquement**). Source unique partagée dans `supabase/functions/_shared/cookidoo/` — réutilisée par le CLI `connector/cookidoo/cli.ts` (fallback IP résidentielle). Le **référentiel machine TM7** (`_shared/thermomix/reference.ts`, miroir front `src/lib/thermomix/reference.ts`) est la base de référence commune : il alimente le prompt IA, le mapper (annotations guided cooking `TTS` + `INGREDIENT`) et la validation du payload. Voir `supabase/functions/CLAUDE.md`.
 - **Providers IA** : Anthropic (défaut, clé serveur `ANTHROPIC_API_KEY`), Gemini (clé serveur `GEMINI_API_KEY` pour la génération d'images, BYOK pour le chat), OpenAI (BYOK). Anthropic ne génère pas d'images — `generate-recipe-image` utilise `gemini-2.5-flash-image` via l'API native Gemini (`/v1beta/models/{model}:generateContent`, **pas** l'endpoint OpenAI-compat).
 - `verify_jwt = false` est configuré dans `supabase/config.toml` pour les fonctions IA (l'auth est gérée dans le corps de la fonction).
 - **Déploiement MCP** : les imports `../_shared/` ne fonctionnent pas avec le bundler MCP — inliner le code partagé directement dans le fichier déployé. Voir `supabase/functions/CLAUDE.md`.

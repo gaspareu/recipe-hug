@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { UtensilsCrossed, Loader2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -13,14 +12,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useCookidooConnector, type ThermomixTool } from '@/hooks/useCookidooConnector';
-
-const TOOLS: { value: ThermomixTool; label: string }[] = [
-  { value: 'TM7', label: 'TM7' },
-  { value: 'TM6', label: 'TM6' },
-  { value: 'TM5', label: 'TM5' },
-  { value: 'TM31', label: 'TM31' },
-];
+import { useCookidooConnector } from '@/hooks/useCookidooConnector';
 
 // Messages d'erreur lisibles pour les échecs classifiés par l'edge function.
 const ERROR_MESSAGES: Record<string, string> = {
@@ -29,6 +21,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   rate_limited: 'Trop de requêtes vers Cookidoo. Réessayez dans une minute.',
   decrypt_failed: 'Mot de passe illisible. Reconfigurez vos identifiants Cookidoo.',
   not_configured: 'Identifiants Cookidoo non configurés.',
+};
+
+// Avertissements non bloquants renvoyés en cas de succès (l'export a réussi).
+const WARNING_MESSAGES: Record<string, string> = {
+  no_image: 'Astuce : ajoutez une image à la recette pour l’afficher sur Cookidoo.',
+  image_not_transferred: 'L’image n’a pas pu être transférée cette fois.',
+  title_not_updated: 'Le titre n’a pas pu être mis à jour sur Cookidoo (contenu à jour).',
 };
 
 interface ExportToCookidooButtonProps {
@@ -49,16 +48,20 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
     if (!isControlled) setInternalOpen(value);
     onOpenChange?.(value);
   };
-  const [tool, setTool] = useState<ThermomixTool>('TM7');
 
   const configured = status.data?.configured;
 
   const handleExport = async () => {
     try {
-      const result = await exportRecipe.mutateAsync({ recipeId, tools: [tool] });
+      const result = await exportRecipe.mutateAsync({ recipeId, tools: ['TM7'] });
       if (result.ok) {
-        toast.success('Recette envoyée vers Cookidoo', {
-          description: result.url ? 'Disponible dans « Mes recettes créées ».' : undefined,
+        const warnings = (result.warnings ?? [])
+          .map((w) => WARNING_MESSAGES[w])
+          .filter(Boolean);
+        const base = result.url ? 'Disponible dans « Mes recettes créées ».' : undefined;
+        const description = [base, ...warnings].filter(Boolean).join(' ') || undefined;
+        toast.success(result.updated ? 'Recette mise à jour sur Cookidoo' : 'Recette envoyée vers Cookidoo', {
+          description,
           action: result.url
             ? { label: 'Ouvrir', onClick: () => window.open(result.url, '_blank') }
             : undefined,
@@ -118,22 +121,10 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Appareil Thermomix</Label>
-              <div className="flex flex-wrap gap-2">
-                {TOOLS.map((t) => (
-                  <Button
-                    key={t.value}
-                    type="button"
-                    variant={tool === t.value ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setTool(t.value)}
-                  >
-                    {t.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Optimisée pour votre <span className="font-medium text-foreground">Thermomix TM7</span> :
+              étapes guidées, temps, températures et vitesses prêts à l'emploi.
+            </p>
             <Button onClick={handleExport} disabled={exportRecipe.isPending} className="w-full">
               {exportRecipe.isPending ? (
                 <>

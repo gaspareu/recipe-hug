@@ -6,19 +6,30 @@ import {
 } from "./mapper.ts";
 import type { Recipe } from "./types.ts";
 
-Deno.test("formatIngredient: quantité + unité + nom", () => {
+// ── formatIngredient ─────────────────────────────────────────────────────────
+
+Deno.test("formatIngredient: unité de mesure → « de »", () => {
+  assertEquals(formatIngredient({ name: "farine", quantity: 200, unit: "g" }), "200 g de farine");
+});
+
+Deno.test("formatIngredient: élision « d' » devant voyelle/h", () => {
+  assertEquals(formatIngredient({ name: "eau", quantity: 1, unit: "L" }), "1 L d'eau");
+  assertEquals(formatIngredient({ name: "huile", quantity: 2, unit: "c. à soupe" }), "2 c. à soupe d'huile");
+});
+
+Deno.test("formatIngredient: pièce / sans unité → quantité + nom", () => {
+  assertEquals(formatIngredient({ name: "œufs", quantity: 2, unit: "pièce" }), "2 œufs");
+  assertEquals(formatIngredient({ name: "sel", quantity: null, unit: "" }), "sel");
+});
+
+Deno.test("formatIngredient: préparation ajoutée en suffixe", () => {
   assertEquals(
-    formatIngredient({ name: "farine", quantity: 200, unit: "g" }),
-    "200 g farine",
+    formatIngredient({ name: "carottes", quantity: 200, unit: "g", preparation: "en dés" }),
+    "200 g de carottes, en dés",
   );
 });
 
-Deno.test("formatIngredient: quantité absente reste propre", () => {
-  assertEquals(
-    formatIngredient({ name: "sel", quantity: null, unit: "" }),
-    "sel",
-  );
-});
+// ── parseStepAnnotations (fallback texte libre) ──────────────────────────────
 
 Deno.test("parseStepAnnotations: TTS temps/vitesse/température", () => {
   const ann = parseStepAnnotations("Mixer 8 min/100°C/vitesse 2.");
@@ -32,7 +43,6 @@ Deno.test("parseStepAnnotations: TTS temps/vitesse/température", () => {
 Deno.test("parseStepAnnotations: Varoma → TTS avec temperature varoma", () => {
   const ann = parseStepAnnotations("Cuire 15 min/Varoma/vitesse 1.");
   assertEquals(ann.length, 1);
-  assertEquals(ann[0].type, "TTS");
   assertEquals(ann[0].data.temperature, { value: "varoma" });
   assertEquals(ann[0].data.time, 900);
   assertEquals(ann[0].data.speed, "1");
@@ -41,6 +51,136 @@ Deno.test("parseStepAnnotations: Varoma → TTS avec temperature varoma", () => 
 Deno.test("parseStepAnnotations: texte simple → aucune annotation", () => {
   assertEquals(parseStepAnnotations("Réserver au frais."), []);
 });
+
+// ── Annotations structurées TM7 ──────────────────────────────────────────────
+
+Deno.test("mapRecipeToCookidoo: étape tm7 → annotation TTS structurée", () => {
+  const payload = mapRecipeToCookidoo({
+    title: "Test",
+    servings: 2,
+    ingredients: [{ name: "farine", quantity: 200, unit: "g" }],
+    steps: [
+      { order: 1, text: "Cuire le mélange.", tm7: { mode: "cook", seconds: 480, temperature: 100, speed: "2" } },
+    ],
+  });
+  const tts = payload.instructions[0].annotations.find((a) => a.type === "TTS")!;
+  assertEquals(tts.data.time, 480);
+  assertEquals(tts.data.speed, "2");
+  assertEquals(tts.data.temperature, { value: "100", unit: "C" });
+});
+
+Deno.test("mapRecipeToCookidoo: tm7 mode steam → Varoma + sens inverse", () => {
+  const payload = mapRecipeToCookidoo({
+    title: "Vapeur",
+    ingredients: [],
+    steps: [
+      { order: 1, text: "Cuire au Varoma.", tm7: { mode: "steam", seconds: 900, speed: "1", reverse: true } },
+    ],
+  });
+  const tts = payload.instructions[0].annotations.find((a) => a.type === "TTS")!;
+  assertEquals(tts.data.temperature, { value: "varoma" });
+  assertEquals(tts.data.time, 900);
+  assertEquals(tts.data.direction, "CCW");
+});
+
+Deno.test("mapRecipeToCookidoo: TTS structuré positionné sur le segment de paramètres", () => {
+  const text = "Ajouter les carottes, cuire 20 min/100°C/vitesse 1.";
+  const payload = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [{ name: "carottes", quantity: 500, unit: "g" }],
+    steps: [{ order: 1, text, tm7: { mode: "cook", seconds: 1200, temperature: 100, speed: "1" } }],
+  });
+  const anns = payload.instructions[0].annotations;
+  const tts = anns.find((a) => a.type === "TTS")!;
+  const ing = anns.find((a) => a.type === "INGREDIENT")!;
+
+  // Le TTS couvre les seuls paramètres, pas toute la phrase…
+  assertEquals(text.substr(tts.position.offset, tts.position.length), "20 min/100°C/vitesse 1");
+  // …et ne chevauche donc pas l'annotation ingrédient.
+  assertEquals(ing.position.offset + ing.position.length <= tts.position.offset, true);
+});
+
+Deno.test("mapRecipeToCookidoo: vitesse plafonnée en cuisson vapeur (contrainte TM7)", () => {
+  const payload = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [],
+    steps: [{ order: 1, text: "Cuire à la vapeur.", tm7: { mode: "steam", seconds: 900, speed: "8" } }],
+  });
+  const tts = payload.instructions[0].annotations.find((a) => a.type === "TTS")!;
+  assertEquals(tts.data.speed, "5"); // TM7_STEAM_SPEED_MAX
+  assertEquals(tts.data.temperature, { value: "varoma" });
+});
+
+Deno.test("mapRecipeToCookidoo: vitesse hors plage omise (dégradation propre)", () => {
+  const payload = mapRecipeToCookidoo({
+    title: "Test",
+    ingredients: [],
+    steps: [{ order: 1, text: "Mixer.", tm7: { mode: "chop", seconds: 10, speed: "25" } }],
+  });
+  const tts = payload.instructions[0].annotations.find((a) => a.type === "TTS")!;
+  assertEquals(tts.data.time, 10);
+  assertEquals(tts.data.speed, undefined); // "25" invalide → omis
+});
+
+// ── Annotations INGREDIENT ───────────────────────────────────────────────────
+
+Deno.test("mapRecipeToCookidoo: annotations INGREDIENT (liaison texte)", () => {
+  const text = "Ajouter les carottes dans le bol.";
+  const payload = mapRecipeToCookidoo({
+    title: "Test",
+    ingredients: [{ name: "carottes", quantity: 500, unit: "g" }],
+    steps: [{ order: 1, text }],
+  });
+  const ing = payload.instructions[0].annotations.find((a) => a.type === "INGREDIENT")!;
+  assertEquals(ing.data.description, "500 g de carottes");
+  assertEquals(text.substr(ing.position.offset, ing.position.length), "carottes");
+});
+
+Deno.test("mapRecipeToCookidoo: pas de faux positif d'ingrédient en milieu de mot", () => {
+  // « ail » ne doit pas être annoté dans « travail »
+  const payload = mapRecipeToCookidoo({
+    title: "Test",
+    ingredients: [{ name: "ail", quantity: 1, unit: "pièce" }],
+    steps: [{ order: 1, text: "Un peu de travail de découpe." }],
+  });
+  assertEquals(payload.instructions[0].annotations.filter((a) => a.type === "INGREDIENT").length, 0);
+});
+
+// ── Temps (prépa / cuisson / total) ──────────────────────────────────────────
+
+Deno.test("mapRecipeToCookidoo: prepTime (manuel) + cookTime (machine) + total", () => {
+  const payload = mapRecipeToCookidoo({
+    title: "Test",
+    ingredients: [],
+    steps: [
+      { order: 1, text: "Laisser reposer.", duration_minutes: 30 },
+      { order: 2, text: "Cuire.", tm7: { mode: "cook", seconds: 600, temperature: 100, speed: "1" } },
+    ],
+  });
+  assertEquals(payload.prepTime, 1800);
+  assertEquals(payload.cookTime, 600);
+  assertEquals(payload.totalTime, 2400);
+});
+
+// ── requiresAnnotationsCheck ─────────────────────────────────────────────────
+
+Deno.test("mapRecipeToCookidoo: requiresAnnotationsCheck reflète la présence d'annotations", () => {
+  const withAnn = mapRecipeToCookidoo({
+    title: "A",
+    ingredients: [],
+    steps: [{ order: 1, text: "Mixer 8 min/vitesse 2." }],
+  });
+  assertEquals(withAnn.recipeMetadata.requiresAnnotationsCheck, true);
+
+  const noAnn = mapRecipeToCookidoo({
+    title: "B",
+    ingredients: [],
+    steps: [{ order: 1, text: "Réserver au frais." }],
+  });
+  assertEquals(noAnn.recipeMetadata.requiresAnnotationsCheck, false);
+});
+
+// ── Structure complète + non-régression texte libre ──────────────────────────
 
 Deno.test("mapRecipeToCookidoo: structure complète + tri des étapes", () => {
   const recipe: Recipe = {
@@ -56,19 +196,29 @@ Deno.test("mapRecipeToCookidoo: structure complète + tri des étapes", () => {
     ],
   };
 
-  const payload = mapRecipeToCookidoo(recipe, { tools: ["TM6"] });
+  const payload = mapRecipeToCookidoo(recipe, { tools: ["TM7"] });
 
   assertEquals(payload.name, "Soupe");
-  assertEquals(payload.tools, ["TM6"]);
+  assertEquals(payload.tools, ["TM7"]);
   assertEquals(payload.yield, { value: 6, unitText: "portion" });
   assertEquals(payload.ingredients.length, 2);
-  assertEquals(payload.ingredients[0], { type: "INGREDIENT", text: "500 g carottes" });
+  assertEquals(payload.ingredients[0], { type: "INGREDIENT", text: "500 g de carottes" });
   // Étapes triées par order
   assertEquals(payload.instructions[0].text, "Éplucher les carottes.");
   assertEquals(payload.instructions[1].text, "Mixer 1 min/vitesse 8.");
-  // totalTime = somme des durées (min) en secondes
-  assertEquals(payload.totalTime, 360);
   assertEquals(payload.workStatus, "PRIVATE");
+});
+
+Deno.test("mapRecipeToCookidoo: recette legacy (texte libre) reste exportable", () => {
+  const payload = mapRecipeToCookidoo({
+    title: "Legacy",
+    ingredients: [{ name: "sucre", quantity: 100, unit: "g" }],
+    steps: [{ order: 1, text: "Mixer 8 min/100°C/vitesse 2." }],
+  });
+  const tts = payload.instructions[0].annotations.find((a) => a.type === "TTS")!;
+  assertEquals(tts.data.time, 480);
+  assertEquals(tts.data.speed, "2");
+  assertEquals(payload.instructions.length, 1);
 });
 
 Deno.test("mapRecipeToCookidoo: défauts (TM7, 4 portions) si non précisés", () => {
@@ -79,4 +229,118 @@ Deno.test("mapRecipeToCookidoo: défauts (TM7, 4 portions) si non précisés", (
   });
   assertEquals(payload.tools, ["TM7"]);
   assertEquals(payload.yield.value, 4);
+});
+
+Deno.test("mapRecipeToCookidoo: image jamais posée par le mapper (upload séparé)", () => {
+  const p = mapRecipeToCookidoo({ title: "T", ingredients: [], steps: [] });
+  assertEquals(p.image, null);
+  assertEquals(p.isImageOwnedByUser, false);
+});
+
+// ── Conformité au contrat Cookidoo réel (inspection réseau) ──────────────────
+
+Deno.test("tm7 reverse → TTS direction CCW (et pas reverse:true)", () => {
+  const p = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [],
+    steps: [{
+      order: 1,
+      text: "Cuire 15 min/100°C/vitesse mijotage.",
+      tm7: { mode: "slow_cook", seconds: 900, temperature: 100, speed: "mijotage", reverse: true },
+    }],
+  });
+  const a = p.instructions[0].annotations[0];
+  assertEquals(a.type, "TTS");
+  assertEquals(a.data.direction, "CCW");
+  assertEquals(a.data.reverse, undefined);
+  // « mijotage » s'écrit « soft » côté Cookidoo
+  assertEquals(a.data.speed, "soft");
+  assertEquals(a.data.time, 900);
+  assertEquals(a.data.temperature, { value: "100", unit: "C" });
+});
+
+Deno.test("mode Pétrin → annotation MODE name=dough", () => {
+  const p = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [],
+    steps: [{ order: 1, text: "Activer le mode Pétrin /10 min.", tm7: { mode: "knead", seconds: 600 } }],
+  });
+  const a = p.instructions[0].annotations[0];
+  assertEquals(a.type, "MODE");
+  assertEquals(a.name, "dough");
+  assertEquals(a.data.time, 600);
+});
+
+Deno.test("mode Rissoler → MODE name=browning avec température et puissance", () => {
+  const p = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [],
+    steps: [{
+      order: 1,
+      text: "Activer le mode Rissoler.",
+      tm7: { mode: "high_temp", seconds: 360, temperature: 160 },
+    }],
+  });
+  const a = p.instructions[0].annotations[0];
+  assertEquals(a.type, "MODE");
+  assertEquals(a.name, "browning");
+  assertEquals(a.data.time, 360);
+  assertEquals(a.data.temperature, { value: "160", unit: "C" });
+  assertEquals(a.data.power, "Intense");
+});
+
+Deno.test("annotation INGREDIENT: data.description est une chaîne simple", () => {
+  const p = mapRecipeToCookidoo({
+    title: "T",
+    ingredients: [{ name: "huile", quantity: 20, unit: "g" }],
+    steps: [{ order: 1, text: "Mettre l'huile dans le bol." }],
+  });
+  const ing = p.instructions[0].annotations.find((a) => a.type === "INGREDIENT");
+  assertEquals(typeof ing?.data.description, "string");
+  assertEquals(ing?.data.description, "20 g d'huile");
+});
+
+// ── Puissance du rissolage (MODE browning) ───────────────────────────────────
+// Vérifié sur sonde réelle (docs/COOKIDOO-CONTRAT.md §4) : `power` détermine
+// l'intention machine — "Intense" → HighTemperature_FullPower,
+// "Gentle" → HighTemperature_MediumPower. Le figer en dur forçait tous les
+// rissolages à pleine puissance.
+
+Deno.test("mapRecipeToCookidoo: rissolage — puissance par défaut « Intense »", () => {
+  const recipe: Recipe = {
+    title: "Test",
+    ingredients: [],
+    steps: [{ order: 1, text: "Rissoler 6 min/160°C.", tm7: { mode: "high_temp", seconds: 360, temperature: 160 } }],
+  };
+  const ann = mapRecipeToCookidoo(recipe).instructions[0].annotations
+    .find((a) => a.type === "MODE");
+  assertEquals(ann?.name, "browning");
+  assertEquals((ann?.data as Record<string, unknown>).power, "Intense");
+});
+
+Deno.test("mapRecipeToCookidoo: rissolage — puissance douce explicite", () => {
+  const recipe: Recipe = {
+    title: "Test",
+    ingredients: [],
+    steps: [{
+      order: 1,
+      text: "Rissoler doucement 6 min/140°C.",
+      tm7: { mode: "high_temp", seconds: 360, temperature: 140, power: "Gentle" },
+    }],
+  };
+  const ann = mapRecipeToCookidoo(recipe).instructions[0].annotations
+    .find((a) => a.type === "MODE");
+  assertEquals((ann?.data as Record<string, unknown>).power, "Gentle");
+});
+
+Deno.test("mapRecipeToCookidoo: `power` ignoré hors rissolage", () => {
+  const recipe: Recipe = {
+    title: "Test",
+    ingredients: [],
+    steps: [{ order: 1, text: "Pétrir 3 min.", tm7: { mode: "knead", seconds: 180, power: "Gentle" } }],
+  };
+  const ann = mapRecipeToCookidoo(recipe).instructions[0].annotations
+    .find((a) => a.type === "MODE");
+  assertEquals(ann?.name, "dough");
+  assertEquals((ann?.data as Record<string, unknown>).power, undefined);
 });
