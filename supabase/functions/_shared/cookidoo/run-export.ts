@@ -118,7 +118,10 @@ export async function runExport(
     try {
       await sleep(2000);
       unguided = await ops.findUnguidedSteps(ctx, id, expectedGuided);
-      if (unguided.length > 0) warnings.push("steps_not_guided");
+      if (unguided.length > 0) {
+        console.error(`[run-export] étapes non guidées sur l'appareil : ${unguided.join(", ")}`);
+        warnings.push("steps_not_guided");
+      }
     } catch (checkErr) {
       // Contrôle best-effort : son échec ne remet pas en cause l'export.
       console.error("[run-export] contrôle guided cooking", checkErr);
