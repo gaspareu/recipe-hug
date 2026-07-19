@@ -188,6 +188,9 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
     erreurs classifiées : `auth_failed` / `ip_blocked` / `rate_limited` / `invalid_payload` / `partial_created`.
 - **⚠️ Risque IP** : Cookidoo peut bloquer les IP datacenter. Si `ip_blocked`, le CLI local
   (IP résidentielle) reste le plan B — il partage exactement le même code `_shared/cookidoo`.
+- **Contrat de l'API** : provenance de chaque élément (observé / déduit / hypothèse), formats
+  d'annotations et flux image détaillés dans **`docs/COOKIDOO-CONTRAT.md`** — à lire avant
+  toute modification du mapper ou du client.
 - **Contrat validé** (inspection réseau de l'éditeur cookidoo.fr, juillet 2026) : formats d'image
   et d'annotations confirmés ci-dessus. `recipeMetadata.requiresAnnotationsCheck` reste à `true`
   (revue guided cooking côté Cookidoo) tant qu'un export réel de bout en bout n'a pas été observé.
