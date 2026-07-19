@@ -159,9 +159,12 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
     `step.tm7`, avec **repli regex** sur le texte pour les recettes existantes ; annotations
     **INGREDIENT** liant les noms d'ingrédients au texte (c'est ce qui rend une étape « guidée »).
     Types d'annotation confirmés : `TTS` (`{time, speed, direction:"CCW", temperature:{value,unit}}`),
-    `MODE` (modes nommés : `name:"dough"|"browning"`, `{time, temperature?, power?}`) et
+    `MODE` (modes nommés : `name:"dough"|"browning"|"steaming"`, `{time, temperature?, power?}`) et
     `INGREDIENT` (`{description: "20 g d'huile"}`). Le sens inverse s'exprime par `direction`,
-    la vitesse mijotage par `speed:"soft"`.
+    la vitesse mijotage par `speed:"soft"`, la cuisson vapeur par `temperature:{value:"varoma"}`
+    (minuscule, sans `unit` — Cookidoo la traduit en `cooking-mode/Steaming`).
+    ⚠️ `power` (rissolage) pilote l'intention machine : `"Intense"` → `HighTemperature_FullPower`,
+    `"Gentle"` → `HighTemperature_MediumPower`. Vient de `step.tm7.power`, défaut `"Intense"`.
   - `validate.ts` (pur, testé) → contrôle structurel du payload **avant** tout appel réseau.
   - `auth.ts` → login PKCE/cookie (`_oauth2_proxy` + `v-authenticated`, **pas** de Bearer token).
   - `client.ts` → endpoints `/created-recipes` (create → attendre ~5 s → patch ; rate limit
@@ -191,7 +194,14 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
 - **Contrat de l'API** : provenance de chaque élément (observé / déduit / hypothèse), formats
   d'annotations et flux image détaillés dans **`docs/COOKIDOO-CONTRAT.md`** — à lire avant
   toute modification du mapper ou du client.
-- **Contrat validé** (inspection réseau de l'éditeur cookidoo.fr, juillet 2026) : formats d'image
-  et d'annotations confirmés ci-dessus. `recipeMetadata.requiresAnnotationsCheck` reste à `true`
-  (revue guided cooking côté Cookidoo) tant qu'un export réel de bout en bout n'a pas été observé.
+- **Contrat validé par sondes d'écriture réelles** (19 juillet 2026) : création, PATCH, image
+  Cloudinary, suppression et **rendu appareil** vérifiés de bout en bout. Voir le journal des
+  sondes dans `docs/COOKIDOO-CONTRAT.md` §10.
+- **Contrôle du guided cooking** : `findUnguidedSteps` relit la **vue appareil**
+  (`GET /created-recipes/{lang}/device/recipes/{id}`) après l'export et signale les étapes que
+  Cookidoo a dégradées en simple texte (`warnings: ["steps_not_guided"]`). C'est le seul moyen de
+  détecter ce mode d'échec : l'API renvoie `200 OK` et stocke l'annotation, qui n'est perdue qu'à
+  la conversion vers l'appareil. Les `GET` du client demandent la vue complète
+  (`application/vnd.vorwerk.customer-recipe.full+json`) — sans elle, les annotations sont invisibles
+  en lecture.
 - **Déploiement** : via CLI Supabase (les imports `../_shared/cookidoo/` sont suivis nativement).

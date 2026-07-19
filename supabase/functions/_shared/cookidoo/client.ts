@@ -53,10 +53,18 @@ export interface ClientCtx {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-function headers(ctx: ClientCtx): Record<string, string> {
+/**
+ * Vue « complète » d'une recette créée. **Indispensable en lecture** : avec un
+ * simple `application/json`, Cookidoo renvoie une vue aplatie façon schema.org
+ * où les annotations (guided cooking) sont totalement absentes — on croirait à
+ * tort qu'elles n'ont pas été enregistrées (cf. docs/COOKIDOO-CONTRAT.md §3).
+ */
+const FULL_VIEW_ACCEPT = "application/vnd.vorwerk.customer-recipe.full+json";
+
+function headers(ctx: ClientCtx, accept = "application/json"): Record<string, string> {
   return {
     Cookie: ctx.cookieHeader,
-    Accept: "application/json",
+    Accept: accept,
     "Content-Type": "application/json",
     "x-requested-with": "xmlhttprequest",
   };
@@ -83,7 +91,7 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  opts: { idempotent?: boolean } = {},
+  opts: { idempotent?: boolean; accept?: string } = {},
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
   const doFetch = ctx.fetchImpl ?? fetch;
@@ -95,7 +103,7 @@ async function request<T>(
   while (true) {
     const res = await doFetch(url, {
       method,
-      headers: headers(ctx),
+      headers: headers(ctx, opts.accept),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await res.text();
@@ -259,7 +267,56 @@ export async function uploadRecipeImage(
 }
 
 export function getRecipe(ctx: ClientCtx, id: string): Promise<unknown> {
-  return request(ctx, "GET", recipePath(ctx, id));
+  return request(ctx, "GET", recipePath(ctx, id), undefined, { accept: FULL_VIEW_ACCEPT });
+}
+
+// ── Vue « appareil » : le seul oracle de validation du guided cooking ────────
+//
+// `/device/recipes/{id}` renvoie la recette telle que le TM7 la reçoit. C'est le
+// seul endroit où l'on voit si une annotation est réellement exploitable :
+// Cookidoo accepte un mode inconnu en 200 OK, le stocke, puis le dégrade en
+// simple texte à la conversion. Cf. docs/COOKIDOO-CONTRAT.md §8.
+
+/** Étape telle que l'appareil la reçoit. `CustomerAnnotations` = étape guidée. */
+interface DevicePrompt {
+  Type?: string;
+  PreparationStepIndex?: number;
+}
+
+interface DeviceRecipe {
+  PromptDetails?: { Prompts?: DevicePrompt[] };
+}
+
+/** Recette dans la vue destinée à l'appareil (structure `SchemaVersion`/`PromptDetails`). */
+export function getDeviceRecipe(ctx: ClientCtx, id: string): Promise<DeviceRecipe> {
+  return request<DeviceRecipe>(
+    ctx,
+    "GET",
+    `/created-recipes/${ctx.lang}/device/recipes/${encodeURIComponent(id)}`,
+  );
+}
+
+/**
+ * Contrôle post-export : parmi les étapes censées être guidées, renvoie les
+ * index de celles que l'appareil a dégradées en simple texte (ou qui manquent).
+ *
+ * Un tableau vide signifie que tout le guided cooking est passé. Toute entrée
+ * signale une annotation refusée **sans erreur HTTP** — le seul mode d'échec
+ * réellement silencieux de cette API.
+ */
+export async function findUnguidedSteps(
+  ctx: ClientCtx,
+  id: string,
+  expectedGuidedIndexes: number[],
+): Promise<number[]> {
+  const device = await getDeviceRecipe(ctx, id);
+  const prompts = device.PromptDetails?.Prompts ?? [];
+  const guided = new Set(
+    prompts
+      .filter((p) => p.Type === "CustomerAnnotations")
+      .map((p) => p.PreparationStepIndex),
+  );
+  return expectedGuidedIndexes.filter((i) => !guided.has(i));
 }
 
 export function deleteRecipe(ctx: ClientCtx, id: string): Promise<unknown> {

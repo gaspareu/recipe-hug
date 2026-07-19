@@ -15,6 +15,7 @@ import { login, countryToLang } from "../_shared/cookidoo/auth.ts";
 import {
   CookidooHttpError,
   createRecipe,
+  findUnguidedSteps,
   deleteRecipe,
   fillRecipe,
   getRecipe,
@@ -223,6 +224,28 @@ serve(async (req) => {
         }
       } else {
         warnings.push("no_image");
+      }
+
+      // Contrôle du guided cooking : l'API accepte des annotations qu'elle dégrade
+      // ensuite en simple texte, sans erreur HTTP (cf. docs/COOKIDOO-CONTRAT.md §8).
+      // La vue « appareil » est le seul endroit où ce silence devient visible.
+      const expectedGuided = payload.instructions
+        .map((step, i) => (step.annotations.some((a) => a.type !== "INGREDIENT") ? i : -1))
+        .filter((i) => i >= 0);
+      if (expectedGuided.length > 0) {
+        try {
+          await sleep(2000);
+          const unguided = await findUnguidedSteps(ctx, id, expectedGuided);
+          if (unguided.length > 0) {
+            console.error(
+              `[export-recipe-cookidoo] étapes non guidées sur l'appareil : ${unguided.join(", ")}`,
+            );
+            warnings.push("steps_not_guided");
+          }
+        } catch (checkErr) {
+          // Contrôle best-effort : son échec ne remet pas en cause l'export.
+          console.error("[export-recipe-cookidoo] contrôle guided cooking", checkErr);
+        }
       }
 
       // Mémorise le mapping pour le prochain export (anti-doublon). Non bloquant :

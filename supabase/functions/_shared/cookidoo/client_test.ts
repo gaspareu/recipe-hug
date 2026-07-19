@@ -8,6 +8,7 @@ import {
   isAllowedImageUrl,
   deleteRecipe,
   fillRecipe,
+  findUnguidedSteps,
   getRecipe,
   type ClientCtx,
   type RetryPolicy,
@@ -121,4 +122,56 @@ Deno.test("isAllowedImageUrl: n'accepte que le stockage Supabase en https", () =
   assertEquals(isAllowedImageUrl("http://169.254.169.254/latest/meta-data/", host), false);
   assertEquals(isAllowedImageUrl("http://localhost:8000/x", host), false);
   assertEquals(isAllowedImageUrl("pas-une-url", host), false);
+});
+
+// ── Vue « appareil » : oracle de validation du guided cooking ────────────────
+// Cf. docs/COOKIDOO-CONTRAT.md §8. L'API accepte des annotations qu'elle
+// dégrade ensuite silencieusement : une étape non guidée ressort en
+// `CustomerText` au lieu de `CustomerAnnotations`. Seule cette vue le révèle.
+
+const deviceView = (types: string[]) =>
+  okJson({
+    Id: "r1",
+    PromptDetails: {
+      Prompts: types.map((Type, i) => ({
+        Type,
+        PreparationStepIndex: i,
+        ActionText: `étape ${i}`,
+      })),
+    },
+  });
+
+Deno.test("getRecipe: demande la vue complète (annotations visibles)", async () => {
+  let accept = "";
+  const ctx: ClientCtx = {
+    cookieHeader: "c",
+    lang: "fr-FR",
+    sleepImpl: () => Promise.resolve(),
+    fetchImpl: ((_url: string, init: RequestInit) => {
+      accept = (init.headers as Record<string, string>).Accept;
+      return Promise.resolve(okJson({}));
+    }) as unknown as typeof fetch,
+  };
+  await getRecipe(ctx, "r1");
+  assertEquals(accept, "application/vnd.vorwerk.customer-recipe.full+json");
+});
+
+Deno.test("findUnguidedSteps: toutes les étapes guidées → aucune alerte", async () => {
+  const ctx = testCtx(() => deviceView(["CustomerAnnotations", "CustomerAnnotations", "FinishingStep"]));
+  assertEquals(await findUnguidedSteps(ctx, "r1", [0, 1]), []);
+});
+
+Deno.test("findUnguidedSteps: étape dégradée en texte → signalée", async () => {
+  const ctx = testCtx(() => deviceView(["CustomerAnnotations", "CustomerText"]));
+  assertEquals(await findUnguidedSteps(ctx, "r1", [0, 1]), [1]);
+});
+
+Deno.test("findUnguidedSteps: étape absente de la vue appareil → signalée", async () => {
+  const ctx = testCtx(() => deviceView(["CustomerAnnotations"]));
+  assertEquals(await findUnguidedSteps(ctx, "r1", [0, 1]), [1]);
+});
+
+Deno.test("findUnguidedSteps: seules les étapes attendues sont contrôlées", async () => {
+  const ctx = testCtx(() => deviceView(["CustomerText", "CustomerAnnotations"]));
+  assertEquals(await findUnguidedSteps(ctx, "r1", [1]), []);
 });
