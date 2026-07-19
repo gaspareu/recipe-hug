@@ -20,7 +20,7 @@ Toute nouvelle dépendance d'outillage (MCP, hook, skill, permission) doit être
 
 ```bash
 npm run dev          # Dev server (Vite, http://localhost:8080)
-npm run build        # Build de production (effectue aussi la vérif TypeScript)
+npm run build        # Build de production (Vite/SWC — ne vérifie PAS les types)
 npm run build:dev    # Build en mode development
 npm run lint         # ESLint (flat config, eslint.config.js)
 npm run typecheck    # Vérification de types TypeScript (tsc -b --noEmit)
@@ -32,7 +32,9 @@ npm run test:run     # Vitest (single run) — à utiliser en validation/CI
 deno test supabase/functions/_shared/decrypt-keys_test.ts
 ```
 
-Il n'y a pas de script `typecheck` dédié ; `npm run build` (`vite build`) effectue la vérification TypeScript.
+⚠️ **`npm run build` ne vérifie pas les types.** `vite build` (SWC) transpile sans passer par `tsc` : un build vert ne prouve rien sur la validité des types. La vérification est `npm run typecheck` (`tsc -b --noEmit`), et c'est elle qu'il faut lancer avant de conclure qu'un changement compile.
+
+Ce script porte une dette préexistante (14 erreurs au 19/07/2026) : comparer le nombre d'erreurs avant/après plutôt que d'exiger zéro.
 
 ## Architecture
 
