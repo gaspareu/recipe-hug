@@ -227,6 +227,10 @@ jamais une URL externe.
 - ✅ `public_id` de la forme `prod/img/customer-recipe/<aléatoire>`.
 - ✅ En écriture on envoie `isImageOwnedByUser` ; en lecture le champ s'appelle
   **`isImageCopyrightOwned`** et reflète bien la valeur envoyée (`true` → `true`).
+- ⚠️ **Divergence à trancher** : la sonde a validé le flux avec `true`, mais `client.ts` envoie
+  `false`. Les deux sont acceptés et l'image s'affiche dans les deux cas — seule la déclaration de
+  propriété change. Les images de recipe-hug étant générées par l'utilisateur, `true` semble plus
+  juste, mais c'est une décision produit, pas technique.
 - ✅ En lecture, `image` devient une URL CDN contenant un placeholder littéral `{transformation}`
   (`https://ugc.assets.tmecosys.com/image/upload/{transformation}/prod/img/customer-recipe/xxx.jpg`),
   à substituer côté client. Cookidoo ajoute aussi un `descriptiveAssets`
@@ -343,7 +347,7 @@ créations » (`isBasedOn: true`) — les annotations y sont produites par Cooki
 | `supabase/functions/_shared/cookidoo/types.ts` | Types du payload et des annotations (`TTS`/`MODE`/`INGREDIENT`). |
 | `supabase/functions/_shared/cookidoo/mapper.ts` | Recette → payload : annotations, format des ingrédients, temps. |
 | `supabase/functions/_shared/cookidoo/client.ts` | Endpoints, ré-essais/backoff, **en-tête `Accept`**, flux image, garde-fou SSRF. |
-| `supabase/functions/_shared/cookidoo/validate.ts` | Contrôle du payload **avant** tout appel réseau — d'autant plus important que l'API ne valide rien (§8). |
+| `supabase/functions/_shared/cookidoo/validate.ts` | Contrôle du payload **avant** tout appel réseau — évite de consommer le budget de requêtes sur un payload que l'API rejettera (§8). |
 | `supabase/functions/_shared/cookidoo/auth.ts` | Login cookies. |
 | `supabase/functions/export-recipe-cookidoo/index.ts` | Orchestration : validation → create/update → remplissage → image, anti-doublon, rollback. |
 
