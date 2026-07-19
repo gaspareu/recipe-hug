@@ -99,6 +99,8 @@ Via le MCP Supabase, outil `apply_migration`, nom `cookidoo_exports`, avec le co
 
 Attendu : succès sans erreur.
 
+**Pourquoi manuellement, alors que les migrations s'appliquent seules au merge.** Dans ce projet, l'intégration native Supabase↔GitHub applique `supabase/migrations/` à chaque merge sur `main` — c'est le mécanisme normal, à ne pas court-circuiter d'habitude. Ici on l'applique en avance parce que les tâches 5 à 7 en dépendent : sans la table, les types ne peuvent pas être générés et le front ne peut pas être testé. L'opération est additive (création d'une table neuve, aucune donnée touchée) et `apply_migration` l'enregistre dans l'historique, donc le merge ne la rejouera pas.
+
 - [ ] **Step 3: Vérifier la structure et la RLS**
 
 Via le MCP Supabase, outil `execute_sql` :
@@ -1332,21 +1334,27 @@ git commit -m "feat: branche le bouton d'export sur le flux asynchrone"
 
 ---
 
-## Task 8 : Déploiement et vérification réelle
+## Task 8 : Vérification réelle, après merge
 
-Committer une edge function ne la déploie pas. Cette tâche est celle qui prouve que l'ensemble fonctionne.
+⚠️ **Cette tâche s'exécute après le merge de la PR, pas avant.**
 
-- [ ] **Step 1: Déployer l'edge function**
+Le déploiement des edge functions est automatique : `.github/workflows/deploy-edge-functions.yml` déploie à chaque push sur `main` touchant `supabase/functions/**`. Ce workflow existe précisément pour supprimer les déploiements manuels, qui avaient causé une dérive « repo ≠ prod ». **Ne pas déployer via le MCP** : ce serait mettre en production du code non mergé, et recréer le problème que le workflow élimine.
 
-Via le MCP Supabase, outil `deploy_edge_function`, nom `export-recipe-cookidoo`.
+Conséquence sur l'ordre : les tâches 1 à 7 se terminent par une PR. Une fois mergée, le workflow déploie, et seulement là cette tâche peut être menée.
 
-⚠️ Le bundler MCP ne résout pas les imports `../_shared/` : inliner le contenu des modules partagés dans le fichier déployé, ou fournir chaque fichier partagé dans la structure `files`. Voir `supabase/functions/CLAUDE.md`.
+- [ ] **Step 1: Vérifier que le workflow de déploiement a réussi**
 
-- [ ] **Step 2: Vérifier que la version a augmenté**
+```bash
+gh run list --workflow=deploy-edge-functions.yml --limit 3
+```
+
+Attendu : le run déclenché par le merge est `completed / success`.
+
+- [ ] **Step 2: Vérifier que la version déployée a augmenté**
 
 Via le MCP Supabase, outil `get_edge_function`, nom `export-recipe-cookidoo`.
 
-Attendu : `version` supérieure à la précédente (8 au dernier relevé).
+Attendu : `version` supérieure à la précédente (8 au dernier relevé). Si elle n'a pas bougé alors que le workflow est vert, ne pas redéployer à l'aveugle — chercher pourquoi (chemins `paths` du workflow, échec silencieux).
 
 - [ ] **Step 3: Exporter une recette réelle depuis l'application**
 
@@ -1399,10 +1407,10 @@ git commit -m "docs: documente l'export Cookidoo asynchrone"
 ## Ordre et dépendances
 
 ```
-Task 1 (migration) ──┬─→ Task 4 (edge function) ──→ Task 8 (déploiement)
-Task 2 (diagnostics) ┤                                      ↑
-Task 3 (run-export) ─┘                                      │
-Task 1 ──→ Task 5 (types) ──→ Task 6 (hook) ──→ Task 7 (UI)─┘
+Task 1 (migration) ──┬─→ Task 4 (edge function) ──┐
+Task 2 (diagnostics) ┤                            ├─→ PR → merge → Task 8
+Task 3 (run-export) ─┘                            │   (déploiement auto)
+Task 1 ──→ Task 5 (types) ──→ Task 6 (hook) ──→ Task 7 (UI)
 ```
 
 Les tâches 2 et 3 sont indépendantes l'une de l'autre et peuvent être menées dans n'importe quel ordre.
