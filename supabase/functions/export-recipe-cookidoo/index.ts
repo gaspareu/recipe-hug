@@ -15,9 +15,9 @@ import { login, countryToLang } from "../_shared/cookidoo/auth.ts";
 import {
   CookidooHttpError,
   createRecipe,
-  findUnguidedSteps,
   deleteRecipe,
   fillRecipe,
+  findUnguidedSteps,
   getRecipe,
   recipeWebUrl,
   renameRecipe,
@@ -26,6 +26,8 @@ import {
 } from "../_shared/cookidoo/client.ts";
 import { mapRecipeToCookidoo } from "../_shared/cookidoo/mapper.ts";
 import { validateCookidooPayload } from "../_shared/cookidoo/validate.ts";
+import { buildExportDiagnostics } from "../_shared/cookidoo/diagnostics.ts";
+import { PartialCreateError, runExport, type CookidooOps } from "../_shared/cookidoo/run-export.ts";
 import type { Recipe, ThermomixTool } from "../_shared/cookidoo/types.ts";
 
 function json(body: unknown, status = 200): Response {
@@ -41,7 +43,7 @@ function fail(error: string, message: string): Response {
   return json({ ok: false, error, message }, 200);
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Classe une erreur réseau/Cookidoo pour orienter le diagnostic côté UI. */
 function classifyError(err: unknown): { error: string; message: string } {
@@ -61,6 +63,57 @@ function classifyError(err: unknown): { error: string; message: string } {
   }
   return { error: "export_failed", message: msg };
 }
+
+/**
+ * Implémentation réelle des opérations Cookidoo injectées dans `runExport`.
+ *
+ * `renameRecipe` et `deleteRecipe` sont adaptées ici : `client.ts` les déclare
+ * en `Promise<unknown>` (elles renvoient la réponse brute de `patchFields`/
+ * `request`, jamais exploitée par les appelants), alors que `CookidooOps` les
+ * attend en `Promise<void>`. Un correctif propre relève de `client.ts`, hors
+ * périmètre de ce fichier — ce wrapper se contente d'ignorer la valeur.
+ */
+const realOps: CookidooOps = {
+  getRecipe,
+  createRecipe,
+  fillRecipe,
+  renameRecipe: async (ctx, id, name) => {
+    await renameRecipe(ctx, id, name);
+  },
+  deleteRecipe: async (ctx, id) => {
+    await deleteRecipe(ctx, id);
+  },
+  uploadRecipeImage,
+  findUnguidedSteps,
+  recipeWebUrl,
+};
+
+/**
+ * Détermine si un ré-export doit réutiliser l'identifiant Cookidoo mémorisé.
+ *
+ * 404 → la recette a été supprimée côté Cookidoo, on la recrée. Toute autre
+ * erreur (429, 5xx, réseau) remonte : recréer sur un doute fabriquerait
+ * exactement le doublon que ce mécanisme sert à éviter.
+ */
+async function resolveExistingId(ctx: ClientCtx, existingId: string | null): Promise<string | null> {
+  if (!existingId) return null;
+  try {
+    await getRecipe(ctx, existingId);
+    return existingId;
+  } catch (lookupErr) {
+    if (lookupErr instanceof CookidooHttpError && lookupErr.status === 404) return null;
+    throw lookupErr;
+  }
+}
+
+// Le runtime prévient avant de recycler l'isolate. Sans cette trace, un export
+// interrompu en plein vol laisse une ligne `pending` sans la moindre indication
+// de la cause : on saurait qu'il a échoué, pas pourquoi.
+// @ts-ignore — addEventListener("beforeunload") est propre au runtime Supabase.
+globalThis.addEventListener?.("beforeunload", (ev: unknown) => {
+  const reason = (ev as { detail?: { reason?: string } })?.detail?.reason ?? "inconnu";
+  console.error(`[export-recipe-cookidoo] isolate arrêté (${reason}) — export en cours possiblement interrompu`);
+});
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -154,121 +207,89 @@ serve(async (req) => {
     const existingId =
       typeof rawExistingId === "string" && rawExistingId.trim() ? rawExistingId.trim() : null;
 
-    // ── Auth + upload Cookidoo (zone à risque IP) ──────────────────────────
-    try {
-      const jar = await login(creds.email, password, lang);
-      const ctx: ClientCtx = { cookieHeader: jar.headerForUrl("https://cookidoo.fr"), lang };
-
-      // Ré-export : mise à jour en place si la recette existe toujours côté
-      // Cookidoo (si elle y a été supprimée, on la recrée).
-      let reuseId: string | null = null;
-      if (existingId) {
-        try {
-          await getRecipe(ctx, existingId);
-          reuseId = existingId;
-        } catch (lookupErr) {
-          // 404 → la recette a été supprimée côté Cookidoo : on la recrée.
-          // Toute autre erreur (429, 5xx, réseau) : on NE recrée PAS — ce serait
-          // fabriquer le doublon que ce mécanisme doit justement éviter.
-          if (lookupErr instanceof CookidooHttpError && lookupErr.status === 404) {
-            reuseId = null;
-          } else {
-            throw lookupErr;
-          }
-        }
-      }
-
-      const warnings: string[] = [];
-      let id: string;
-      if (reuseId) {
-        id = reuseId;
-        // Le champ de renommage en PATCH n'est pas confirmé (endpoints
-        // non-officiels) → best-effort : un échec ne doit pas empêcher la mise à
-        // jour du contenu.
-        try {
-          await renameRecipe(ctx, id, payload.name);
-          await sleep(2000);
-        } catch (renameErr) {
-          console.error("[export-recipe-cookidoo] rename", renameErr);
-          warnings.push("title_not_updated");
-        }
-        await fillRecipe(ctx, id, payload);
-      } else {
-        id = await createRecipe(ctx, payload.name);
-        await sleep(5000); // Cookidoo exige un délai avant les PATCH de remplissage
-        try {
-          await fillRecipe(ctx, id, payload);
-        } catch (fillErr) {
-          // Rollback best-effort : ne pas laisser une recette vide sur Cookidoo.
-          try {
-            await deleteRecipe(ctx, id);
-          } catch {
-            return fail(
-              "partial_created",
-              `Recette partiellement créée sur Cookidoo (id ${id}) : le remplissage a échoué et la suppression automatique aussi. Supprimez-la depuis Cookidoo, ou via le CLI (--delete ${id}).`,
-            );
-          }
-          throw fillErr; // rollback OK → échec classé normalement, sans résidu
-        }
-      }
-
-      // Image : upload Cloudinary isolé, best-effort — un échec n'invalide pas
-      // l'export (Cookidoo ré-héberge l'image, cf. uploadRecipeImage).
-      if (imageUrl) {
-        try {
-          await sleep(2000);
-          await uploadRecipeImage(ctx, id, imageUrl, new URL(SUPABASE_URL).hostname);
-        } catch (imgErr) {
-          console.error("[export-recipe-cookidoo] image", imgErr);
-          warnings.push("image_not_transferred");
-        }
-      } else {
-        warnings.push("no_image");
-      }
-
-      // Contrôle du guided cooking : l'API accepte des annotations qu'elle dégrade
-      // ensuite en simple texte, sans erreur HTTP (cf. docs/COOKIDOO-CONTRAT.md §8).
-      // La vue « appareil » est le seul endroit où ce silence devient visible.
-      const expectedGuided = payload.instructions
-        .map((step, i) => (step.annotations.some((a) => a.type !== "INGREDIENT") ? i : -1))
-        .filter((i) => i >= 0);
-      if (expectedGuided.length > 0) {
-        try {
-          await sleep(2000);
-          const unguided = await findUnguidedSteps(ctx, id, expectedGuided);
-          if (unguided.length > 0) {
-            console.error(
-              `[export-recipe-cookidoo] étapes non guidées sur l'appareil : ${unguided.join(", ")}`,
-            );
-            warnings.push("steps_not_guided");
-          }
-        } catch (checkErr) {
-          // Contrôle best-effort : son échec ne remet pas en cause l'export.
-          console.error("[export-recipe-cookidoo] contrôle guided cooking", checkErr);
-        }
-      }
-
-      // Mémorise le mapping pour le prochain export (anti-doublon). Non bloquant :
-      // si la colonne n'existe pas encore, l'export reste un succès.
-      const { error: mapErr } = await supabase
-        .from("recipes")
-        .update({ cookidoo_recipe_id: id, cookidoo_exported_at: new Date().toISOString() })
-        .eq("id", recipeId);
-      if (mapErr) console.error("[export-recipe-cookidoo] mapping", mapErr.message);
-
-      return json({
-        ok: true,
-        cookidoo_recipe_id: id,
-        url: recipeWebUrl(ctx, id),
-        tools,
-        warnings,
-        updated: reuseId !== null,
-      });
-    } catch (err) {
-      const classified = classifyError(err);
-      console.error("[export-recipe-cookidoo]", classified.error, classified.message);
-      return fail(classified.error, classified.message);
+    // ── Journal : ligne pending, créée avant de rendre la main ──────────────
+    // Écriture en service role : la RLS n'accorde au client que la lecture, de
+    // sorte qu'un journal ne puisse pas être falsifié depuis le front.
+    const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!SERVICE_ROLE_KEY) {
+      return json({ error: "server_misconfigured", message: "SUPABASE_SERVICE_ROLE_KEY absent" }, 500);
     }
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    const diagnostics = buildExportDiagnostics(recipe, payload);
+    const { data: job, error: jobError } = await admin
+      .from("cookidoo_exports")
+      .insert({ user_id: user.id, recipe_id: recipeId, diagnostics })
+      .select("id")
+      .single();
+    if (jobError || !job) {
+      return json({ error: "db_error", message: jobError?.message ?? "job non créé" }, 500);
+    }
+
+    // ── Phase asynchrone ───────────────────────────────────────────────────
+    // Tout ce qui suit se poursuit après la réponse HTTP. Aucune exception ne
+    // doit s'en échapper : elle serait perdue sans laisser de trace, et la
+    // ligne resterait pending indéfiniment.
+    const startedAt = Date.now();
+    const work = (async () => {
+      try {
+        const jar = await login(creds.email, password, lang);
+        const ctx: ClientCtx = { cookieHeader: jar.headerForUrl("https://cookidoo.fr"), lang };
+        const reuseId = await resolveExistingId(ctx, existingId);
+
+        const outcome = await runExport(
+          { ctx, payload, existingId: reuseId, imageUrl, supabaseHost: new URL(SUPABASE_URL).hostname },
+          realOps,
+          sleep,
+        );
+
+        // Mémorise le mapping pour le prochain export (anti-doublon).
+        const { error: mapErr } = await admin
+          .from("recipes")
+          .update({
+            cookidoo_recipe_id: outcome.cookidoo_recipe_id,
+            cookidoo_exported_at: new Date().toISOString(),
+          })
+          .eq("id", recipeId);
+        if (mapErr) console.error("[export-recipe-cookidoo] mapping", mapErr.message);
+
+        await admin.from("cookidoo_exports").update({
+          status: "success",
+          cookidoo_recipe_id: outcome.cookidoo_recipe_id,
+          cookidoo_url: outcome.url,
+          updated: outcome.updated,
+          warnings: outcome.warnings,
+          unguided_steps: outcome.unguided_steps,
+          duration_ms: Date.now() - startedAt,
+          finished_at: new Date().toISOString(),
+        }).eq("id", job.id);
+      } catch (err) {
+        const classified = err instanceof PartialCreateError
+          ? { error: "partial_created", message: err.message }
+          : classifyError(err);
+        console.error("[export-recipe-cookidoo]", classified.error, classified.message);
+
+        const { error: updateErr } = await admin.from("cookidoo_exports").update({
+          status: "failed",
+          error_code: classified.error,
+          error_message: classified.message,
+          // Conserve l'identifiant de la recette résiduelle à nettoyer.
+          cookidoo_recipe_id: err instanceof PartialCreateError ? err.cookidooRecipeId : null,
+          duration_ms: Date.now() - startedAt,
+          finished_at: new Date().toISOString(),
+        }).eq("id", job.id);
+        // Dernier recours : si même l'écriture de l'échec échoue, la ligne
+        // restera pending. Au moins la cause apparaîtra dans les logs.
+        if (updateErr) {
+          console.error("[export-recipe-cookidoo] journal", updateErr.message);
+        }
+      }
+    })();
+
+    // @ts-ignore — EdgeRuntime est fourni par le runtime Supabase, absent des types Deno.
+    if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work);
+
+    return json({ ok: true, export_id: job.id, status: "pending", tools });
   } catch (err) {
     console.error("[export-recipe-cookidoo] fatal", err);
     return json({ error: "internal_error", message: String(err) }, 500);
