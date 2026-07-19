@@ -29,8 +29,8 @@ export interface CookidooOps {
   getRecipe(ctx: ClientCtx, id: string): Promise<unknown>;
   createRecipe(ctx: ClientCtx, name: string): Promise<string>;
   fillRecipe(ctx: ClientCtx, id: string, payload: CookidooRecipePayload): Promise<void>;
-  renameRecipe(ctx: ClientCtx, id: string, name: string): Promise<void>;
-  deleteRecipe(ctx: ClientCtx, id: string): Promise<void>;
+  renameRecipe(ctx: ClientCtx, id: string, name: string): Promise<unknown>;
+  deleteRecipe(ctx: ClientCtx, id: string): Promise<unknown>;
   uploadRecipeImage(ctx: ClientCtx, id: string, imageUrl: string, host: string): Promise<void>;
   findUnguidedSteps(ctx: ClientCtx, id: string, expected: number[]): Promise<number[]>;
   recipeWebUrl(ctx: ClientCtx, id: string): string;

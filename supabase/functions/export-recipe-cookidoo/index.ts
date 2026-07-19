@@ -64,25 +64,13 @@ function classifyError(err: unknown): { error: string; message: string } {
   return { error: "export_failed", message: msg };
 }
 
-/**
- * Implémentation réelle des opérations Cookidoo injectées dans `runExport`.
- *
- * `renameRecipe` et `deleteRecipe` sont adaptées ici : `client.ts` les déclare
- * en `Promise<unknown>` (elles renvoient la réponse brute de `patchFields`/
- * `request`, jamais exploitée par les appelants), alors que `CookidooOps` les
- * attend en `Promise<void>`. Un correctif propre relève de `client.ts`, hors
- * périmètre de ce fichier — ce wrapper se contente d'ignorer la valeur.
- */
+/** Implémentation réelle des opérations Cookidoo injectées dans `runExport`. */
 const realOps: CookidooOps = {
   getRecipe,
   createRecipe,
   fillRecipe,
-  renameRecipe: async (ctx, id, name) => {
-    await renameRecipe(ctx, id, name);
-  },
-  deleteRecipe: async (ctx, id) => {
-    await deleteRecipe(ctx, id);
-  },
+  renameRecipe,
+  deleteRecipe,
   uploadRecipeImage,
   findUnguidedSteps,
   recipeWebUrl,
@@ -264,24 +252,28 @@ serve(async (req) => {
           finished_at: new Date().toISOString(),
         }).eq("id", job.id);
       } catch (err) {
-        const classified = err instanceof PartialCreateError
-          ? { error: "partial_created", message: err.message }
-          : classifyError(err);
-        console.error("[export-recipe-cookidoo]", classified.error, classified.message);
+        try {
+          const classified = err instanceof PartialCreateError
+            ? { error: "partial_created", message: err.message }
+            : classifyError(err);
+          console.error("[export-recipe-cookidoo]", classified.error, classified.message);
 
-        const { error: updateErr } = await admin.from("cookidoo_exports").update({
-          status: "failed",
-          error_code: classified.error,
-          error_message: classified.message,
-          // Conserve l'identifiant de la recette résiduelle à nettoyer.
-          cookidoo_recipe_id: err instanceof PartialCreateError ? err.cookidooRecipeId : null,
-          duration_ms: Date.now() - startedAt,
-          finished_at: new Date().toISOString(),
-        }).eq("id", job.id);
-        // Dernier recours : si même l'écriture de l'échec échoue, la ligne
-        // restera pending. Au moins la cause apparaîtra dans les logs.
-        if (updateErr) {
-          console.error("[export-recipe-cookidoo] journal", updateErr.message);
+          const { error: updateErr } = await admin.from("cookidoo_exports").update({
+            status: "failed",
+            error_code: classified.error,
+            error_message: classified.message,
+            // Conserve l'identifiant de la recette résiduelle à nettoyer.
+            cookidoo_recipe_id: err instanceof PartialCreateError ? err.cookidooRecipeId : null,
+            duration_ms: Date.now() - startedAt,
+            finished_at: new Date().toISOString(),
+          }).eq("id", job.id);
+          // Dernier recours : si même l'écriture de l'échec échoue, la ligne
+          // restera pending. Au moins la cause apparaîtra dans les logs.
+          if (updateErr) console.error("[export-recipe-cookidoo] journal", updateErr.message);
+        } catch (reportErr) {
+          // Rien ne doit s'échapper d'une tâche de fond : l'exception serait
+          // perdue sans trace et la ligne resterait pending sans explication.
+          console.error("[export-recipe-cookidoo] journal (exception)", reportErr);
         }
       }
     })();
