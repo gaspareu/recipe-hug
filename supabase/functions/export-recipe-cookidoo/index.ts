@@ -241,7 +241,11 @@ serve(async (req) => {
           .eq("id", recipeId);
         if (mapErr) console.error("[export-recipe-cookidoo] mapping", mapErr.message);
 
-        await admin.from("cookidoo_exports").update({
+        // supabase-js ne lève pas sur erreur d'écriture : sans ce contrôle, un
+        // échec de cet update laisserait la ligne bloquée en `pending`, et le
+        // front tournerait jusqu'au timeout sans jamais savoir que l'export a
+        // réussi. On journalise donc explicitement (règle « pas d'échec silencieux »).
+        const { error: successErr } = await admin.from("cookidoo_exports").update({
           status: "success",
           cookidoo_recipe_id: outcome.cookidoo_recipe_id,
           cookidoo_url: outcome.url,
@@ -251,6 +255,9 @@ serve(async (req) => {
           duration_ms: Date.now() - startedAt,
           finished_at: new Date().toISOString(),
         }).eq("id", job.id);
+        if (successErr) {
+          console.error("[export-recipe-cookidoo] journal succès", successErr.message);
+        }
       } catch (err) {
         try {
           const classified = err instanceof PartialCreateError

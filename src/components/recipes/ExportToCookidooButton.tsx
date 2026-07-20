@@ -62,7 +62,18 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
   // exportable) est connu ici. L'issue réelle arrive par `job`, traitée dans
   // l'effet ci-dessous.
   const handleExport = async () => {
-    const response = await startExport(recipeId);
+    let response;
+    try {
+      response = await startExport(recipeId);
+    } catch (err) {
+      // Erreur de transport (edge function 5xx, coupure réseau) : `startExport`
+      // rejette au lieu de renvoyer `ok:false`. Sans ce filet, la promesse
+      // partirait en rejet non géré et l'utilisateur ne verrait aucun retour.
+      toast.error('Échec de l’envoi', {
+        description: err instanceof Error ? err.message : 'Erreur réseau, réessayez.',
+      });
+      return;
+    }
     if (!response.ok) {
       toast.error('Échec de l’envoi', {
         description: ERROR_MESSAGES[response.error ?? ''] ?? response.message ?? 'Erreur inconnue',
