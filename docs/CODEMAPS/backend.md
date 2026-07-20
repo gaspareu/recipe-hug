@@ -13,10 +13,12 @@ cors.ts (5L)            headers CORS
 thermomix/reference.ts (327L)  référentiel machine TM7 : vitesses, températures,
                                modes, accessoires, barème + normalisation/validation
                                (miroir front : src/lib/thermomix/reference.ts)
-cookidoo/mapper.ts (292L)      recette → payload Cookidoo (annotations TTS + INGREDIENT)
+cookidoo/mapper.ts (381L)      recette → payload Cookidoo (annotations TTS + INGREDIENT)
 cookidoo/auth.ts (186L)        login PKCE/cookie Cookidoo
-cookidoo/client.ts (175L)      endpoints /created-recipes (retry 429/5xx, rollback)
-cookidoo/types.ts (79L)        types payload + miroir du modèle recette
+cookidoo/client.ts (330L)      endpoints /created-recipes (retry 429/5xx, vue appareil)
+cookidoo/run-export.ts (166L)  orchestration create/update → fill → image → contrôle (ops injectées)
+cookidoo/diagnostics.ts (50L)  diagnostic qualité du payload (pur)
+cookidoo/types.ts (87L)        types payload + miroir du modèle recette
 cookidoo/validate.ts (30L)     contrôle du payload avant tout appel réseau
 ```
 
@@ -42,7 +44,7 @@ resolveAIConfig(agentType, userId)
 | `claim-shares` | 115 | Récupération recette partagée |
 | `analyze-recipe` | 109 | Analyse nutritionnelle/tags |
 | `elevenlabs-scribe-token` | 80 | Token STT ElevenLabs |
-| `export-recipe-cookidoo` | 251 | Export recette → Cookidoo (TM7, guided cooking, anti-doublon) |
+| `export-recipe-cookidoo` | 282 | Export recette → Cookidoo **asynchrone** (TM7, guided cooking, anti-doublon, journal `cookidoo_exports`) |
 | `manage-cookidoo-credentials` | 109 | CRUD identifiants Cookidoo chiffrés (AES-GCM) |
 
 ## Pattern Unifié
