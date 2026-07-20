@@ -170,7 +170,7 @@ Deno.test("compte les étapes, les annotations et les ingrédients", () => {
     servings: 4,
     ingredients: [{ name: "farine", quantity: 200, unit: "g" }],
     steps: [
-      { order: 1, text: "Mixer", tm7: { mode: "manual", duration_seconds: 30, speed: 5 } },
+      { order: 1, text: "Mixer", tm7: { mode: "mix", seconds: 30, speed: "5" } },
       { order: 2, text: "Verser" },
     ],
   };
@@ -557,7 +557,8 @@ import type { CookidooRecipePayload } from "./types.ts";
 
 /** Recette créée sur Cookidoo mais ni remplie ni supprimable : nettoyage manuel requis. */
 export class PartialCreateError extends Error {
-  constructor(public readonly cookidooRecipeId: string, public readonly cause: unknown) {
+  // `override` est exigé : `cause` masque `Error.cause` (ES2022).
+  constructor(public readonly cookidooRecipeId: string, public override readonly cause: unknown) {
     super(
       `Recette partiellement créée sur Cookidoo (id ${cookidooRecipeId}) : ` +
         `le remplissage a échoué et la suppression automatique aussi. ` +
@@ -660,7 +661,12 @@ export async function runExport(
     try {
       await sleep(2000);
       unguided = await ops.findUnguidedSteps(ctx, id, expectedGuided);
-      if (unguided.length > 0) warnings.push("steps_not_guided");
+      if (unguided.length > 0) {
+        // Le log liste les index concernés : c'est le point d'entrée du
+        // diagnostic quand une recette arrive mal configurée sur l'appareil.
+        console.error(`[run-export] étapes non guidées sur l'appareil : ${unguided.join(", ")}`);
+        warnings.push("steps_not_guided");
+      }
     } catch (checkErr) {
       // Contrôle best-effort : son échec ne remet pas en cause l'export.
       console.error("[run-export] contrôle guided cooking", checkErr);
