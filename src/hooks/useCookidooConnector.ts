@@ -2,9 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
-// Outil Thermomix supporté par l'export Cookidoo (scope réduit au TM7).
-export type ThermomixTool = 'TM7';
-
 export interface CookidooStatus {
   configured: boolean;
   email_masked?: string;
@@ -18,22 +15,10 @@ export interface CookidooCredentialsInput {
   country?: string;
 }
 
-export interface CookidooExportResult {
-  ok: boolean;
-  cookidoo_recipe_id?: string;
-  url?: string;
-  tools?: ThermomixTool[];
-  error?: string;
-  message?: string;
-  /** Avertissements non bloquants (ex. image absente ou non transférée). */
-  warnings?: string[];
-  /** true si la recette Cookidoo existante a été mise à jour (pas de doublon). */
-  updated?: boolean;
-}
-
 /**
- * Connecteur Cookidoo : gestion des identifiants chiffrés (côté serveur) et
- * export d'une recette vers le compte Cookidoo de l'utilisateur (Thermomix).
+ * Connecteur Cookidoo : gestion des identifiants chiffrés (côté serveur) de
+ * l'utilisateur. L'export d'une recette vit désormais dans `useCookidooExport`
+ * (flux asynchrone).
  */
 export function useCookidooConnector() {
   const { user } = useAuth();
@@ -80,21 +65,5 @@ export function useCookidooConnector() {
     },
   });
 
-  const exportRecipe = useMutation({
-    mutationFn: async (
-      { recipeId, tools }: { recipeId: string; tools?: ThermomixTool[] },
-    ): Promise<CookidooExportResult> => {
-      const response = await supabase.functions.invoke('export-recipe-cookidoo', {
-        body: { recipe_id: recipeId, tools: tools || ['TM7'] },
-      });
-      // L'edge function renvoie un corps JSON même en cas d'échec applicatif
-      // (auth_failed / ip_blocked…). On le remonte tel quel quand il est présent.
-      const data = response.data as CookidooExportResult | null;
-      if (data) return data;
-      if (response.error) throw response.error;
-      return { ok: false, error: 'unknown', message: 'Réponse vide du serveur' };
-    },
-  });
-
-  return { status, saveCredentials, deleteCredentials, exportRecipe };
+  return { status, saveCredentials, deleteCredentials };
 }

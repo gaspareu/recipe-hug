@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { UtensilsCrossed, Loader2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCookidooConnector } from '@/hooks/useCookidooConnector';
+import { useCookidooExport } from '@/hooks/useCookidooExport';
 
 // Messages d'erreur lisibles pour les échecs classifiés par l'edge function.
 const ERROR_MESSAGES: Record<string, string> = {
@@ -21,6 +22,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   rate_limited: 'Trop de requêtes vers Cookidoo. Réessayez dans une minute.',
   decrypt_failed: 'Mot de passe illisible. Reconfigurez vos identifiants Cookidoo.',
   not_configured: 'Identifiants Cookidoo non configurés.',
+  partial_created: 'Une recette vide subsiste sur Cookidoo : supprimez-la depuis votre compte.',
 };
 
 // Avertissements non bloquants renvoyés en cas de succès (l'export a réussi).
@@ -28,6 +30,7 @@ const WARNING_MESSAGES: Record<string, string> = {
   no_image: 'Astuce : ajoutez une image à la recette pour l’afficher sur Cookidoo.',
   image_not_transferred: 'L’image n’a pas pu être transférée cette fois.',
   title_not_updated: 'Le titre n’a pas pu être mis à jour sur Cookidoo (contenu à jour).',
+  steps_not_guided: 'Certaines étapes n’ont pas été reconnues comme guidées par Cookidoo.',
 };
 
 interface ExportToCookidooButtonProps {
@@ -40,8 +43,12 @@ interface ExportToCookidooButtonProps {
 }
 
 export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenChange, showTrigger = true }: ExportToCookidooButtonProps) {
-  const { status, exportRecipe } = useCookidooConnector();
+  const { status } = useCookidooConnector();
+  const { startExport, reset, job, isStarting, timedOut } = useCookidooExport();
   const [internalOpen, setInternalOpen] = useState(false);
+  // Identifiant du job déjà notifié par toast, pour n'en émettre qu'un seul
+  // par export (y compris si l'utilisateur a navigué ailleurs entretemps).
+  const [notifiedId, setNotifiedId] = useState<string | null>(null);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
@@ -51,33 +58,66 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
 
   const configured = status.data?.configured;
 
+  // L'export rend la main immédiatement : seul un refus synchrone (recette non
+  // exportable) est connu ici. L'issue réelle arrive par `job`, traitée dans
+  // l'effet ci-dessous.
   const handleExport = async () => {
+    let response;
     try {
-      const result = await exportRecipe.mutateAsync({ recipeId, tools: ['TM7'] });
-      if (result.ok) {
-        const warnings = (result.warnings ?? [])
-          .map((w) => WARNING_MESSAGES[w])
-          .filter(Boolean);
-        const base = result.url ? 'Disponible dans « Mes recettes créées ».' : undefined;
-        const description = [base, ...warnings].filter(Boolean).join(' ') || undefined;
-        toast.success(result.updated ? 'Recette mise à jour sur Cookidoo' : 'Recette envoyée vers Cookidoo', {
-          description,
-          action: result.url
-            ? { label: 'Ouvrir', onClick: () => window.open(result.url, '_blank') }
-            : undefined,
-        });
-        setOpen(false);
-      } else {
-        toast.error('Échec de l’envoi', {
-          description: ERROR_MESSAGES[result.error ?? ''] ?? result.message ?? 'Erreur inconnue',
-        });
-      }
+      response = await startExport(recipeId);
     } catch (err) {
+      // Erreur de transport (edge function 5xx, coupure réseau) : `startExport`
+      // rejette au lieu de renvoyer `ok:false`. Sans ce filet, la promesse
+      // partirait en rejet non géré et l'utilisateur ne verrait aucun retour.
       toast.error('Échec de l’envoi', {
-        description: err instanceof Error ? err.message : undefined,
+        description: err instanceof Error ? err.message : 'Erreur réseau, réessayez.',
+      });
+      return;
+    }
+    if (!response.ok) {
+      toast.error('Échec de l’envoi', {
+        description: ERROR_MESSAGES[response.error ?? ''] ?? response.message ?? 'Erreur inconnue',
+      });
+      return;
+    }
+    toast.info('Envoi lancé vers Cookidoo…', {
+      description: 'Vous pouvez continuer, le résultat s’affichera ici.',
+    });
+    setOpen(false);
+  };
+
+  // Le toast final doit partir une seule fois par export, y compris si
+  // l'utilisateur a navigué ailleurs entretemps.
+  useEffect(() => {
+    if (!job || job.status === 'pending' || job.id === notifiedId) return;
+    setNotifiedId(job.id);
+
+    if (job.status === 'success') {
+      const warnings = (job.warnings ?? []).map((w) => WARNING_MESSAGES[w]).filter(Boolean);
+      const base = job.cookidoo_url ? 'Disponible dans « Mes recettes créées ».' : undefined;
+      toast.success(job.updated ? 'Recette mise à jour sur Cookidoo' : 'Recette envoyée vers Cookidoo', {
+        description: [base, ...warnings].filter(Boolean).join(' ') || undefined,
+        action: job.cookidoo_url
+          ? { label: 'Ouvrir', onClick: () => window.open(job.cookidoo_url!, '_blank') }
+          : undefined,
+      });
+    } else {
+      toast.error('Échec de l’envoi', {
+        description: ERROR_MESSAGES[job.error_code ?? ''] ?? job.error_message ?? 'Erreur inconnue',
       });
     }
-  };
+    reset();
+  }, [job, notifiedId, reset]);
+
+  // Au-delà du délai d'attente, on ne sait plus rien : le dire franchement
+  // plutôt que laisser un spinner tourner sans fin.
+  useEffect(() => {
+    if (!timedOut) return;
+    toast.warning('Envoi toujours en cours', {
+      description: 'Vérifiez dans quelques instants sur Cookidoo avant de relancer.',
+    });
+    reset();
+  }, [timedOut, reset]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -125,8 +165,8 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
               Optimisée pour votre <span className="font-medium text-foreground">Thermomix TM7</span> :
               étapes guidées, temps, températures et vitesses prêts à l'emploi.
             </p>
-            <Button onClick={handleExport} disabled={exportRecipe.isPending} className="w-full">
-              {exportRecipe.isPending ? (
+            <Button onClick={handleExport} disabled={isStarting} className="w-full">
+              {isStarting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Envoi en cours…
