@@ -1,6 +1,6 @@
 import { assertEquals, assertRejects } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import { PartialCreateError, runExport, type CookidooOps } from "./run-export.ts";
-import type { ClientCtx } from "./client.ts";
+import { CookidooHttpError, type ClientCtx } from "./client.ts";
 import type { CookidooRecipePayload } from "./types.ts";
 
 const ctx: ClientCtx = { cookieHeader: "cookie", lang: "fr" };
@@ -75,6 +75,43 @@ Deno.test("ré-export : réutilise l'identifiant existant sans créer de doublon
 
   assertEquals(out.cookidoo_recipe_id, "old-id");
   assertEquals(out.updated, true);
+  assertEquals(ops.calls.includes("get:old-id"), true);
+  assertEquals(ops.calls.some((c) => c.startsWith("create:")), false);
+});
+
+Deno.test("ré-export d'une recette supprimée côté Cookidoo (404) : recrée", async () => {
+  // La recette mémorisée n'existe plus : la recréer est le bon comportement.
+  const ops = fakeOps({
+    getRecipe: () => Promise.reject(new CookidooHttpError(404, "Not Found")),
+  });
+
+  const out = await runExport(
+    { ctx, payload: payload(), existingId: "ghost-id", supabaseHost: "db.example.com" },
+    ops,
+    noSleep,
+  );
+
+  assertEquals(out.cookidoo_recipe_id, "new-id");
+  assertEquals(out.updated, false);
+  assertEquals(ops.calls.includes("create:Tarte"), true);
+});
+
+Deno.test("ré-export : une erreur non-404 remonte, sans recréer de doublon", async () => {
+  // Sur un doute (429, 5xx, réseau), recréer fabriquerait le doublon que
+  // l'anti-doublon sert justement à éviter.
+  const ops = fakeOps({
+    getRecipe: () => Promise.reject(new CookidooHttpError(429, "Too Many Requests")),
+  });
+
+  await assertRejects(
+    () => runExport(
+      { ctx, payload: payload(), existingId: "old-id", supabaseHost: "db.example.com" },
+      ops,
+      noSleep,
+    ),
+    CookidooHttpError,
+  );
+
   assertEquals(ops.calls.some((c) => c.startsWith("create:")), false);
 });
 

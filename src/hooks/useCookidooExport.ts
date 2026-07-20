@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -45,7 +45,6 @@ export interface StartExportResponse {
  */
 export function useCookidooExport() {
   const [exportId, setExportId] = useState<string | null>(null);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
   const [timedOut, setTimedOut] = useState(false);
 
   const start = useMutation({
@@ -72,33 +71,36 @@ export function useCookidooExport() {
       return (data as CookidooExportJob | null) ?? null;
     },
     enabled: !!exportId && !timedOut,
+    // Simple fonction de cadence : on ré-interroge tant que le statut n'est pas
+    // final. La borne de temps est armée séparément (effet ci-dessous), pour ne
+    // pas mêler une décision de cadence à une mutation d'état.
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      if (status && status !== 'pending') return false;
-      if (startedAt !== null && Date.now() - startedAt > POLL_TIMEOUT_MS) {
-        setTimedOut(true);
-        return false;
-      }
-      return POLL_INTERVAL_MS;
+      return status && status !== 'pending' ? false : POLL_INTERVAL_MS;
     },
   });
+
+  // Borne l'attente : un isolate tué avant la fin laisse la ligne `pending`
+  // définitivement, et interroger sans fin ne produirait qu'un spinner éternel.
+  // Le minuteur est réarmé à chaque nouvel export et nettoyé au démontage.
+  useEffect(() => {
+    if (!exportId) return;
+    const timer = setTimeout(() => setTimedOut(true), POLL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [exportId]);
 
   /** Lance l'export. Renvoie la réponse synchrone : un `ok: false` est définitif. */
   const startExport = async (recipeId: string): Promise<StartExportResponse> => {
     setExportId(null);
     setTimedOut(false);
     const response = await start.mutateAsync(recipeId);
-    if (response.ok && response.export_id) {
-      setStartedAt(Date.now());
-      setExportId(response.export_id);
-    }
+    if (response.ok && response.export_id) setExportId(response.export_id);
     return response;
   };
 
   /** Remet le hook à zéro (fermeture du dialogue, nouvel export). */
   const reset = () => {
     setExportId(null);
-    setStartedAt(null);
     setTimedOut(false);
   };
 

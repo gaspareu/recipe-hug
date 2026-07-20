@@ -51,7 +51,8 @@ export interface ClientCtx {
   retry?: RetryPolicy;
 }
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+/** Pause simple. Exportée : l'edge function s'en sert pour cadencer l'export. */
+export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
  * Vue « complète » d'une recette créée. **Indispensable en lecture** : avec un
