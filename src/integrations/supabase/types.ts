@@ -10,7 +10,32 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -41,6 +66,60 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      cookidoo_exports: {
+        Row: {
+          cookidoo_recipe_id: string | null
+          cookidoo_url: string | null
+          created_at: string
+          diagnostics: Json | null
+          duration_ms: number | null
+          error_code: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          recipe_id: string
+          status: string
+          unguided_steps: number[]
+          updated: boolean
+          user_id: string
+          warnings: string[]
+        }
+        Insert: {
+          cookidoo_recipe_id?: string | null
+          cookidoo_url?: string | null
+          created_at?: string
+          diagnostics?: Json | null
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          recipe_id: string
+          status?: string
+          unguided_steps?: number[]
+          updated?: boolean
+          user_id: string
+          warnings?: string[]
+        }
+        Update: {
+          cookidoo_recipe_id?: string | null
+          cookidoo_url?: string | null
+          created_at?: string
+          diagnostics?: Json | null
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          recipe_id?: string
+          status?: string
+          unguided_steps?: number[]
+          updated?: boolean
+          user_id?: string
+          warnings?: string[]
         }
         Relationships: []
       }
@@ -214,6 +293,8 @@ export type Database = {
         Row: {
           ai_summary: string | null
           calorie_score: number | null
+          cookidoo_exported_at: string | null
+          cookidoo_recipe_id: string | null
           created_at: string | null
           id: string
           ingredients: Json
@@ -232,6 +313,8 @@ export type Database = {
         Insert: {
           ai_summary?: string | null
           calorie_score?: number | null
+          cookidoo_exported_at?: string | null
+          cookidoo_recipe_id?: string | null
           created_at?: string | null
           id?: string
           ingredients?: Json
@@ -250,6 +333,8 @@ export type Database = {
         Update: {
           ai_summary?: string | null
           calorie_score?: number | null
+          cookidoo_exported_at?: string | null
+          cookidoo_recipe_id?: string | null
           created_at?: string | null
           id?: string
           ingredients?: Json
@@ -298,6 +383,36 @@ export type Database = {
           preferred_model?: string | null
           provider?: string
           provider_api_keys?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_cookidoo_credentials: {
+        Row: {
+          country: string
+          created_at: string
+          email: string
+          id: string
+          password_enc: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          country?: string
+          created_at?: string
+          email: string
+          id?: string
+          password_enc: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          country?: string
+          created_at?: string
+          email?: string
+          id?: string
+          password_enc?: string
           updated_at?: string
           user_id?: string
         }
@@ -395,10 +510,38 @@ export type Database = {
         }
         Relationships: []
       }
+      user_cookidoo_credentials_safe: {
+        Row: {
+          country: string | null
+          created_at: string | null
+          email: string | null
+          id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       generate_webhook_token: { Args: { user_uuid: string }; Returns: string }
       get_my_webhook_token: { Args: never; Returns: string }
+      get_user_id_by_phone: { Args: { phone_number: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
@@ -527,6 +670,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
