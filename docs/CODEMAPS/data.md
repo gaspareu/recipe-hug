@@ -9,7 +9,7 @@
 | Table | Clé | Description |
 |-------|-----|-------------|
 | `profiles` | user_id (FK auth.users) | Profil utilisateur, préférences |
-| `recipes` | id uuid | Recettes (titre, ingrédients, steps, image_url) |
+| `recipes` | id uuid | Recettes (titre, ingrédients, steps[+`tm7`], image_url, `cookidoo_recipe_id`) |
 | `recipe_versions` | id, recipe_id | Historique versions recette |
 | `meal_plans` | id, user_id | Plans de repas hebdomadaires |
 | `meal_plan_items` | id, meal_plan_id, recipe_id | Items dans un plan |
@@ -18,6 +18,7 @@
 | `webhook_tokens` | user_id | Tokens webhook par user |
 | `recipe_shares` | id, recipe_id, token | Liens de partage recettes |
 | `user_preferences` | user_id | Préférences culinaires détaillées |
+| `cookidoo_exports` | id, user_id, recipe_id | Journal des exports Thermomix (statut, erreur, `diagnostics` qualité). RLS : lecture propriétaire, **aucune** écriture cliente |
 
 ## Relations Clés
 ```

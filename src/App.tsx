@@ -16,6 +16,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { RouteError } from "@/components/RouteError";
+import { Toaster } from '@/components/ui/sonner';
 
 // Lazy load pages for code-splitting
 const Auth = lazy(() => import("./pages/Auth"));
@@ -105,6 +106,9 @@ const App = () => (
       <AuthProvider>
         <ThemeProvider>
           <RouterProvider router={router} />
+          {/* Sans ce conteneur, tous les appels `toast.*` sont silencieux :
+              l'action réussit mais l'utilisateur n'en voit aucune trace. */}
+          <Toaster />
         </ThemeProvider>
       </AuthProvider>
     </TooltipProvider>

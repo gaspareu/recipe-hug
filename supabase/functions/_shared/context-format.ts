@@ -98,9 +98,17 @@ ${lines.join("\n")}
 export interface ActiveRecipeContext {
   id: string;
   title: string;
-  servings?: number;
-  season?: string;
-  ingredients?: Array<{ quantity?: string | number; unit?: string; name: string; category?: string }>;
+  // Champs optionnels tolérant `null` : ils proviennent de schémas Zod nullable
+  // (activeRecipe côté home-assistant). Les usages ci-dessous gèrent déjà null.
+  servings?: number | null;
+  season?: string | null;
+  ingredients?: Array<{
+    quantity?: string | number | null;
+    unit?: string | null;
+    name: string;
+    category?: string | null;
+    preparation?: string | null;
+  }>;
   steps?: Array<{ order: number; text: string; completed?: boolean }>;
   completedSteps?: number[];
 }
@@ -121,7 +129,8 @@ export function formatRecipeContext(recipe: ActiveRecipeContext | null | undefin
     for (const ing of ingredients) {
       const qty = ing.quantity ?? "";
       const unit = ing.unit ?? "";
-      context += `- ${qty} ${unit} ${ing.name}${ing.category ? ` (${ing.category})` : ""}\n`;
+      const prep = ing.preparation ? `, ${ing.preparation}` : "";
+      context += `- ${qty} ${unit} ${ing.name}${prep}${ing.category ? ` (${ing.category})` : ""}\n`;
     }
   }
 

@@ -9,12 +9,16 @@
  * /created-recipes (reverse-engineerés, non-officiels).
  */
 
+import type { Tm7StepParams } from "../thermomix/reference.ts";
+
 // ── Modèle recipe-hug (miroir de src/types/recipe.ts) ────────────────────────
 export interface Ingredient {
   name: string;
   category?: string;
   quantity: number | null;
   unit: string;
+  /** Préparation (« émincé », « en dés »…) — enrichit le rendu guided cooking. */
+  preparation?: string;
 }
 
 export interface Step {
@@ -22,6 +26,8 @@ export interface Step {
   text: string;
   duration_minutes?: number;
   parallel_with?: number[];
+  /** Paramètres machine TM7 (miroir de src/types/recipe.ts). */
+  tm7?: Tm7StepParams;
 }
 
 export interface Recipe {
@@ -32,7 +38,9 @@ export interface Recipe {
 }
 
 // ── Payload Cookidoo (/created-recipes) ──────────────────────────────────────
-export type ThermomixTool = "TM7" | "TM6" | "TM5" | "TM31";
+// Scope volontairement réduit au TM7 (cf. plan « export qualité expert TM7 ») :
+// l'app n'optimise et n'exporte que pour le Thermomix TM7.
+export type ThermomixTool = "TM7";
 
 export interface CookidooIngredient {
   type: "INGREDIENT";
@@ -40,8 +48,16 @@ export interface CookidooIngredient {
 }
 
 /** Annotation d'étape : c'est ce qui rend une étape « guided cooking » sur le TM7. */
+/**
+ * Annotation d'étape (formes confirmées par inspection réseau sur cookidoo.fr) :
+ *  - `TTS`        → réglages manuels : `{ time, speed, direction?, temperature }`
+ *  - `MODE`       → mode nommé (`name`: "dough", "browning"…) : `{ time, temperature?, power? }`
+ *  - `INGREDIENT` → liaison texte ↔ ingrédient : `{ description: "20 g d'huile" }`
+ */
 export interface Annotation {
-  type: "TTS" | "INGREDIENT";
+  type: "TTS" | "INGREDIENT" | "MODE";
+  /** Nom du mode Cookidoo — uniquement pour `type: "MODE"`. */
+  name?: string;
   data: Record<string, unknown>;
   /** Empan de caractères annoté dans le texte de l'étape. */
   position: { offset: number; length: number };
@@ -55,7 +71,8 @@ export interface CookidooStep {
 
 export interface CookidooRecipePayload {
   name: string;
-  image: null;
+  /** URL publique de l'image du plat (bucket `recipe-images`), ou null. */
+  image: string | null;
   isImageOwnedByUser: boolean;
   tools: ThermomixTool[];
   yield: { value: number; unitText: string };
