@@ -13,7 +13,6 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptValue } from "../_shared/decrypt-keys.ts";
 import { login, countryToLang } from "../_shared/cookidoo/auth.ts";
 import {
-  CookidooHttpError,
   createRecipe,
   deleteRecipe,
   fillRecipe,
@@ -21,6 +20,7 @@ import {
   getRecipe,
   recipeWebUrl,
   renameRecipe,
+  sleep,
   uploadRecipeImage,
   type ClientCtx,
 } from "../_shared/cookidoo/client.ts";
@@ -43,7 +43,6 @@ function fail(error: string, message: string): Response {
   return json({ ok: false, error, message }, 200);
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Classe une erreur réseau/Cookidoo pour orienter le diagnostic côté UI. */
 function classifyError(err: unknown): { error: string; message: string } {
@@ -75,24 +74,6 @@ const realOps: CookidooOps = {
   findUnguidedSteps,
   recipeWebUrl,
 };
-
-/**
- * Détermine si un ré-export doit réutiliser l'identifiant Cookidoo mémorisé.
- *
- * 404 → la recette a été supprimée côté Cookidoo, on la recrée. Toute autre
- * erreur (429, 5xx, réseau) remonte : recréer sur un doute fabriquerait
- * exactement le doublon que ce mécanisme sert à éviter.
- */
-async function resolveExistingId(ctx: ClientCtx, existingId: string | null): Promise<string | null> {
-  if (!existingId) return null;
-  try {
-    await getRecipe(ctx, existingId);
-    return existingId;
-  } catch (lookupErr) {
-    if (lookupErr instanceof CookidooHttpError && lookupErr.status === 404) return null;
-    throw lookupErr;
-  }
-}
 
 // Le runtime prévient avant de recycler l'isolate. Sans cette trace, un export
 // interrompu en plein vol laisse une ligne `pending` sans la moindre indication
@@ -170,6 +151,9 @@ serve(async (req) => {
     }
 
     const lang = countryToLang(creds.country ?? "fr");
+    // N'extraire que le champ utile : la tâche de fond vit plusieurs secondes,
+    // inutile qu'elle retienne toute la ligne d'identifiants (dont le chiffré).
+    const { email } = creds;
     const recipe: Recipe = {
       title: recipeRow.title,
       servings: recipeRow.servings,
@@ -221,40 +205,42 @@ serve(async (req) => {
     const startedAt = Date.now();
     const work = (async () => {
       try {
-        const jar = await login(creds.email, password, lang);
+        const jar = await login(email, password, lang);
         const ctx: ClientCtx = { cookieHeader: jar.headerForUrl("https://cookidoo.fr"), lang };
-        const reuseId = await resolveExistingId(ctx, existingId);
 
         const outcome = await runExport(
-          { ctx, payload, existingId: reuseId, imageUrl, supabaseHost: new URL(SUPABASE_URL).hostname },
+          { ctx, payload, existingId, imageUrl, supabaseHost: new URL(SUPABASE_URL).hostname },
           realOps,
           sleep,
         );
 
-        // Mémorise le mapping pour le prochain export (anti-doublon).
-        const { error: mapErr } = await admin
-          .from("recipes")
-          .update({
+        // Deux écritures indépendantes (tables différentes, aucune dépendance de
+        // données) : les lancer ensemble évite un aller-retour de latence avant
+        // que la ligne passe en `success` — donc avant que le front cesse d'interroger.
+        // supabase-js ne lève pas sur erreur d'écriture : chaque erreur est donc
+        // journalisée explicitement (règle « pas d'échec silencieux »). Sans le
+        // contrôle sur le second update, la ligne resterait bloquée en `pending`.
+        const [{ error: mapErr }, { error: successErr }] = await Promise.all([
+          // Mémorise le mapping pour le prochain export (anti-doublon).
+          admin
+            .from("recipes")
+            .update({
+              cookidoo_recipe_id: outcome.cookidoo_recipe_id,
+              cookidoo_exported_at: new Date().toISOString(),
+            })
+            .eq("id", recipeId),
+          admin.from("cookidoo_exports").update({
+            status: "success",
             cookidoo_recipe_id: outcome.cookidoo_recipe_id,
-            cookidoo_exported_at: new Date().toISOString(),
-          })
-          .eq("id", recipeId);
+            cookidoo_url: outcome.url,
+            updated: outcome.updated,
+            warnings: outcome.warnings,
+            unguided_steps: outcome.unguided_steps,
+            duration_ms: Date.now() - startedAt,
+            finished_at: new Date().toISOString(),
+          }).eq("id", job.id),
+        ]);
         if (mapErr) console.error("[export-recipe-cookidoo] mapping", mapErr.message);
-
-        // supabase-js ne lève pas sur erreur d'écriture : sans ce contrôle, un
-        // échec de cet update laisserait la ligne bloquée en `pending`, et le
-        // front tournerait jusqu'au timeout sans jamais savoir que l'export a
-        // réussi. On journalise donc explicitement (règle « pas d'échec silencieux »).
-        const { error: successErr } = await admin.from("cookidoo_exports").update({
-          status: "success",
-          cookidoo_recipe_id: outcome.cookidoo_recipe_id,
-          cookidoo_url: outcome.url,
-          updated: outcome.updated,
-          warnings: outcome.warnings,
-          unguided_steps: outcome.unguided_steps,
-          duration_ms: Date.now() - startedAt,
-          finished_at: new Date().toISOString(),
-        }).eq("id", job.id);
         if (successErr) {
           console.error("[export-recipe-cookidoo] journal succès", successErr.message);
         }

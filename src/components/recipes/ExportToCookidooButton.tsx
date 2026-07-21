@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { UtensilsCrossed, Loader2, ExternalLink } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -32,6 +32,16 @@ const WARNING_MESSAGES: Record<string, string> = {
   title_not_updated: 'Le titre n’a pas pu être mis à jour sur Cookidoo (contenu à jour).',
   steps_not_guided: 'Certaines étapes n’ont pas été reconnues comme guidées par Cookidoo.',
 };
+
+/** Titre unique pour tous les échecs d'export — un seul endroit à faire évoluer. */
+function showExportError(description: string) {
+  toast.error('Échec de l’envoi', { description });
+}
+
+/** Traduit un code d'échec, avec repli sur le message brut du serveur. */
+function resolveErrorMessage(code?: string | null, message?: string | null): string {
+  return ERROR_MESSAGES[code ?? ''] ?? message ?? 'Erreur inconnue';
+}
 
 interface ExportToCookidooButtonProps {
   recipeId: string;
@@ -69,15 +79,11 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
       // Erreur de transport (edge function 5xx, coupure réseau) : `startExport`
       // rejette au lieu de renvoyer `ok:false`. Sans ce filet, la promesse
       // partirait en rejet non géré et l'utilisateur ne verrait aucun retour.
-      toast.error('Échec de l’envoi', {
-        description: err instanceof Error ? err.message : 'Erreur réseau, réessayez.',
-      });
+      showExportError(err instanceof Error ? err.message : 'Erreur réseau, réessayez.');
       return;
     }
     if (!response.ok) {
-      toast.error('Échec de l’envoi', {
-        description: ERROR_MESSAGES[response.error ?? ''] ?? response.message ?? 'Erreur inconnue',
-      });
+      showExportError(resolveErrorMessage(response.error, response.message));
       return;
     }
     toast.info('Envoi lancé vers Cookidoo…', {
@@ -102,9 +108,7 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
           : undefined,
       });
     } else {
-      toast.error('Échec de l’envoi', {
-        description: ERROR_MESSAGES[job.error_code ?? ''] ?? job.error_message ?? 'Erreur inconnue',
-      });
+      showExportError(resolveErrorMessage(job.error_code, job.error_message));
     }
     reset();
   }, [job, notifiedId, reset]);

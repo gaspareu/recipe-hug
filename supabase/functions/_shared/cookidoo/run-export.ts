@@ -10,7 +10,7 @@
  * Le `login` reste volontairement en dehors : il dépend des identifiants
  * déchiffrés, qui n'ont rien à faire ici.
  */
-import type { ClientCtx } from "./client.ts";
+import { CookidooHttpError, type ClientCtx } from "./client.ts";
 import type { CookidooRecipePayload } from "./types.ts";
 
 /** Recette créée sur Cookidoo mais ni remplie ni supprimable : nettoyage manuel requis. */
@@ -39,7 +39,11 @@ export interface CookidooOps {
 export interface RunExportInput {
   ctx: ClientCtx;
   payload: CookidooRecipePayload;
-  /** Identifiant Cookidoo déjà associé à la recette, ou null. */
+  /**
+   * Identifiant Cookidoo mémorisé pour cette recette, ou null. Sa validité est
+   * vérifiée ici même (cf. `resolveExistingId`) : il peut désigner une recette
+   * supprimée entretemps côté Cookidoo.
+   */
   existingId: string | null;
   imageUrl?: string;
   /** Hôte Supabase, pour la validation anti-SSRF de l'URL d'image. */
@@ -56,13 +60,37 @@ export interface ExportOutcome {
 
 export type Sleep = (ms: number) => Promise<void>;
 
+/**
+ * Détermine si un ré-export peut réutiliser l'identifiant Cookidoo mémorisé.
+ *
+ * 404 → la recette a été supprimée côté Cookidoo, on la recrée. Toute autre
+ * erreur (429, 5xx, réseau) remonte : recréer sur un doute fabriquerait
+ * exactement le doublon que ce mécanisme sert à éviter.
+ */
+async function resolveExistingId(
+  ctx: ClientCtx,
+  existingId: string | null,
+  ops: CookidooOps,
+): Promise<string | null> {
+  if (!existingId) return null;
+  try {
+    await ops.getRecipe(ctx, existingId);
+    return existingId;
+  } catch (lookupErr) {
+    if (lookupErr instanceof CookidooHttpError && lookupErr.status === 404) return null;
+    throw lookupErr;
+  }
+}
+
 export async function runExport(
   input: RunExportInput,
   ops: CookidooOps,
   sleep: Sleep,
 ): Promise<ExportOutcome> {
-  const { ctx, payload, existingId, imageUrl, supabaseHost } = input;
+  const { ctx, payload, imageUrl, supabaseHost } = input;
   const warnings: string[] = [];
+
+  const existingId = await resolveExistingId(ctx, input.existingId, ops);
 
   let id: string;
   if (existingId) {

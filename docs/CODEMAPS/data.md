@@ -18,6 +18,7 @@
 | `webhook_tokens` | user_id | Tokens webhook par user |
 | `recipe_shares` | id, recipe_id, token | Liens de partage recettes |
 | `user_preferences` | user_id | Préférences culinaires détaillées |
+| `cookidoo_exports` | id, user_id, recipe_id | Journal des exports Thermomix (statut, erreur, `diagnostics` qualité). RLS : lecture propriétaire, **aucune** écriture cliente |
 
 ## Relations Clés
 ```
