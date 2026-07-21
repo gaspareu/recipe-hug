@@ -5,6 +5,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAIStreaming } from "../_shared/ai-providers.ts";
 import { formatPreferencesContext, formatFavoritesContext, formatRecipeContext } from "../_shared/context-format.ts";
+import { TM7_MODES, TM7_ACCESSORY_LABELS, buildTm7ReferenceForPrompt } from "../_shared/thermomix/reference.ts";
 
 // Input validation schema
 const ContentPartSchema = z.union([
@@ -32,12 +33,27 @@ const IngredientSchema = z.object({
   quantity: z.union([z.string(), z.number()]).nullable().optional(),
   unit: z.string().nullable().optional(),
   category: z.string().optional(),
+  preparation: z.string().nullable().optional(),
+});
+
+// Paramètres machine TM7 d'une étape réinjectée en contexte (tolérant : on
+// préserve la structure pour ne pas perdre les réglages lors d'une modification).
+const Tm7ParamsSchema = z.object({
+  mode: z.string().optional(),
+  seconds: z.number().nullable().optional(),
+  temperature: z.union([z.number(), z.string()]).nullable().optional(),
+  speed: z.union([z.string(), z.number()]).nullable().optional(),
+  reverse: z.boolean().nullable().optional(),
+  accessory: z.string().nullable().optional(),
+  power: z.string().nullable().optional(),
 });
 
 const StepSchema = z.object({
   order: z.number(),
   text: z.string(),
   completed: z.boolean().optional(),
+  duration_minutes: z.number().nullable().optional(),
+  tm7: Tm7ParamsSchema.nullable().optional(),
 });
 
 const ActiveRecipeSchema = z.object({
@@ -83,7 +99,13 @@ Quand l'utilisateur veut créer une nouvelle recette :
 Appelle save_recipe quand l'utilisateur dit "ok", "parfait", "super", "génial", "c'est bon", "ça me va", "enregistre", etc.
 NE PAS ATTENDRE de confirmation supplémentaire.
 
-Format ingrédients : Catégories parmi "Légumes", "Viandes", "Poissons", "Épices", "Produits laitiers", "Féculents", "Fruits", "Condiments", "Huiles", "Autres". Quantité et unité séparées.
+Format ingrédients : Catégories parmi "Légumes", "Viandes", "Poissons", "Épices", "Produits laitiers", "Féculents", "Fruits", "Condiments", "Huiles", "Autres". Quantité et unité séparées. Ajoute la préparation ("émincé", "en dés") quand c'est pertinent.
+
+Format étapes — TOUTES les recettes sont destinées au Thermomix TM7. Rédige comme un expert Cookidoo :
+- UNE action machine = UNE étape distincte (ne regroupe jamais deux opérations machine dans une même étape).
+- Pour chaque étape réalisée par l'appareil, renseigne l'objet "tm7" (mode, seconds, temperature, speed, reverse, accessory, power) ET rédige le texte au format Cookidoo, ex. "Mixer 8 min/100°C/vitesse 2".
+- Étapes manuelles (éplucher, réserver, dresser) : PAS d'objet "tm7" ; renseigne "duration_minutes" si un temps d'attente s'applique.
+- Respecte STRICTEMENT le RÉFÉRENTIEL THERMOMIX TM7 (fourni plus bas) : n'invente jamais une fonction, une vitesse ou une température absente du TM7. "Varoma" = cuisson vapeur (pas de °C) ; "sens inverse" pour mélanger sans hacher.
 
 ### Skill : Guidage cuisine
 Quand l'utilisateur veut cuisiner une recette (qui est en contexte ou identifiée) :
@@ -128,6 +150,53 @@ Quand l'utilisateur veut planifier ses repas de la semaine :
 1. Ne mentionne JAMAIS les éléments du profil utilisateur (allergies, préférences, équipement) sauf si l'utilisateur te le demande explicitement. Respecte-les silencieusement.
 2. Propose toujours une action après avoir répondu.
 3. N'hésite pas à utiliser tes outils directement sans demander confirmation quand l'intention est claire.`;
+
+// Clés du référentiel TM7 injectées dans les schémas d'outils (source unique).
+const TM7_MODE_KEYS = Object.keys(TM7_MODES);
+const TM7_ACCESSORY_KEYS = Object.keys(TM7_ACCESSORY_LABELS);
+const TM7_REFERENCE_BLOCK = buildTm7ReferenceForPrompt();
+
+// Schéma commun d'une étape, partagé par save_recipe / extract / create.
+const STEP_ITEMS_SCHEMA = {
+  type: "object",
+  properties: {
+    order: { type: "number" },
+    text: {
+      type: "string",
+      description:
+        "Texte de l'étape. Pour une action machine : format Cookidoo, ex. « Mixer 8 min/100°C/vitesse 2 » ou « Cuire 15 min/Varoma/vitesse 1 ».",
+    },
+    duration_minutes: {
+      type: "number",
+      description:
+        "Durée en minutes d'une étape MANUELLE (repos, réfrigération, levée). Omettre pour une action machine (utiliser tm7.seconds).",
+    },
+    tm7: {
+      type: "object",
+      description:
+        "Réglages Thermomix TM7 quand l'étape est réalisée par l'appareil. OMETTRE pour une étape manuelle (éplucher, réserver, dresser).",
+      properties: {
+        mode: { type: "string", enum: TM7_MODE_KEYS, description: "Mode TM7" },
+        seconds: { type: "number", description: "Durée de l'opération, en secondes" },
+        temperature: {
+          type: "number",
+          description: "Température en °C (37-160). Pour la vapeur : mode « steam » (Varoma) sans température.",
+        },
+        speed: { type: "string", description: "Vitesse : « 0.5 » à « 10 », « mijotage » ou « Turbo »" },
+        reverse: { type: "boolean", description: "Sens inverse : mélange sans hacher" },
+        accessory: { type: "string", enum: TM7_ACCESSORY_KEYS, description: "Accessoire utilisé" },
+        power: {
+          type: "string",
+          enum: ["Intense", "Gentle"],
+          description:
+            "Puissance du rissolage (mode « high_temp » uniquement) : « Intense » par défaut, « Gentle » pour un rissolage doux",
+        },
+      },
+      required: ["mode"],
+    },
+  },
+  required: ["order", "text"],
+};
 
 // ===== ALL TOOLS =====
 const TOOLS = [
@@ -225,20 +294,14 @@ const TOOLS = [
                 quantity: { type: "string" },
                 unit: { type: "string" },
                 category: { type: "string" },
+                preparation: { type: "string", description: "Préparation : « émincé », « en dés »… (optionnel)" },
               },
               required: ["name", "quantity", "unit", "category"],
             },
           },
           steps: {
             type: "array",
-            items: {
-              type: "object",
-              properties: {
-                order: { type: "number" },
-                text: { type: "string" },
-              },
-              required: ["order", "text"],
-            },
+            items: STEP_ITEMS_SCHEMA,
           },
         },
         required: ["title", "servings", "ingredients", "steps"],
@@ -264,20 +327,14 @@ const TOOLS = [
                 quantity: { type: "number" },
                 unit: { type: "string" },
                 category: { type: "string" },
+                preparation: { type: "string", description: "Préparation : « émincé », « en dés »… (optionnel)" },
               },
               required: ["name", "quantity", "unit"],
             },
           },
           steps: {
             type: "array",
-            items: {
-              type: "object",
-              properties: {
-                order: { type: "number" },
-                text: { type: "string" },
-              },
-              required: ["order", "text"],
-            },
+            items: STEP_ITEMS_SCHEMA,
           },
         },
         required: ["title", "servings", "ingredients", "steps"],
@@ -303,20 +360,14 @@ const TOOLS = [
                 quantity: { type: "number" },
                 unit: { type: "string" },
                 category: { type: "string" },
+                preparation: { type: "string", description: "Préparation : « émincé », « en dés »… (optionnel)" },
               },
               required: ["name", "quantity", "unit"],
             },
           },
           steps: {
             type: "array",
-            items: {
-              type: "object",
-              properties: {
-                order: { type: "number" },
-                text: { type: "string" },
-              },
-              required: ["order", "text"],
-            },
+            items: STEP_ITEMS_SCHEMA,
           },
           relation_to_original: { type: "string" },
         },
@@ -460,8 +511,8 @@ serve(async (req) => {
     });
     console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
 
-    // Build unified system prompt
-    let systemPrompt = UNIFIED_PROMPT + SUGGESTIONS_INSTRUCTION;
+    // Build unified system prompt (référentiel TM7 injecté pour la génération d'étapes)
+    let systemPrompt = UNIFIED_PROMPT + "\n\n" + TM7_REFERENCE_BLOCK + SUGGESTIONS_INSTRUCTION;
 
     // Fetch and add user preferences
     const { data: prefs } = await supabaseClient

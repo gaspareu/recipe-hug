@@ -54,6 +54,7 @@ App
 | `useAuth.tsx` | 142 | Auth Supabase, session |
 | `useRecipeChat.ts` | 133 | Chat dans contexte recette |
 | `useRecipeVersions.ts` | 133 | Versioning recettes |
+| `useCookidooExport.ts` | 115 | Export Cookidoo async : déclenche puis interroge le journal (2 s, abandon à 2 min) |
 | `useInstallPrompt.ts` | — | PWA beforeinstallprompt event [NEW] |
 | `useNetworkStatus.ts` | — | navigator.onLine + events [NEW] |
 
