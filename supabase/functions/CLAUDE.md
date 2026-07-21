@@ -140,23 +140,102 @@ redirectTo: `${window.location.origin}/auth`  // ✅
 
 ---
 
-## Connecteur Cookidoo (export Thermomix)
+## Connecteur Cookidoo (export Thermomix TM7)
 
 Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes recettes créées »).
+**Scope : TM7 uniquement** (TM6/TM5/TM31 retirés).
 
-- **Source unique** : `supabase/functions/_shared/cookidoo/{auth,client,mapper,types}.ts`. Le CLI
+- **Référentiel TM7** : `_shared/thermomix/reference.ts` — la « base de référence » machine
+  (vitesses 0.5-10 + Turbo/mijotage, températures 37-160 °C, Varoma = **mode** vapeur, modes,
+  accessoires, barème de conversion action → réglage) + normalisation (`normalizeSpeed`,
+  `clampTemperature`). Miroir front strictement synchronisé : `src/lib/thermomix/reference.ts`
+  (garde-fou `reference.sync.test.ts`). Alimente le prompt IA et le mapper, qui applique les
+  contraintes machine (plages, plafond de vitesse en vapeur, durée maximale).
+- **Source unique** : `_shared/cookidoo/{auth,client,mapper,types,validate}.ts`. Le CLI
   `connector/cookidoo/cli.ts` importe **ces mêmes modules** (entrypoint mince, zéro duplication).
 - **Modules** :
-  - `mapper.ts` (pur, testé `mapper_test.ts`) → recipe-hug → payload Cookidoo + annotations TTS/STEAMING.
+  - `mapper.ts` (pur, testé) → recipe-hug → payload Cookidoo. Annotations **TTS** (temps, vitesse,
+    température, Varoma, sens inverse) construites en priorité depuis les champs structurés
+    `step.tm7`, avec **repli regex** sur le texte pour les recettes existantes ; annotations
+    **INGREDIENT** liant les noms d'ingrédients au texte (c'est ce qui rend une étape « guidée »).
+    Types d'annotation confirmés : `TTS` (`{time, speed, direction:"CCW", temperature:{value,unit}}`),
+    `MODE` (modes nommés : `name:"dough"|"browning"|"steaming"`, `{time, temperature?, power?}`) et
+    `INGREDIENT` (`{description: "20 g d'huile"}`). Le sens inverse s'exprime par `direction`,
+    la vitesse mijotage par `speed:"soft"`, la cuisson vapeur par `temperature:{value:"varoma"}`
+    (minuscule, sans `unit` — Cookidoo la traduit en `cooking-mode/Steaming`).
+    ⚠️ `power` (rissolage) pilote l'intention machine : `"Intense"` → `HighTemperature_FullPower`,
+    `"Gentle"` → `HighTemperature_MediumPower`. Vient de `step.tm7.power`, défaut `"Intense"`.
+  - `validate.ts` (pur, testé) → contrôle structurel du payload **avant** tout appel réseau.
   - `auth.ts` → login PKCE/cookie (`_oauth2_proxy` + `v-authenticated`, **pas** de Bearer token).
-  - `client.ts` → endpoints `/created-recipes` (create → attendre ~5 s → patch ; rate limit ~10 req/min).
+  - `client.ts` → endpoints `/created-recipes` (create → attendre ~5 s → patch ; rate limit
+    ~10 req/min). Ré-essais avec backoff sur 429 (respecte `Retry-After`) et 5xx ; le POST de
+    création n'est **jamais** rejoué sur 5xx (réponse ambiguë → risque de doublon). `fetch`/`sleep`
+    injectables via `ClientCtx` → retry testable sans délai réel.
 - **Fonctions** :
   - `manage-cookidoo-credentials` — GET (statut, email masqué) / POST (upsert chiffré AES-GCM) / DELETE.
     Mot de passe chiffré via `AI_KEYS_ENCRYPTION_SECRET`, jamais renvoyé en clair. Stocké dans
     `user_cookidoo_credentials` (vue `_safe` sans `password_enc`).
-  - `export-recipe-cookidoo` — lit la recette (RLS) + déchiffre les creds → login → map → create → patch.
-    **Échecs métier renvoyés en HTTP 200 avec `{ ok:false, error }`** (supabase-js met `data` à null sur non-2xx),
-    erreurs classifiées : `auth_failed` / `ip_blocked` / `rate_limited`.
+  - `export-recipe-cookidoo` — **asynchrone en deux phases** (l'export prend ~5-15 s, il ne doit
+    pas bloquer l'interface) :
+    1. **Phase synchrone** (< 1 s) : auth → lecture recette (RLS) → déchiffrement creds → mapping
+       → **validation**. Un payload invalide répond immédiatement, sans consommer de requête
+       Cookidoo. Sinon la fonction insère une ligne `cookidoo_exports` au statut `pending` et
+       répond aussitôt `{ ok: true, export_id, status: "pending", tools }`.
+    2. **Phase asynchrone** (`EdgeRuntime.waitUntil`) : login → create **ou** update-in-place →
+       patch → image → contrôle du guided cooking. Le résultat complet est écrit dans la ligne
+       de journal (`success` / `failed`). Aucune exception ne peut s'en échapper (double
+       `try/catch`) : elle serait perdue et laisserait la ligne bloquée en `pending`.
+
+    ⚠️ La réponse HTTP ne contient donc **plus** le résultat de l'export (`cookidoo_recipe_id`,
+    `url`, `updated`, `warnings`) : ces champs vivent désormais dans `cookidoo_exports`. Le front
+    (`src/hooks/useCookidooExport.ts`) interroge la ligne toutes les 2 s tant qu'elle est
+    `pending`, s'arrête au statut final et abandonne après 2 min.
+
+    **Journal `cookidoo_exports`** (migration `20260719000000`) : une ligne par export. RLS en
+    **lecture seule pour le propriétaire, aucune policy d'écriture** — seule la fonction écrit,
+    en service role, pour qu'un client ne puisse pas falsifier un journal. La colonne
+    `diagnostics` (jsonb, produite par `_shared/cookidoo/diagnostics.ts`) porte `steps_total`,
+    `steps_with_tm7`, `steps_guided`, `annotations`, `ingredients_count`, `has_image` : c'est
+    l'outil de diagnostic qualité — si `steps_with_tm7` ≪ `steps_total`, le défaut est **en amont**
+    (génération IA), pas dans le connecteur.
+
+    **Orchestration** : `_shared/cookidoo/run-export.ts` (create/update → fill → image → contrôle),
+    avec les opérations réseau **injectées** (`CookidooOps`) pour rendre testables les chemins
+    d'échec — rollback, dégradation des annotations, réutilisation d'identifiant. Le `login` reste
+    volontairement dans `index.ts` : il dépend des identifiants déchiffrés.
+    **Anti-doublon** : `recipes.cookidoo_recipe_id` mémorise la recette Cookidoo associée ; un
+    ré-export la met à jour au lieu d'en recréer une (`updated: true` dans le journal). La validité
+    de cet identifiant est revérifiée avant réutilisation (`resolveExistingId` dans `run-export.ts`) :
+    404 → la recette a été supprimée côté Cookidoo, on la recrée ; toute autre erreur remonte, car
+    recréer sur un doute fabriquerait le doublon que ce mécanisme sert à éviter.
+    **Rollback** : si le remplissage échoue après création, la recette est supprimée ; si la
+    suppression échoue aussi → `partial_created` (id + commande CLI dans le message).
+    **Image** : Cookidoo ré-héberge l'image sur son CDN — flux confirmé par inspection réseau :
+    signature (`POST /created-recipes/{lang}/image/signature`) → upload multipart Cloudinary →
+    `PATCH {image: "<public_id>.<ext>"}` (le champ `image` attend un identifiant Cloudinary, **pas**
+    une URL). `uploadRecipeImage` télécharge les octets depuis le stockage Supabase, dont l'origine
+    est vérifiée (`isAllowedImageUrl`, anti-SSRF). Isolé et best-effort : un échec n'invalide pas
+    l'export (`warnings: ["image_not_transferred"]` / `["no_image"]`).
+    **Deux canaux d'erreur, selon la phase** — ne pas les confondre :
+    - *Phase synchrone* → **HTTP 200 avec `{ ok:false, error }`** (supabase-js met `data` à null sur
+      non-2xx, d'où le 200). Concerne ce qui est détectable sans réseau : `invalid_input`,
+      `invalid_payload`, `not_found`, `not_configured`, `decrypt_failed`.
+    - *Phase asynchrone* → écrit dans `cookidoo_exports.error_code`, jamais dans la réponse HTTP :
+      `auth_failed` / `ip_blocked` / `rate_limited` / `partial_created` / `export_failed`.
+      Le front les lit en interrogeant le journal.
 - **⚠️ Risque IP** : Cookidoo peut bloquer les IP datacenter. Si `ip_blocked`, le CLI local
   (IP résidentielle) reste le plan B — il partage exactement le même code `_shared/cookidoo`.
+- **Contrat de l'API** : provenance de chaque élément (observé / déduit / hypothèse), formats
+  d'annotations et flux image détaillés dans **`docs/COOKIDOO-CONTRAT.md`** — à lire avant
+  toute modification du mapper ou du client.
+- **Contrat validé par sondes d'écriture réelles** (19 juillet 2026) : création, PATCH, image
+  Cloudinary, suppression et **rendu appareil** vérifiés de bout en bout. Voir le journal des
+  sondes dans `docs/COOKIDOO-CONTRAT.md` §10.
+- **Contrôle du guided cooking** : `findUnguidedSteps` relit la **vue appareil**
+  (`GET /created-recipes/{lang}/device/recipes/{id}`) après l'export et signale les étapes que
+  Cookidoo a dégradées en simple texte (`warnings: ["steps_not_guided"]`). C'est le seul moyen de
+  détecter ce mode d'échec : l'API renvoie `200 OK` et stocke l'annotation, qui n'est perdue qu'à
+  la conversion vers l'appareil. Les `GET` du client demandent la vue complète
+  (`application/vnd.vorwerk.customer-recipe.full+json`) — sans elle, les annotations sont invisibles
+  en lecture.
 - **Déploiement** : via CLI Supabase (les imports `../_shared/cookidoo/` sont suivis nativement).

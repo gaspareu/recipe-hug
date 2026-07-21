@@ -14,6 +14,8 @@
 | `ai-config.ts` | `resolveAIConfig`, `getUserAISettings`, `getApiKeyForProvider` | Résolution hiérarchique : Agent Config → Global → Default (Anthropic) |
 | `ai-providers.ts` | `callAINonStreaming`, `callAIStreaming`, `buildToolCallRequest`, `extractToolCallResult`, `buildVisionRequest`, `buildSimpleRequest`, `buildRequestHeaders`, `extractContentFromResponse` | Appels IA unifiés, transforms de stream, helpers tool-calling et vision |
 | `decrypt-keys.ts` | `encryptValue`, `decryptValue`, `decryptProviderKeys`, `maskApiKey` | Chiffrement/déchiffrement AES-GCM des clés API |
+| `thermomix/reference.ts` | `TM7_MODES`, `TM7_CONVERSION_CHEATSHEET`, `normalizeSpeed`, `clampTemperature`, `buildTm7ReferenceForPrompt` | **Référentiel machine TM7** (vitesses, températures, modes, accessoires, barème). Miroir front synchronisé : `src/lib/thermomix/reference.ts` |
+| `cookidoo/{mapper,validate,client,auth,types}.ts` | `mapRecipeToCookidoo`, `validateCookidooPayload`, `createRecipe`, `fillRecipe`, `setRecipeImage`, `login` | Connecteur Cookidoo (export TM7, annotations guided cooking). Détail : `supabase/functions/CLAUDE.md` |
 
 ### Résolution de configuration (`resolveAIConfig`)
 
@@ -51,6 +53,8 @@ Règle : Anthropic ne génère pas d'images → `generate-recipe-image` utilise 
 | 9 | `elevenlabs-scribe-token` | Utilitaire | — | — | Sans IA |
 | 10 | `share-recipe` | Utilitaire | — | — | Sans IA |
 | 11 | `claim-shares` | Utilitaire | — | — | Sans IA |
+| 12 | `manage-cookidoo-credentials` | Utilitaire | — | — | Sans IA (AES-GCM) |
+| 13 | `export-recipe-cookidoo` | Utilitaire | — | — | Sans IA (export TM7) |
 
 ---
 
