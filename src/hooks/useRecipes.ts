@@ -4,6 +4,7 @@ import { toast } from '@/components/ui/sonner';
 import type { Recipe, RecipeFormData, Ingredient, Step } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
 import { triggerRecipeCompletion } from '@/lib/recipe-completion';
+import { generateRecipeImageInBackground } from '@/lib/recipe-image';
 
 // Helper pour parser les données Supabase vers notre type Recipe
 export function parseRecipe(data: Record<string, unknown>): Recipe {
@@ -82,9 +83,17 @@ export function useCreateRecipe() {
       
       const createdRecipe = parseRecipe(data);
       
-      // Trigger image generation in background unless explicitly skipped or image already exists
+      // Trigger image generation in background unless explicitly skipped or image already exists.
+      // onSuccess invalide les queries pour que l'image générée remplace le placeholder
+      // (transition spinner → image propre, comme côté home chat).
       if (!recipe.skipImageGeneration && !recipe.source_image_url) {
-        triggerImageGeneration(createdRecipe.id, createdRecipe.title, createdRecipe.ingredients);
+        generateRecipeImageInBackground({
+          recipeId: createdRecipe.id, title: createdRecipe.title, ingredients: createdRecipe.ingredients,
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['recipe', createdRecipe.id] });
+            queryClient.invalidateQueries({ queryKey: ['recipes'] });
+          },
+        });
       }
 
       // Complétion description/tags en arrière-plan (best-effort, non bloquant)
@@ -102,36 +111,6 @@ export function useCreateRecipe() {
       toast('Impossible de créer la recette');
     },
   });
-}
-
-// Background image generation function (fire and forget)
-async function triggerImageGeneration(recipeId: string, title: string, ingredients: Ingredient[]) {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return;
-    
-    console.log('Triggering background image generation for recipe:', recipeId);
-    
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-recipe-image`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ recipeId, title, ingredients }),
-      }
-    );
-    
-    if (response.ok) {
-      console.log('Image generation triggered successfully');
-    } else {
-      console.warn('Image generation failed:', await response.text());
-    }
-  } catch (error) {
-    console.warn('Image generation error:', error);
-  }
 }
 
 export function useUpdateRecipe() {

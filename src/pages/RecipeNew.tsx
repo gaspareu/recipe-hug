@@ -20,6 +20,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { CollapsibleSection } from '@/components/profile/CollapsibleSection';
 import { fadeInUpVariants, fadeInUpTransition } from '@/lib/motion';
 import { useCreateRecipe } from '@/hooks/useRecipes';
+import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
 
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
@@ -120,6 +121,7 @@ export default function RecipeNew() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erreur inconnue';
       setAnalyzeError(message);
+      toast.error("Échec de l'analyse de la photo", { description: message });
       console.error('Image parsing error:', err);
     } finally {
       setIsAnalyzing(false);

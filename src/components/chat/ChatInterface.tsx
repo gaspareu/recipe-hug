@@ -169,12 +169,19 @@ export function ChatInterface({
     return content;
   }, []);
 
-  // Le contenu brut du dernier message peut contenir uniquement un appel d'outil
-  // (ex: enregistrement de recette) qui disparaît une fois nettoyé : tant que rien
-  // n'est encore affichable, on garde le feedback "Réflexion en cours..." visible.
+  // Feedback "Réflexion en cours..." affiché tant que l'assistant n'a rien de
+  // visible à montrer. Deux cas :
+  //  - dernier message = utilisateur : la requête est partie mais la réponse
+  //    (headers SSE de l'edge function) n'est pas encore arrivée — c'est la
+  //    fenêtre où l'utilisateur doit savoir que sa demande est prise en compte.
+  //  - dernier message = assistant au contenu affichable vide : appel d'outil
+  //    en cours (ex: enregistrement de recette) ou aucun token encore reçu.
   const showThinkingIndicator = useMemo(() => {
+    if (!isStreaming) return false;
     const lastMessage = messages[messages.length - 1];
-    return isStreaming && lastMessage?.role === 'assistant' && getDisplayContent(lastMessage) === '';
+    if (!lastMessage) return false;
+    if (lastMessage.role === 'user') return true;
+    return lastMessage.role === 'assistant' && getDisplayContent(lastMessage) === '';
   }, [messages, isStreaming, getDisplayContent]);
 
   return (

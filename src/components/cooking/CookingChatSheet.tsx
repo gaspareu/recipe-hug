@@ -11,6 +11,7 @@ interface CookingChatSheetProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   pendingRecipe: PendingRecipe | null;
+  isSavingRecipe?: boolean;
   sendMessage: (content: string, imageDataUrl?: string) => void;
   savePendingRecipe: () => void;
   cancelPendingRecipe: () => void;
@@ -22,7 +23,7 @@ const COOKING_SUGGESTIONS = ['Par quoi remplacer ?', "C'est cuit ?", 'Une astuce
 
 export function CookingChatSheet({
   open, onOpenChange, autoListen,
-  messages, isStreaming, pendingRecipe,
+  messages, isStreaming, pendingRecipe, isSavingRecipe,
   sendMessage, savePendingRecipe, cancelPendingRecipe, regenerateResponse, stopGeneration,
 }: CookingChatSheetProps) {
   return (
@@ -43,6 +44,7 @@ export function CookingChatSheet({
             messages={messages}
             isStreaming={isStreaming}
             pendingRecipe={pendingRecipe}
+            isSavingRecipe={isSavingRecipe}
             sendMessage={sendMessage}
             savePendingRecipe={savePendingRecipe}
             cancelPendingRecipe={cancelPendingRecipe}

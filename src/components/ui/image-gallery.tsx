@@ -4,8 +4,9 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { useNavigate } from 'react-router-dom';
-import { Heart } from 'lucide-react';
+import { Heart, Loader2 } from 'lucide-react';
 import { getPlaceholderForRecipe } from '@/lib/recipePlaceholder';
+import { useIsGeneratingImage } from '@/lib/imageGenerationStore';
 
 export interface GalleryItem {
   id: string;
@@ -66,6 +67,9 @@ function AnimatedImage({
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = React.useState(true);
   const [imgSrc, setImgSrc] = React.useState(src);
+  // Génération d'image IA en cours : seulement pertinent tant qu'aucune image
+  // custom n'existe (src retombe alors sur le placeholder = fallback).
+  const isGenerating = useIsGeneratingImage(id) && src === fallback;
   const [showBurst, setShowBurst] = React.useState(false);
   const lastTapRef = React.useRef(0);
   const tapTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -153,6 +157,18 @@ function AnimatedImage({
               {title}
             </p>
           </div>
+
+          {/* Génération d'image IA en arrière-plan */}
+          {isGenerating && (
+            <div
+              className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-background/70"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="px-2 text-center text-[11px] font-medium text-foreground">Image en cours…</span>
+            </div>
+          )}
 
           {/* Cœur central (double-tap) */}
           {showBurst && (
