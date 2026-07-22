@@ -3,6 +3,7 @@ import { Camera, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getPlaceholderForRecipe } from '@/lib/recipePlaceholder';
+import { useIsGeneratingImage } from '@/lib/imageGenerationStore';
 
 interface RecipeImageDisplayProps {
   recipeId: string;
@@ -27,6 +28,10 @@ export function RecipeImageDisplay({
 
   const displayUrl = imageUrl || getPlaceholderForRecipe(recipeId);
   const hasCustomImage = !!imageUrl;
+
+  // Génération d'image IA en arrière-plan : on n'affiche l'indicateur que tant
+  // qu'aucune image n'est encore disponible (le refetch la fera apparaître).
+  const isGenerating = useIsGeneratingImage(recipeId) && !imageUrl;
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,16 +59,18 @@ export function RecipeImageDisplay({
   };
 
   const handleClick = () => {
-    if (isEditable && !isUploading && inputRef.current) {
+    if (isEditable && !isUploading && !isGenerating && inputRef.current) {
       inputRef.current.click();
     }
   };
+
+  const isBusy = isUploading || isGenerating;
 
   return (
     <div
       className={cn(
         'relative w-full aspect-[16/9] rounded-lg overflow-hidden bg-muted group',
-        isEditable && !isUploading && 'cursor-pointer'
+        isEditable && !isBusy && 'cursor-pointer'
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -79,7 +86,7 @@ export function RecipeImageDisplay({
       <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300" />
 
       {/* Title centered on image */}
-      {title && !isHovered && !isUploading && (
+      {title && !isHovered && !isBusy && (
         <div className="absolute inset-0 flex items-center justify-center p-4">
           <h2 className="text-center font-solitreo text-2xl sm:text-3xl leading-tight line-clamp-3 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white font-bold">
             {title}
@@ -88,7 +95,7 @@ export function RecipeImageDisplay({
       )}
 
       {/* Overlay on hover for editable state */}
-      {isEditable && isHovered && !isUploading && (
+      {isEditable && isHovered && !isBusy && (
         <div className="absolute inset-0 bg-background/60 flex items-center justify-center transition-opacity">
           <div className="flex flex-col items-center gap-2 text-foreground">
             <Camera className="h-8 w-8" />
@@ -100,14 +107,14 @@ export function RecipeImageDisplay({
       )}
 
       {/* Badge caméra - toujours visible sur mobile, indicateur d'édition */}
-      {isEditable && !isUploading && (
+      {isEditable && !isBusy && (
         <div className="absolute bottom-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-sm pointer-events-none">
           <Camera className="h-4 w-4 text-foreground/70" />
         </div>
       )}
 
       {/* Remove button for custom images */}
-      {isEditable && hasCustomImage && isHovered && !isUploading && (
+      {isEditable && hasCustomImage && isHovered && !isBusy && (
         <Button
           variant="destructive"
           size="icon"
@@ -118,10 +125,18 @@ export function RecipeImageDisplay({
         </Button>
       )}
 
-      {/* Loading state */}
-      {isUploading && (
-        <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+      {/* Overlay de chargement : upload manuel ou génération d'image IA en fond.
+          Le libellé n'apparaît que pour la génération (l'upload n'a qu'un spinner). */}
+      {isBusy && (
+        <div
+          className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center gap-2 text-foreground"
+          role="status"
+          aria-live="polite"
+        >
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          {isGenerating && !isUploading && (
+            <span className="text-sm font-medium">Image en cours de génération…</span>
+          )}
         </div>
       )}
 

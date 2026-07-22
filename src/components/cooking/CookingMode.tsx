@@ -150,6 +150,7 @@ export function CookingMode({ recipe, onClose, onRecipeUpdate, onRecipeCreate }:
         messages={chat.messages}
         isStreaming={chat.isStreaming}
         pendingRecipe={chat.pendingRecipe}
+        isSavingRecipe={chat.isSavingRecipe}
         sendMessage={chat.sendMessage}
         savePendingRecipe={chat.savePendingRecipe}
         cancelPendingRecipe={chat.cancelPendingRecipe}

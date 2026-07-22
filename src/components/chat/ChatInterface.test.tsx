@@ -386,6 +386,57 @@ describe("ChatInterface — accessibilité", () => {
     });
   });
 
+  describe("Indicateur de réflexion — fenêtre d'attente réseau", () => {
+    it("affiche 'Réflexion en cours' quand isStreaming=true et que le dernier message est celui de l'utilisateur (avant tout token)", () => {
+      const userMessage: ChatMessage = {
+        id: "u1",
+        role: "user",
+        content: "Ma question",
+        timestamp: new Date(),
+      };
+      render(
+        <ChatInterface
+          {...defaultProps}
+          messages={[userMessage]}
+          isStreaming={true}
+        />
+      );
+      expect(screen.getByRole("status", { name: "Réflexion en cours" })).toBeInTheDocument();
+    });
+
+    it("n'affiche pas l'indicateur quand isStreaming=false (dernier message utilisateur)", () => {
+      const userMessage: ChatMessage = {
+        id: "u1",
+        role: "user",
+        content: "Ma question",
+        timestamp: new Date(),
+      };
+      render(
+        <ChatInterface
+          {...defaultProps}
+          messages={[userMessage]}
+          isStreaming={false}
+        />
+      );
+      expect(screen.queryByRole("status", { name: "Réflexion en cours" })).not.toBeInTheDocument();
+    });
+
+    it("masque l'indicateur dès que l'assistant a du contenu affichable", () => {
+      const messages: ChatMessage[] = [
+        { id: "u1", role: "user", content: "Ma question", timestamp: new Date() },
+        { id: "a1", role: "assistant", content: "Voici la réponse", timestamp: new Date() },
+      ];
+      render(
+        <ChatInterface
+          {...defaultProps}
+          messages={messages}
+          isStreaming={true}
+        />
+      );
+      expect(screen.queryByRole("status", { name: "Réflexion en cours" })).not.toBeInTheDocument();
+    });
+  });
+
   describe("Bouton stop génération", () => {
     it("le bouton stop a aria-label='Arrêter la génération' quand isStreaming=true", () => {
       const stopGeneration = vi.fn();

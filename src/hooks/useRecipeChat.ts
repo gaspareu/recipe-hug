@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
 import { useRecipes } from './useRecipes';
 import { useUserPreferences } from './useUserPreferences';
@@ -95,9 +95,11 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
     buildRequest,
   });
 
+  const [isSavingRecipe, setIsSavingRecipe] = useState(false);
   const savePendingRecipe = useCallback(async () => {
     const pending = engine.pendingRecipe;
     if (!pending) return;
+    setIsSavingRecipe(true);
     try {
       if (pending.isUpdate && onRecipeUpdate) await onRecipeUpdate(pending);
       else if (onRecipeCreate) await onRecipeCreate(pending);
@@ -108,6 +110,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
         timestamp: new Date(),
       }]);
     } catch (error) { console.error('Error saving recipe:', error); }
+    finally { setIsSavingRecipe(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
   }, [engine.pendingRecipe, onRecipeUpdate, onRecipeCreate]);
 
@@ -127,6 +130,6 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
     searchResults: engine.searchResults,
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
     regenerateResponse: engine.regenerateResponse, stopGeneration: engine.stopGeneration,
-    savePendingRecipe, cancelPendingRecipe,
+    savePendingRecipe, cancelPendingRecipe, isSavingRecipe,
   };
 }

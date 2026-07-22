@@ -6,9 +6,9 @@ import { useRecipes } from './useRecipes';
 import { useUserPreferences } from './useUserPreferences';
 import { supabase } from '@/integrations/supabase/client';
 import { useChatEngine, ActiveRecipeData, ChatEngineConfig, ToolCallAction } from './useChatEngine';
-import type { Ingredient } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
 import { triggerRecipeCompletion } from '@/lib/recipe-completion';
+import { generateRecipeImageInBackground } from '@/lib/recipe-image';
 import { applyPreferenceOperations } from '@/lib/preference-operations';
 import { buildPendingRecipeFromToolCall, parsePreferenceOperations } from '@/lib/chat-tool-payloads';
 
@@ -16,21 +16,6 @@ import { buildPendingRecipeFromToolCall, parsePreferenceOperations } from '@/lib
 export type { ChatMessage, MessageContent, PendingRecipe, ActiveRecipeData, RecipeCard } from './useChatEngine';
 
 const WELCOME_MESSAGE = "Salut ! Je suis Chef, ton assistant culinaire. 👨‍🍳\n\nJe peux t'aider à :\n- 🔍 **Chercher** une recette dans ton livre\n- ✨ **Créer** une nouvelle recette\n- 👨‍🍳 **Cuisiner** en te guidant étape par étape\n- 🔧 **Modifier** une recette existante\n\nQu'est-ce qui te ferait plaisir ?";
-
-// Background image generation function (fire and forget)
-async function triggerBackgroundImageGeneration(
-  recipeId: string, title: string, ingredients: Ingredient[],
-  accessToken: string, refetchRecipes: () => Promise<unknown>,
-) {
-  try {
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-recipe-image`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ recipeId, title, ingredients }) },
-    );
-    if (response.ok) { await refetchRecipes(); }
-  } catch (error) { console.warn('Image generation error:', error); }
-}
 
 export function useHomeChat() {
   const navigate = useNavigate();
@@ -196,7 +181,10 @@ export function useHomeChat() {
         if (error) throw error;
         recipeId = newRecipe?.id ?? '';
         if (recipeId) {
-          triggerBackgroundImageGeneration(recipeId, pending.title, pending.ingredients, session.access_token, refetchRecipes);
+          generateRecipeImageInBackground({
+            recipeId, title: pending.title, ingredients: pending.ingredients,
+            accessToken: session.access_token, onSuccess: refetchRecipes,
+          });
           triggerRecipeCompletion(
             recipeId,
             {
