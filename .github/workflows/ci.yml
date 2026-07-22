@@ -69,8 +69,13 @@ jobs:
       #   Deno (comme le runtime edge en prod, sans node_modules).
       # --allow-env : les tests decrypt-keys manipulent AI_KEYS_ENCRYPTION_SECRET
       #   via Deno.env pour vérifier le comportement fail-closed.
+      # --min-dep-age=0 : Deno résout aussi les dépendances npm du package.json
+      #   racine (frontend), qu'aucun module `_shared/` n'importe. Sa politique
+      #   d'âge minimal (24 h) faisait donc échouer le job sur chaque PR
+      #   Dependabot rebasée le jour d'une publication npm. Le garde-fou
+      #   supply-chain reste assuré côté frontend par `npm ci` (lockfile).
       - name: Tests Deno (modules partagés)
-        run: deno test --allow-env --node-modules-dir=none supabase/functions/_shared/
+        run: deno test --allow-env --node-modules-dir=none --min-dep-age=0 supabase/functions/_shared/
 
   e2e:
     name: E2E (Playwright)
