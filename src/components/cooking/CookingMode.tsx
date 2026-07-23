@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X, SunMedium, ChevronLeft, ArrowRight, Check, Mic, ChefHat, ChevronUp } from 'lucide-react';
+import { X, ChevronLeft, ArrowRight, Check, Mic, ChefHat, ChevronUp } from 'lucide-react';
 import type { Recipe, Step, Ingredient } from '@/types/recipe';
-import { cn } from '@/lib/utils';
 import { useCookingTimers } from '@/hooks/useCookingTimers';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useRecipeChat } from '@/hooks/useRecipeChat';
@@ -31,9 +30,10 @@ export function CookingMode({ recipe, onClose, onRecipeUpdate, onRecipeCreate }:
   const done = idx >= total;
 
   const { timers, addTimer, toggleTimer, dismissTimer } = useCookingTimers({ onTimerDone: playChime });
-  const { isSupported: wakeLockSupported, isActive: wakeLockActive, request: requestWakeLock, release: releaseWakeLock } = useWakeLock();
+  const { request: requestWakeLock } = useWakeLock();
 
-  // Garde l'écran allumé pendant toute la session de cuisine.
+  // Garde l'écran allumé pendant toute la session de cuisine (non désactivable :
+  // on ne veut pas que l'écran s'éteigne au milieu d'une recette).
   useEffect(() => { void requestWakeLock(); }, [requestWakeLock]);
 
   // Étapes déjà franchies, transmises à Chef pour qu'il connaisse la progression.
@@ -70,21 +70,9 @@ export function CookingMode({ recipe, onClose, onRecipeUpdate, onRecipeCreate }:
           </div>
           <div className="mt-0.5 max-w-[200px] truncate font-solitreo text-lg text-foreground">{recipe.title}</div>
         </div>
-        {wakeLockSupported ? (
-          <button
-            onClick={() => (wakeLockActive ? void releaseWakeLock() : void requestWakeLock())}
-            className={cn(
-              'flex h-[38px] w-[38px] items-center justify-center rounded-full hover:bg-muted',
-              wakeLockActive ? 'text-accent' : 'text-foreground',
-            )}
-            aria-label="Garder l'écran allumé"
-            aria-pressed={wakeLockActive}
-          >
-            <SunMedium className="h-[19px] w-[19px]" aria-hidden="true" />
-          </button>
-        ) : (
-          <span className="h-[38px] w-[38px]" />
-        )}
+        {/* Spacer pour garder le titre centré (le wake lock est actif en
+            permanence, sans contrôle utilisateur). */}
+        <span className="h-[38px] w-[38px]" aria-hidden="true" />
       </header>
 
       {/* Barre de minuteurs actifs */}
