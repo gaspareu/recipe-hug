@@ -129,6 +129,7 @@ export function useHomeChat() {
       case 'extract_modified_recipe':
       case 'create_new_recipe': {
         const pending = buildPendingRecipeFromToolCall(action, activeRecipe);
+        // eslint-disable-next-line react-hooks/immutability -- `engine` n'existe pas encore ici (dépendance circulaire avec useChatEngine, cf. commentaire du dep array) ; son setter est stable.
         if (pending) engine.setPendingRecipe(pending);
         return null;
       }

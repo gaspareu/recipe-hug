@@ -337,14 +337,12 @@ describe("ChatInterface — accessibilité", () => {
   describe("Input file caché", () => {
     it("l'input file a aria-hidden='true'", () => {
       render(<ChatInterface {...defaultProps} />);
-      // eslint-disable-next-line testing-library/no-node-access
       const fileInput = document.querySelector('input[type="file"]');
       expect(fileInput).toHaveAttribute("aria-hidden", "true");
     });
 
     it("l'input file a tabIndex=-1", () => {
       render(<ChatInterface {...defaultProps} />);
-      // eslint-disable-next-line testing-library/no-node-access
       const fileInput = document.querySelector('input[type="file"]');
       expect(fileInput).toHaveAttribute("tabindex", "-1");
     });

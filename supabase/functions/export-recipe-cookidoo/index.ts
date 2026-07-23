@@ -78,7 +78,7 @@ const realOps: CookidooOps = {
 // Le runtime prévient avant de recycler l'isolate. Sans cette trace, un export
 // interrompu en plein vol laisse une ligne `pending` sans la moindre indication
 // de la cause : on saurait qu'il a échoué, pas pourquoi.
-// @ts-ignore — addEventListener("beforeunload") est propre au runtime Supabase.
+// @ts-expect-error — addEventListener("beforeunload") est propre au runtime Supabase.
 globalThis.addEventListener?.("beforeunload", (ev: unknown) => {
   const reason = (ev as { detail?: { reason?: string } })?.detail?.reason ?? "inconnu";
   console.error(`[export-recipe-cookidoo] isolate arrêté (${reason}) — export en cours possiblement interrompu`);
@@ -271,7 +271,7 @@ serve(async (req) => {
       }
     })();
 
-    // @ts-ignore — EdgeRuntime est fourni par le runtime Supabase, absent des types Deno.
+    // @ts-expect-error — EdgeRuntime est fourni par le runtime Supabase, absent des types Deno.
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work);
 
     return json({ ok: true, export_id: job.id, status: "pending", tools });

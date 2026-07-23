@@ -31,8 +31,11 @@ export function useCookingTimers({ onTimerDone }: UseCookingTimersOptions = {}) 
   const [timers, setTimers] = useState<CookingTimer[]>([]);
 
   // onTimerDone lu via ref pour éviter de relancer l'interval à chaque rendu.
+  // Mise à jour après le commit (la ref n'est lue que dans le callback d'interval).
   const onTimerDoneRef = useRef(onTimerDone);
-  onTimerDoneRef.current = onTimerDone;
+  useEffect(() => {
+    onTimerDoneRef.current = onTimerDone;
+  });
 
   useEffect(() => {
     const interval = setInterval(() => {

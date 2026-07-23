@@ -31,8 +31,10 @@ export default function Profile() {
   // rafraîchissement) ; sinon on suit la valeur du profil chargé.
   const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
 
-  // Alimente le champ éditable dès que le profil est chargé.
+  // Alimente le champ éditable dès que le profil (chargé de façon asynchrone) est
+  // disponible. Sync ponctuelle données serveur → état de formulaire éditable.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- seed d'un champ éditable depuis une donnée async, pas un état dérivé calculable au rendu.
     if (profile) setDisplayName(profile.display_name || '');
   }, [profile]);
 

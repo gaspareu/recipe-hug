@@ -118,6 +118,7 @@ function useCategoryState(categories: string[]) {
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initialise l'état d'ouverture des nouvelles catégories tout en préservant les bascules utilisateur existantes.
     setOpenCategories(prev => {
       const initial: Record<string, boolean> = {};
       let hasNew = false;

@@ -96,6 +96,7 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
   // l'utilisateur a navigué ailleurs entretemps.
   useEffect(() => {
     if (!job || job.status === 'pending' || job.id === notifiedId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- réagit à l'arrivée d'un job async terminé (polling) et garde le « notifié une seule fois ».
     setNotifiedId(job.id);
 
     if (job.status === 'success') {
