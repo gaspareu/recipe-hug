@@ -23,7 +23,7 @@ export function RecipeStatusSelect({ status, onStatusChange, disabled }: RecipeS
 
   return (
     <Select value={status} onValueChange={(value) => onStatusChange(value as RecipeStatus)} disabled={disabled}>
-      <SelectTrigger className="w-auto h-auto border-0 p-0 shadow-none focus:ring-0 [&>svg]:hidden">
+      <SelectTrigger className="w-auto h-auto border-0 p-0 shadow-none focus:ring-0 [&>svg]:hidden [&>span]:line-clamp-none">
         <SelectValue>
           <Badge className={`cursor-pointer flex items-center gap-1 ${config.className}`}>
             <Pencil className="h-3 w-3" />

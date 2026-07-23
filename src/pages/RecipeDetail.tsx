@@ -136,14 +136,20 @@ export default function RecipeDetail() {
           </div>
         </motion.div>
 
-        {/* Badges : statut → saison → nutrition → score (rangée scrollable) */}
-        <div className="overflow-x-auto pb-1 -mb-1">
-          <div className="flex items-center gap-2 min-w-max py-1">
-            <RecipeStatusSelect status={recipe.status} onStatusChange={handleStatusChange} disabled={updateRecipe.isPending} />
-            {recipe.season && <><Separator orientation="vertical" className="h-4" /><Badge variant="outline" className="flex items-center gap-1 shrink-0"><Leaf className="h-3 w-3" />{recipe.season}</Badge></>}
-            {recipe.nutrition_tags && recipe.nutrition_tags.length > 0 && <><Separator orientation="vertical" className="h-4" />{recipe.nutrition_tags.map((tag, i) => <Badge key={i} variant="secondary" className="shrink-0">{tag}</Badge>)}</>}
-            {recipe.calorie_score && <><Separator orientation="vertical" className="h-4" /><Badge variant="outline" className="shrink-0">Score: {recipe.calorie_score}/5</Badge></>}
+        {/* Badges : statut → saison → nutrition → score (rangée scrollable).
+            Le fondu à droite signale qu'il reste des tags à faire défiler ; sur
+            fond uni sans débordement il est invisible (dégradé vers la même
+            couleur de fond). */}
+        <div className="relative">
+          <div className="overflow-x-auto pb-1 -mb-1">
+            <div className="flex items-center gap-2 min-w-max py-1 pr-8">
+              <RecipeStatusSelect status={recipe.status} onStatusChange={handleStatusChange} disabled={updateRecipe.isPending} />
+              {recipe.season && <><Separator orientation="vertical" className="h-4" /><Badge variant="outline" className="flex items-center gap-1 shrink-0"><Leaf className="h-3 w-3" />{recipe.season}</Badge></>}
+              {recipe.nutrition_tags && recipe.nutrition_tags.length > 0 && <><Separator orientation="vertical" className="h-4" />{recipe.nutrition_tags.map((tag, i) => <Badge key={i} variant="secondary" className="shrink-0">{tag}</Badge>)}</>}
+              {recipe.calorie_score && <><Separator orientation="vertical" className="h-4" /><Badge variant="outline" className="shrink-0">Score: {recipe.calorie_score}/5</Badge></>}
+            </div>
           </div>
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent" aria-hidden="true" />
         </div>
 
         {recipe.ai_summary && <p className="text-sm text-muted-foreground">{recipe.ai_summary}</p>}
