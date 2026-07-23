@@ -115,8 +115,11 @@ serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "claude-sonnet-4-6",
+              model: "claude-sonnet-5",
               max_tokens: 1,
+              // Sonnet 5 active le thinking adaptatif par défaut : on le désactive
+              // pour ce simple ping de validation (max_tokens: 1).
+              thinking: { type: "disabled" },
               messages: [{ role: "user", content: "Hi" }],
             }),
           });

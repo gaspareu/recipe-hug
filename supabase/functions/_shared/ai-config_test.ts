@@ -74,7 +74,7 @@ Deno.test("resolveAIConfig: aucune config → défaut Anthropic + clé serveur",
   await withEnv(async () => {
     const config = await resolveAIConfig(fakeSupabase(null), "u1", { agentType: "home" });
     assertEquals(config.provider, "anthropic");
-    assertEquals(config.model, "claude-sonnet-4-6");
+    assertEquals(config.model, "claude-sonnet-5");
     assertEquals(config.apiKey, "srv-anthropic");
     assertEquals(config.endpoint, "https://api.anthropic.com/v1/messages");
   });
