@@ -208,10 +208,10 @@ export function ChatInterface({
                   transition={messageTransition}
                   className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
-                  <div className={`max-w-[80%] ${message.role === 'user' ? 'bg-muted rounded-3xl px-4 py-3' : ''}`}>
+                  <div className={`min-w-0 break-words ${message.role === 'user' ? 'max-w-[80%] bg-muted rounded-3xl px-4 py-3' : 'max-w-full sm:max-w-[85%]'}`}>
                     {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
                     {message.role === 'assistant' ? (
-                      <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-p:leading-relaxed prose-li:text-foreground">
+                      <div className="prose prose-sm max-w-none break-words text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-p:leading-relaxed prose-li:text-foreground">
                         <ReactMarkdown>{displayContent}</ReactMarkdown>
                         {showCaret && (
                           <motion.span
