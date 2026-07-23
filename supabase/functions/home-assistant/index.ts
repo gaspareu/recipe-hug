@@ -506,7 +506,7 @@ serve(async (req) => {
 
     const aiConfig = await resolveAIConfig(supabaseClient, userId, {
       agentType: "chat",
-      defaultModel: "claude-sonnet-4-6",
+      defaultModel: "claude-sonnet-5",
       requiredCapabilities: ["tools"],
     });
     console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);

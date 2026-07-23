@@ -58,6 +58,20 @@ export async function callAINonStreaming(config: AIConfig, messages: ChatMessage
   return data.choices?.[0]?.message?.content;
 }
 
+/**
+ * Sonnet 5 & Opus activent le thinking adaptatif par défaut quand le champ
+ * `thinking` est absent (contrairement à Sonnet 4.6 / Haiku 4.5). On le
+ * désactive explicitement pour préserver la latence et le coût actuels, éviter
+ * les troncatures (thinking + réponse partagent `max_tokens`) et toute
+ * interaction avec un `tool_choice` forcé. Les modèles Haiku sont laissés tels
+ * quels (thinking déjà inactif par défaut).
+ */
+function applyAnthropicThinking(body: Record<string, unknown>, model: string): void {
+  if (/^claude-(sonnet-5|opus)/.test(model)) {
+    body.thinking = { type: "disabled" };
+  }
+}
+
 async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage[]): Promise<string> {
   const systemMessage = messages.find((m) => m.role === "system")?.content || "";
   const chatMessages = messages
@@ -65,6 +79,7 @@ async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage
     .map((msg) => ({ role: msg.role, content: msg.content }));
 
   const body: Record<string, unknown> = { model: config.model, max_tokens: 8192, messages: chatMessages };
+  applyAnthropicThinking(body, config.model);
   if (systemMessage) body.system = systemMessage;
 
   const response = await fetch(config.endpoint, {
@@ -195,6 +210,7 @@ async function callAnthropicStreaming(config: AIConfig, messages: ChatMessage[],
   }));
 
   const body: Record<string, unknown> = { model: config.model, max_tokens: 8192, messages: chatMessages };
+  applyAnthropicThinking(body, config.model);
   // Prompt caching : le prompt système (volumineux : persona + préférences +
   // liste des recettes) et les définitions d'outils sont stables au sein d'une
   // conversation. Un cache_control sur le bloc système met en cache tout le
@@ -453,6 +469,7 @@ export function buildToolCallRequest(
       body: {
         model: config.model,
         max_tokens: 4096,
+        ...(/^claude-(sonnet-5|opus)/.test(config.model) ? { thinking: { type: "disabled" } } : {}),
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
         tools: tools.map((t) => ({

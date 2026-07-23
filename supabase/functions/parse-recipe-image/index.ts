@@ -96,7 +96,7 @@ serve(async (req) => {
     const aiConfig = await resolveAIConfig(supabaseClient, userId, {
       agentType: "parse_image",
       // OCR de recettes (photos, manuscrits) : Sonnet pour la qualité vision.
-      defaultModel: "claude-sonnet-4-6",
+      defaultModel: "claude-sonnet-5",
       requiredCapabilities: ["vision"],
     });
     console.log(`Parsing recipe image for user ${userId} using ${aiConfig.provider}/${aiConfig.model}`);

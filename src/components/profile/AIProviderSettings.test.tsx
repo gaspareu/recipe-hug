@@ -33,7 +33,7 @@ vi.mock('@/hooks/useAISettings', async (importActual) => {
       hasApiKeyForProvider: mockState.hasApiKeyForProvider,
       getMaskedKeyForProvider: (p: Exclude<AIProvider, 'anthropic'>) => mockState.maskedKeys?.[p]?.masked ?? null,
       effectiveProvider: mockState.settings?.provider ?? 'anthropic',
-      effectiveModel: mockState.settings?.preferred_model ?? 'claude-sonnet-4-6',
+      effectiveModel: mockState.settings?.preferred_model ?? 'claude-sonnet-5',
     }),
   };
 });
