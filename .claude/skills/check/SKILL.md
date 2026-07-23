@@ -19,8 +19,8 @@ Comparer au baseline plutôt que d'exiger zéro. Au **2026-07-23** :
 | Commande | Baseline (dette préexistante) |
 |----------|-------------------------------|
 | `npm run test:run` | **0 échec** (446 tests) — doit rester à 0 |
-| `npm run typecheck` | **12 erreurs** |
-| `npm run lint` | **22 problèmes** |
+| `npm run typecheck` | **0 erreur** |
+| `npm run lint` | **0 problème** |
 
 > Ces chiffres évoluent avec la dette. Si tu résorbes ou ajoutes de la dette
 > légitimement, **mets à jour ce tableau ET celui du `CLAUDE.md`** dans le même commit.
@@ -60,8 +60,8 @@ Comparer au baseline plutôt que d'exiger zéro. Au **2026-07-23** :
 
 Formuler un verdict explicite, par exemple :
 
-- ✅ **Aucune régression** — tests 0 échec, typecheck 12 = 12, lint 22 = 22.
-- ⚠️ **Régression** — typecheck 14 > 12 (**+2**) : 2 erreurs ajoutées dans
+- ✅ **Aucune régression** — tests 0 échec, typecheck 0 = 0, lint 0 = 0.
+- ⚠️ **Régression** — typecheck 2 > 0 (**+2**) : 2 erreurs ajoutées dans
   `src/…` → à corriger avant de conclure.
 
 Ne jamais affirmer « ça compile / c'est bon » sans avoir lancé les commandes et lu

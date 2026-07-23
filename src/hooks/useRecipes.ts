@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
 import type { Recipe, RecipeFormData, Ingredient, Step } from '@/types/recipe';
-import type { Json } from '@/integrations/supabase/types';
+import type { Json, Database } from '@/integrations/supabase/types';
 import { triggerRecipeCompletion } from '@/lib/recipe-completion';
 import { generateRecipeImageInBackground } from '@/lib/recipe-image';
 
@@ -128,7 +128,7 @@ export function useUpdateRecipe() {
       
       const { data, error } = await supabase
         .from('recipes')
-        .update(updateData)
+        .update(updateData as Database['public']['Tables']['recipes']['Update'])
         .eq('id', id)
         .select()
         .single();

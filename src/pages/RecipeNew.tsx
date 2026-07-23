@@ -161,6 +161,8 @@ export default function RecipeNew() {
         steps,
         nutrition_tags: nutritionTags.length > 0 ? nutritionTags : null,
         season: season || null,
+        calorie_score: null,
+        ai_summary: null,
         source_type: uploadedImageUrl ? 'image' : 'manual',
         source_image_url: uploadedImageUrl ?? null,
         skipImageGeneration: !!uploadedImageUrl,

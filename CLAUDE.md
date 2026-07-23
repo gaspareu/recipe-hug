@@ -36,7 +36,7 @@ deno test supabase/functions/_shared/decrypt-keys_test.ts
 
 ⚠️ **`npm run build` ne vérifie pas les types.** `vite build` (SWC) transpile sans passer par `tsc` : un build vert ne prouve rien sur la validité des types. La vérification est `npm run typecheck` (`tsc -b --noEmit`), et c'est elle qu'il faut lancer avant de conclure qu'un changement compile.
 
-Ce script porte une dette préexistante : comparer le nombre d'erreurs avant/après plutôt que d'exiger zéro. Baseline de non-régression au **2026-07-23** : `typecheck` = **12 erreurs**, `lint` = **22 problèmes**, `test:run` = **0 échec**. Le skill **`/check`** automatise cette comparaison ; tenir ces chiffres à jour dans les deux fichiers (`CLAUDE.md` + `.claude/skills/check/SKILL.md`) quand la dette évolue.
+Ce script porte une dette préexistante : comparer le nombre d'erreurs avant/après plutôt que d'exiger zéro. Baseline de non-régression au **2026-07-23** : `typecheck` = **0 erreur**, `lint` = **0 problème**, `test:run` = **0 échec**. Le skill **`/check`** automatise cette comparaison ; tenir ces chiffres à jour dans les deux fichiers (`CLAUDE.md` + `.claude/skills/check/SKILL.md`) quand la dette évolue.
 
 ## Architecture
 

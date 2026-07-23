@@ -11,7 +11,7 @@ const { mockSupabase, mockNavigate, mockRefetch, mockUpdatePreferencesAsync, moc
     mockSupabase: { from: vi.fn(), auth: { getSession: vi.fn(), getUser: vi.fn() } } as any,
     mockNavigate: vi.fn(),
     mockRefetch: vi.fn(() => Promise.resolve()),
-    mockUpdatePreferencesAsync: vi.fn(() => Promise.resolve()),
+    mockUpdatePreferencesAsync: vi.fn((_prefs?: unknown) => Promise.resolve()),
     mockInvalidate: vi.fn(),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     hookState: { recipes: [] as any[], preferences: null as any },

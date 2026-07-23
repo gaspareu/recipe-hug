@@ -40,7 +40,7 @@ function installSupabase(options: SupabaseMockOptions = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   // triggerImageGeneration (fire-and-forget) appelle fetch — on le neutralise.
-  global.fetch = vi.fn(() =>
+  globalThis.fetch = vi.fn(() =>
     Promise.resolve({ ok: true, text: () => Promise.resolve("") } as Response),
   );
 });
@@ -204,7 +204,7 @@ describe("useCreateRecipe", () => {
     const { result } = renderHook(() => useCreateRecipe(), { wrapper: createQueryWrapper() });
     await result.current.mutateAsync({ ...FORM, skipImageGeneration: true });
     await Promise.resolve();
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it("déclenche la génération d'image quand aucune image source n'existe", async () => {
@@ -215,7 +215,7 @@ describe("useCreateRecipe", () => {
     });
     const { result } = renderHook(() => useCreateRecipe(), { wrapper: createQueryWrapper() });
     await result.current.mutateAsync({ ...FORM });
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
   });
 });
 

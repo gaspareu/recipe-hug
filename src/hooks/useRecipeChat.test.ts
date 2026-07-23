@@ -8,7 +8,7 @@ import type { UserCulinaryPreferences } from "./useUserPreferences";
 const { mockSupabase, mockUpdatePreferencesAsync, hookState } = vi.hoisted(() => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mockSupabase: { from: vi.fn(), auth: { getSession: vi.fn(), getUser: vi.fn() } } as any,
-  mockUpdatePreferencesAsync: vi.fn(() => Promise.resolve()),
+  mockUpdatePreferencesAsync: vi.fn((_prefs?: unknown) => Promise.resolve()),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   hookState: { recipes: [] as any[], preferences: null as any },
 }));
