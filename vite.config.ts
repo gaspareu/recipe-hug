@@ -81,7 +81,7 @@ export default defineConfig(() => ({
     css: true,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     coverage: {
-      provider: "v8",
+      provider: "v8" as const,
       reporter: ["text", "text-summary", "html", "json-summary"],
       reportsDirectory: "./coverage",
       include: ["src/**/*.{ts,tsx}"],

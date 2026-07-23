@@ -75,6 +75,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
     id: "msg-1",
     role: "user",
     content: "Bonjour",
+    timestamp: new Date(),
     ...overrides,
   };
 }
