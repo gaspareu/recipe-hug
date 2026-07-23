@@ -11,6 +11,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **`.mcp.json`** (racine, committé) — déclare le serveur MCP **Supabase** (HTTP). L'intégration **GitHub** est fournie nativement par Claude Code Web (pas de `gh` CLI dans le conteneur).
 - **`.claude/settings.json`** (committé) — hook `SessionStart` exécutant `npm ci` (conteneur prêt dès l'ouverture de session), hooks `PreToolUse`/`PostToolUse` (`.claude/hooks/git-guard.mjs` : blocage commit/push sur `main`, force push, édition des fichiers auto-générés ; rappel de redéploiement des edge functions) + permissions pré-accordées pour npm/git/deno (moins de prompts).
 - **`.claude/skills/git-github/`** (committé) — skill projet : bonnes pratiques git/GitHub (branches, commits conventionnels en français, validation avant push, PR, redéploiement edge functions). À consulter avant tout commit/push/PR.
+- **`.claude/skills/check/`** (committé) — skill `/check` : garde-fou qualité rapide et déterministe (tests + typecheck + lint, comparés au baseline de non-régression). À lancer à volonté pendant le dev et avant tout commit.
+- **`.claude/skills/pre-pr/`** (committé) — skill `/pre-pr` : revue approfondie avant PR (enchaîne `/check`, `/simplify`, l'agent `code-reviewer` et `/security-review`). À lancer une fois quand une feature est prête.
 - **CI GitHub Actions** (`.github/workflows/ci.yml`) — tests + build + `deno test` ; c'est le **garde-fou de non-régression**, car la session web ne revalide pas tout automatiquement. `typecheck` et `lint` y tournent en mode informatif (non-bloquant) tant que la dette de types/lint préexistante n'est pas résorbée.
 - **`.github/dependabot.yml`** (committé) — PR hebdomadaires de mise à jour des dépendances npm et des GitHub Actions.
 
@@ -34,7 +36,7 @@ deno test supabase/functions/_shared/decrypt-keys_test.ts
 
 ⚠️ **`npm run build` ne vérifie pas les types.** `vite build` (SWC) transpile sans passer par `tsc` : un build vert ne prouve rien sur la validité des types. La vérification est `npm run typecheck` (`tsc -b --noEmit`), et c'est elle qu'il faut lancer avant de conclure qu'un changement compile.
 
-Ce script porte une dette préexistante (14 erreurs au 19/07/2026) : comparer le nombre d'erreurs avant/après plutôt que d'exiger zéro.
+Ce script porte une dette préexistante : comparer le nombre d'erreurs avant/après plutôt que d'exiger zéro. Baseline de non-régression au **2026-07-23** : `typecheck` = **12 erreurs**, `lint` = **22 problèmes**, `test:run` = **0 échec**. Le skill **`/check`** automatise cette comparaison ; tenir ces chiffres à jour dans les deux fichiers (`CLAUDE.md` + `.claude/skills/check/SKILL.md`) quand la dette évolue.
 
 ## Architecture
 
