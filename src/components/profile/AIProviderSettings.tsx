@@ -38,10 +38,12 @@ export function AIProviderSettings() {
   // Initialize from saved settings (API keys are NOT populated - they're encrypted in DB)
   useEffect(() => {
     if (settings) {
+      /* eslint-disable react-hooks/set-state-in-effect -- seed du formulaire depuis les réglages chargés (async), pas un état dérivé calculable au rendu. */
       setSelectedProvider(settings.provider);
       // Don't populate providerApiKeys from settings - they contain encrypted blobs
       setSelectedModel(settings.preferred_model || '');
       setAgentConfigs(settings.agent_configs || {});
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [settings]);
 
@@ -49,6 +51,7 @@ export function AIProviderSettings() {
   useEffect(() => {
     const models = PROVIDER_MODELS[selectedProvider];
     if (models.length > 0 && !models.find(m => m.value === selectedModel)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- retombe sur un modèle valide quand le provider change et n'expose pas le modèle courant.
       setSelectedModel(models[0].value);
     }
   }, [selectedProvider, selectedModel]);

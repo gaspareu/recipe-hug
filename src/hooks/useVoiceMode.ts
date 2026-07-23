@@ -33,8 +33,11 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
 
   // Référence à jour de scribe : le cleanup de démontage (deps []) doit
   // déconnecter le scribe courant, pas celui capturé au premier rendu.
+  // Mise à jour après le commit (la ref n'est lue que dans le cleanup).
   const scribeRef = useRef(scribe);
-  scribeRef.current = scribe;
+  useEffect(() => {
+    scribeRef.current = scribe;
+  });
 
   // Play next audio in queue
   const playNextInQueue = useCallback(async () => {
@@ -118,8 +121,13 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
     }
   }, []);
 
+  // Ref « dernière valeur » lue uniquement dans les callbacks audio asynchrones :
+  // mise à jour après le commit pour ne pas muter une ref pendant le rendu.
   const playNextInQueueRef = useRef(playNextInQueue);
-  playNextInQueueRef.current = playNextInQueue;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability -- ref « dernière valeur » d'un callback récursif (la file s'auto-enchaîne) ; mise à jour après le commit.
+    playNextInQueueRef.current = playNextInQueue;
+  });
 
   // Text-to-speech
   const speak = useCallback(async (text: string) => {

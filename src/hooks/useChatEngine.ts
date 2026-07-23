@@ -77,9 +77,7 @@ export function useChatEngine(config: ChatEngineConfig) {
 
   // Use refs for callbacks to avoid stale closures in streaming
   const onToolCallRef = useRef(config.onToolCall);
-  onToolCallRef.current = config.onToolCall;
   const buildRequestRef = useRef(config.buildRequest);
-  buildRequestRef.current = config.buildRequest;
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() },
@@ -92,10 +90,17 @@ export function useChatEngine(config: ChatEngineConfig) {
 
   // Recette active lue pendant le streaming (les callbacks sont mémoïsés sans
   // `activeRecipe` en dépendance, pour éviter les closures périmées) : elle est
-  // injectée en 2e argument d'onToolCall. Synchronisée au rendu, et de façon
+  // injectée en 2e argument d'onToolCall. Synchronisée après le rendu, et de façon
   // synchrone dans executeToolCall (get_recipe_details) pour l'auto-retry.
   const activeRecipeRef = useRef(activeRecipe);
-  activeRecipeRef.current = activeRecipe;
+
+  // Les refs « dernière valeur » sont mises à jour après le commit (elles ne sont
+  // lues que dans des callbacks asynchrones de streaming, jamais pendant le rendu).
+  useEffect(() => {
+    onToolCallRef.current = config.onToolCall;
+    buildRequestRef.current = config.buildRequest;
+    activeRecipeRef.current = activeRecipe;
+  });
 
   // Tracks a recipe loaded via get_recipe_details during a streaming turn,
   // so runAssistantRequest can retry with the enriched context.

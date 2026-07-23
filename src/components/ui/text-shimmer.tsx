@@ -18,13 +18,20 @@ export function TextShimmer({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) {
-  const MotionComponent = motion(Component as keyof JSX.IntrinsicElements);
+  // `Component` est une prop dynamique : le composant motion doit être créé à
+  // partir d'elle. Le useMemo le stabilise (clé sur `Component`), donc pas de
+  // remontage ni de perte d'état — la règle statique ne peut pas le vérifier.
+  const MotionComponent = useMemo(
+    () => motion(Component as keyof JSX.IntrinsicElements),
+    [Component]
+  );
 
   const dynamicSpread = useMemo(() => {
     return children.length * spread;
   }, [children, spread]);
 
   return (
+    // eslint-disable-next-line react-hooks/static-components -- composant motion mémoïsé sur la prop dynamique `Component` (cf. useMemo ci-dessus).
     <MotionComponent
       className={cn(
         'relative inline-block bg-[length:250%_100%,auto] bg-clip-text',

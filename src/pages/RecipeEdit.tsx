@@ -61,8 +61,11 @@ export default function RecipeEdit() {
   const [season, setSeason] = useState<string>('');
   const [isDirty, setIsDirty] = useState(false);
 
+  // Seed du formulaire d'édition depuis la recette chargée (async) : sync ponctuelle
+  // données serveur → état éditable, pas un état dérivé calculable au rendu.
   useEffect(() => {
     if (recipe) {
+      /* eslint-disable react-hooks/set-state-in-effect -- initialisation des champs éditables depuis une donnée async. */
       setTitle(recipe.title);
       setServings(recipe.servings || '');
       setStatus(recipe.status);
@@ -71,6 +74,7 @@ export default function RecipeEdit() {
       setNutritionTags(recipe.nutrition_tags || []);
       setSeason(recipe.season || '');
       setIsDirty(false);
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [recipe]);
 

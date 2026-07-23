@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -18,6 +18,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const claimPendingShares = useCallback(async (accessToken: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('claim-shares', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!error && data?.claimed > 0) {
+        const { toast } = await import('sonner');
+        toast.success(`${data.claimed} recette(s) partagée(s) ajoutée(s) à votre compte !`);
+      }
+    } catch (err) {
+      console.error('Error claiming shares:', err);
+    }
+  }, []);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -70,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initSession();
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [claimPendingShares]);
 
   const signUp = async (email: string, password: string, displayName?: string) => {
     const redirectUrl = `${window.location.origin}/`;
@@ -100,20 +114,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-  };
-
-  const claimPendingShares = async (accessToken: string) => {
-    try {
-      const { data, error } = await supabase.functions.invoke('claim-shares', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!error && data?.claimed > 0) {
-        const { toast } = await import('sonner');
-        toast.success(`${data.claimed} recette(s) partagée(s) ajoutée(s) à votre compte !`);
-      }
-    } catch (err) {
-      console.error('Error claiming shares:', err);
-    }
   };
 
   const resetPassword = async (email: string) => {
