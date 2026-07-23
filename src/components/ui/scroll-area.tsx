@@ -8,7 +8,11 @@ const ScrollArea = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
 >(({ className, children, ...props }, ref) => (
   <ScrollAreaPrimitive.Root ref={ref} className={cn("relative overflow-hidden", className)} {...props}>
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">{children}</ScrollAreaPrimitive.Viewport>
+    {/* [&>div]:!block : Radix enveloppe le contenu dans un div `display:table` (min-width:100%)
+        qui se dimensionne sur le contenu et non le viewport — une ligne large (URL, JSON de
+        streaming) déborde alors et est tronquée par l'overflow-hidden de la racine. Forcer
+        `block` fait résoudre les largeurs sur le viewport. */}
+    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit] [&>div]:!block">{children}</ScrollAreaPrimitive.Viewport>
     <ScrollBar />
     <ScrollAreaPrimitive.Corner />
   </ScrollAreaPrimitive.Root>
