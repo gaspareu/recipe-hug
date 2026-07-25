@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // --- Mocks des dépendances externes du hook ---
@@ -227,6 +227,11 @@ describe('useVoiceMode', () => {
       await result.current.speak('Bonjour **le** monde');
     });
 
+    // speak() n'attend pas la file audio (lecture en tâche de fond) → poll jusqu'à la lecture.
+    await waitFor(() => {
+      expect(audioPlay).toHaveBeenCalledTimes(1);
+    });
+
     const ttsCall = findTtsCall();
     expect(ttsCall).toBeTruthy();
 
@@ -234,7 +239,6 @@ describe('useVoiceMode', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer token-123');
     // Le markdown doit être retiré avant l'envoi à ElevenLabs.
     expect(JSON.parse(init.body as string).text).toBe('Bonjour le monde');
-    expect(audioPlay).toHaveBeenCalledTimes(1);
     expect(result.current.isSpeaking).toBe(true);
   });
 
@@ -256,11 +260,13 @@ describe('useVoiceMode', () => {
 
     await act(async () => {
       await result.current.speak('Bonjour');
-      // La file se vide via setTimeout(0) dans le catch → laisse tourner le microtask.
-      await new Promise((r) => setTimeout(r, 0));
     });
 
-    expect(result.current.isSpeaking).toBe(false);
+    // Le reset de isSpeaking passe par un setTimeout(0) dans le catch : poll
+    // jusqu'à ce que la file s'auto-vide, plutôt qu'une attente fixe (flaky en CI).
+    await waitFor(() => {
+      expect(result.current.isSpeaking).toBe(false);
+    });
   });
 
   it('désactiver le mode vocal coupe la lecture et l\'écoute', async () => {
