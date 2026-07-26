@@ -82,7 +82,7 @@ export default function Home() {
           isSavingRecipe={isSavingRecipe}
           sendMessage={sendMessage}
           onCreateRecipe={createProposedRecipe}
-          onStartCooking={(recipeId) => startCooking(recipeId)}
+          onStartCooking={startCooking}
           regenerateResponse={regenerateResponse}
           stopGeneration={stopGeneration}
           suggestions={defaultSuggestions}
