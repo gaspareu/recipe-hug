@@ -111,6 +111,10 @@ export function useChatEngine(config: ChatEngineConfig) {
     [],
   );
 
+  const clearProposedPending = useCallback((messageId: string) => {
+    proposedPendingRef.current.delete(messageId);
+  }, []);
+
   const updateMessageCard = useCallback((messageId: string, patch: Partial<RecipeCard>) => {
     setMessages(prev => prev.map(m =>
       m.id === messageId && m.recipeCard ? { ...m, recipeCard: { ...m.recipeCard, ...patch } } : m,
@@ -445,12 +449,13 @@ export function useChatEngine(config: ChatEngineConfig) {
     setActiveRecipe(initialActiveRecipe);
     setPendingRecipe(null);
     setSearchResults([]);
+    proposedPendingRef.current.clear();
   }, [welcomeMessage, initialActiveRecipe]);
 
   return {
     messages, isStreaming, activeRecipe, pendingRecipe, searchResults,
     setActiveRecipe, setPendingRecipe, setSearchResults, setMessages,
     sendMessage, resetChat, regenerateResponse, stopGeneration,
-    getProposedPending, updateMessageCard,
+    getProposedPending, clearProposedPending, updateMessageCard,
   };
 }

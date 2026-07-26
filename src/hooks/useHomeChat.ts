@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -174,6 +174,9 @@ export function useHomeChat() {
 
   // Save pending recipe
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
+  // Ref synchrone pour la garde anti double-clic (isSavingRecipe est asynchrone :
+  // le state React n'est pas encore mis à jour au deuxième appel synchrone).
+  const isSavingRef = useRef(false);
   const savePendingRecipe = useCallback(async () => {
     const pending = engine.pendingRecipe;
     if (!pending) return;
@@ -264,8 +267,10 @@ export function useHomeChat() {
     messageId: string,
     override: { servings: number; ingredients: Ingredient[] },
   ) => {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     const pending = engine.getProposedPending(messageId);
-    if (!pending) return;
+    if (!pending) { isSavingRef.current = false; return; }
     setIsSavingRecipe(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -273,6 +278,9 @@ export function useHomeChat() {
       const toSave = { ...pending, servings: override.servings, ingredients: override.ingredients };
 
       let recipeId = toSave.originalRecipeId ?? '';
+      // Limitation connue (héritée de savePendingRecipe) : un update qui ne
+      // touche aucune ligne (id inexistant, RLS) ne renvoie pas d'erreur —
+      // la carte passerait en saved sans écriture réelle.
       if (toSave.isUpdate && toSave.originalRecipeId) {
         const { error } = await supabase.from('recipes').update({
           title: toSave.title, servings: toSave.servings,
@@ -308,6 +316,7 @@ export function useHomeChat() {
         status: 'saved', id: recipeId,
         servings: toSave.servings, ingredients: toSave.ingredients,
       });
+      engine.clearProposedPending(messageId);
     } catch (error) {
       console.error('Error saving recipe:', error);
       engine.setMessages(prev => [...prev, {
@@ -316,10 +325,11 @@ export function useHomeChat() {
         timestamp: new Date(),
       }]);
     } finally {
+      isSavingRef.current = false;
       setIsSavingRecipe(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.*` sont stables (même motif que savePendingRecipe)
-  }, [refetchRecipes, queryClient]);
+  }, [isSavingRecipe, refetchRecipes, queryClient]);
 
   const startCooking = useCallback((recipeId: string) => setCookingRecipeId(recipeId), []);
   const stopCooking = useCallback(() => setCookingRecipeId(null), []);

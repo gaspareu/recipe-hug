@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { vi, type Mock } from "vitest";
-import { createSupabaseMock, type SupabaseMockOptions } from "@/test/supabase-mock";
+import { createSupabaseMock, createQueryBuilder, type SupabaseMockOptions } from "@/test/supabase-mock";
 import { sseResponse, toolCallEvent, contentEvent } from "@/test/sse";
 import type { Recipe } from "@/types/recipe";
 import type { UserCulinaryPreferences } from "./useUserPreferences";
@@ -206,6 +206,21 @@ describe("propose_recipe — carte attachée au message", () => {
       isUpdate: true,
     });
     expect(result.current.pendingRecipe).toBeNull();
+
+    // Vérifie la chaîne complète de persistance : UPDATE sur la recette d'origine.
+    const msgId = lastMessage(result.current.messages).id;
+    await act(() => result.current.createProposedRecipe(msgId, {
+      servings: 6,
+      ingredients: [{ name: "Avocat", quantity: 3, unit: "" }],
+    }));
+    const [recipesBuilder] = buildersFor("recipes");
+    expect(recipesBuilder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Tarte Tatin", servings: 6 }),
+    );
+    expect(recipesBuilder.eq).toHaveBeenCalledWith("id", "r1");
+    await waitFor(() => {
+      expect(lastMessage(result.current.messages).recipeCard).toMatchObject({ status: "saved", id: "r1" });
+    });
   });
 
   it("search_recipes attache des cartes saved construites depuis useRecipes", async () => {
@@ -288,6 +303,55 @@ describe("useHomeChat — création de recette", () => {
       const urls = fetchMock.mock.calls.map((c) => String(c[0]));
       expect(urls.some((u) => u.includes("generate-recipe-image"))).toBe(true);
     });
+  });
+
+  it("double-clic : deux appels rapides à createProposedRecipe ne font qu'une insertion", async () => {
+    // La garde isSavingRecipe (state React) est complétée par un ref isSavingRef
+    // pour bloquer le second appel synchrone avant même le premier setState.
+    let resolveInsert!: () => void;
+    const insertPromise = new Promise<void>((res) => { resolveInsert = res; });
+
+    installSupabase({
+      resultsByTable: {
+        recipes: {
+          data: { id: "new-1" },
+          error: null,
+        },
+      },
+    });
+
+    // Remplace le mock single() pour le builder recipes par une promesse lente.
+    const originalFrom = mockSupabase.from as Mock;
+    originalFrom.mockImplementationOnce((table: string) => {
+      if (table === "recipes") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const builder: any = {};
+        const CHAIN_METHODS = ["select", "insert", "update", "delete", "eq", "neq", "order", "limit"] as const;
+        for (const m of CHAIN_METHODS) builder[m] = vi.fn(() => builder);
+        builder.single = vi.fn(() => insertPromise.then(() => ({ data: { id: "new-1" }, error: null })));
+        builder.then = (onfulfilled?: (v: unknown) => unknown) =>
+          insertPromise.then(() => onfulfilled?.({ data: null, error: null }));
+        return builder;
+      }
+      return createQueryBuilder({ data: null, error: null });
+    });
+
+    const { result } = renderHook(() => useHomeChat());
+    await sendToolCall(result, "save_recipe", PENDING_RECIPE);
+    const msgId = lastMessage(result.current.messages).id;
+
+    // Deux appels sans await entre eux — seul le premier doit passer.
+    const call1 = result.current.createProposedRecipe(msgId, { servings: 6, ingredients: PENDING_RECIPE.ingredients });
+    const call2 = result.current.createProposedRecipe(msgId, { servings: 6, ingredients: PENDING_RECIPE.ingredients });
+
+    resolveInsert();
+    await act(() => Promise.all([call1, call2]));
+
+    const allBuilders = buildersFor("recipes");
+    const insertCalls = allBuilders.flatMap((b) =>
+      (b.insert as Mock).mock.calls,
+    );
+    expect(insertCalls).toHaveLength(1);
   });
 });
 
