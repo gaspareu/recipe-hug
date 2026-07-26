@@ -216,7 +216,7 @@ export function useHomeChat() {
           ? `✅ J'ai mis à jour ta recette "${pending.title}" !`
           : `✅ J'ai enregistré ta nouvelle recette "${pending.title}" ! Une image est en cours de génération.`,
         timestamp: new Date(),
-        recipeCard: recipeId ? { id: recipeId, title: pending.title, servings: pending.servings, isUpdate: !!pending.isUpdate } : undefined,
+        recipeCard: recipeId ? { id: recipeId, status: 'saved' as const, title: pending.title, servings: pending.servings, ingredients: pending.ingredients, stepsCount: pending.steps.length, isUpdate: !!pending.isUpdate } : undefined,
       }]);
     } catch (error) {
       console.error('Error saving recipe:', error);

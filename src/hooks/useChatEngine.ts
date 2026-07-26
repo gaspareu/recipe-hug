@@ -3,10 +3,19 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Ingredient, Step } from '@/types/recipe';
 
+export type RecipeCardStatus = 'proposed' | 'saved';
+
 export interface RecipeCard {
-  id: string;
+  /** Présent uniquement en état 'saved' (recette en DB). */
+  id?: string;
+  status: RecipeCardStatus;
   title: string;
   servings: number;
+  ingredients: Ingredient[];
+  stepsCount: number;
+  intro?: string[];
+  introClosing?: string;
+  tip?: string;
   isUpdate: boolean;
 }
 
@@ -18,6 +27,8 @@ export interface ChatMessage {
   timestamp: Date;
   /** Carte de recette affichée après création/mise à jour, avec lien vers la fiche */
   recipeCard?: RecipeCard;
+  /** Cartes des résultats de recherche (branché en Task 4) */
+  recipeCards?: RecipeCard[];
 }
 
 export type MessageContent =
@@ -41,6 +52,9 @@ export interface PendingRecipe {
   servings: number;
   ingredients: Ingredient[];
   steps: Step[];
+  intro?: string[];
+  introClosing?: string;
+  tip?: string;
   isUpdate?: boolean;
   originalRecipeId?: string;
   relationToOriginal?: string;

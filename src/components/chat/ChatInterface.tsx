@@ -249,39 +249,44 @@ export function ChatInterface({
                         )}
                       </div>
                     )}
-                    {message.recipeCard && (
-                      <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-border/50 bg-card p-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                            <ChefHat className="h-5 w-5" />
+                    {message.recipeCard && (() => {
+                      const cardId = message.recipeCard?.id;
+                      return (
+                        <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-border/50 bg-card p-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                              <ChefHat className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">{message.recipeCard.title}</p>
+                              <p className="text-xs text-muted-foreground">{message.recipeCard.servings} portions</p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{message.recipeCard.title}</p>
-                            <p className="text-xs text-muted-foreground">{message.recipeCard.servings} portions</p>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {onStartCooking && cardId && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="gap-1.5"
+                                onClick={() => onStartCooking(cardId)}
+                              >
+                                <ChefHat className="h-4 w-4" aria-hidden="true" />
+                                Cuisiner
+                              </Button>
+                            )}
+                            {cardId && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => navigate(`/recipes/${cardId}`)}
+                              >
+                                Voir
+                              </Button>
+                            )}
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          {onStartCooking && (
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="gap-1.5"
-                              onClick={() => message.recipeCard && onStartCooking(message.recipeCard.id)}
-                            >
-                              <ChefHat className="h-4 w-4" aria-hidden="true" />
-                              Cuisiner
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => navigate(`/recipes/${message.recipeCard?.id}`)}
-                          >
-                            Voir
-                          </Button>
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                   {message.role === 'user' && message.content && message.content !== '📷 Image envoyée' && (
                     <Button
