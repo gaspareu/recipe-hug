@@ -230,6 +230,9 @@ export function useHomeChat() {
         servings: toSave.servings, ingredients: toSave.ingredients,
       });
       engine.clearProposedPending(messageId);
+      // Parité avec l'ancien savePendingRecipe : la recette active sort du
+      // contexte une fois enregistrée (sinon les tours suivants la traînent).
+      engine.setActiveRecipe(null);
     } catch (error) {
       console.error('Error saving recipe:', error);
       engine.setMessages(prev => [...prev, {
