@@ -92,12 +92,8 @@ const UNIFIED_PROMPT = `Tu es Chef, l'assistant culinaire de cette application. 
 ### Skill : Création de recette
 Quand l'utilisateur veut créer une nouvelle recette :
 1. DÉCOUVERTE (1-2 échanges max) : Pose UNE question à la fois pour comprendre l'envie
-2. PROPOSITION : Propose une recette avec titre, ingrédients principaux et grandes lignes
-3. AFFINAGE : Ajuste selon les retours
-4. VALIDATION : Dès que l'utilisateur approuve → appelle save_recipe IMMÉDIATEMENT
-
-Appelle save_recipe quand l'utilisateur dit "ok", "parfait", "super", "génial", "c'est bon", "ça me va", "enregistre", etc.
-NE PAS ATTENDRE de confirmation supplémentaire.
+2. AFFINAGE : Ajuste selon les retours
+3. PROPOSITION : appelle `propose_recipe` avec la recette structurée (intro à 2-3 puces, phrase de clôture, astuce de chef, quantités numériques). L'utilisateur crée la recette via le bouton de la carte — n'appelle PAS save_recipe toi-même pour une création.
 
 Format ingrédients : Catégories parmi "Légumes", "Viandes", "Poissons", "Épices", "Produits laitiers", "Féculents", "Fruits", "Condiments", "Huiles", "Autres". Quantité et unité séparées. Ajoute la préparation ("émincé", "en dés") quand c'est pertinent.
 
@@ -278,8 +274,55 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "propose_recipe",
+      description: "Présente une recette à l'utilisateur sous forme de carte interactive. L'utilisateur l'enregistre lui-même via le bouton de la carte — n'appelle PAS save_recipe toi-même pour une création. Pour la mise à jour d'une recette existante, utilise extract_modified_recipe/save_recipe comme avant.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Titre de la recette" },
+          servings: { type: "number", description: "Nombre de portions" },
+          ingredients: {
+            type: "array",
+            description: "Liste des ingrédients",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Nom de l'ingrédient" },
+                quantity: { type: "number", description: "Quantité (nombre — pas une chaîne)" },
+                unit: { type: "string", description: "Unité (g, ml, pièce…)" },
+                category: { type: "string", description: "Catégorie parmi : Légumes, Viandes, Poissons, Épices, Produits laitiers, Féculents, Fruits, Condiments, Huiles, Autres" },
+                preparation: { type: "string", description: "Préparation : « émincé », « en dés »… (optionnel)" },
+              },
+              required: ["name", "quantity", "unit", "category"],
+            },
+          },
+          steps: {
+            type: "array",
+            items: STEP_ITEMS_SCHEMA,
+          },
+          intro: {
+            type: "array",
+            items: { type: "string" },
+            description: "2-3 puces courtes présentant les points clés de la recette (ingrédients phares, technique)",
+          },
+          intro_closing: {
+            type: "string",
+            description: "Phrase de clôture de l'intro (ex. conseil d'assemblage)",
+          },
+          tip: {
+            type: "string",
+            description: "Une astuce de chef pour réussir la recette",
+          },
+        },
+        required: ["title", "servings", "ingredients", "steps"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "save_recipe",
-      description: "Enregistre une nouvelle recette. APPELER IMMÉDIATEMENT quand l'utilisateur valide.",
+      description: "Enregistre une nouvelle recette dans le contexte d'une mise à jour ou d'une création initiée par un outil de modification. Ne pas appeler pour une création depuis le chat — utiliser propose_recipe à la place.",
       parameters: {
         type: "object",
         properties: {
