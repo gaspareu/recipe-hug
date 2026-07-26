@@ -45,4 +45,14 @@ describe('RecipeChatCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /Créer la recette/i }));
     expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ servings: 3 }));
   });
+
+  it('borne basse : le bouton moins est désactivé à 1 portion', () => {
+    render(<RecipeChatCard card={{ ...proposed, servings: 1 }} onCreate={vi.fn()} onStartCooking={vi.fn()} onOpenDetail={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /diminuer les portions/i })).toBeDisabled();
+  });
+
+  it('borne haute : le bouton plus est désactivé à 12 portions', () => {
+    render(<RecipeChatCard card={{ ...proposed, servings: 12 }} onCreate={vi.fn()} onStartCooking={vi.fn()} onOpenDetail={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /augmenter les portions/i })).toBeDisabled();
+  });
 });

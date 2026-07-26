@@ -25,7 +25,7 @@ function formatQuantity(quantity: number, unit: string): string {
   const parts: string[] = [];
   if (quantity > 0) parts.push(String(quantity));
   if (unit.trim()) parts.push(unit.trim());
-  return parts.join(' '); // espace insécable
+  return parts.join(' ');
 }
 
 export function RecipeChatCard({
@@ -35,6 +35,11 @@ export function RecipeChatCard({
   onOpenDetail,
   className,
 }: RecipeChatCardProps) {
+  // Initialisé au montage uniquement (piège useState volontairement assumé) :
+  // lors de la transition proposed → saved, le parent patche card.servings avec
+  // la valeur que l'utilisateur vient de choisir ici — état local et prop
+  // coïncident donc. Si un même message devait un jour porter une AUTRE recette,
+  // le parent devra keyer le composant pour forcer un remontage.
   const [portions, setPortions] = useState(card.servings);
 
   const scaled = useMemo(
