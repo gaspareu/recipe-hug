@@ -10,6 +10,7 @@ import { TextShimmer } from '@/components/ui/text-shimmer';
 import { toast } from '@/components/ui/sonner';
 import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
+import { shouldSpeakMessage } from './shouldSpeakMessage';
 import { messageVariants, messageTransition } from '@/lib/motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -101,9 +102,8 @@ export function ChatInterface({
 
   // Auto-speak new assistant messages
   useEffect(() => {
-    if (!voiceEnabled) return;
     const last = messages[messages.length - 1];
-    if (last && last.role === 'assistant' && last.content && !isStreaming && last.content !== lastMessageRef.current) {
+    if (shouldSpeakMessage(last, { voiceEnabled, isStreaming, lastSpokenContent: lastMessageRef.current })) {
       lastMessageRef.current = last.content;
       speak(last.content);
     }
