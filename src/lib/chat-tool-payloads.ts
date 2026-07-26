@@ -92,9 +92,15 @@ export function parseRecipePayload(data: unknown): PendingRecipe | null {
     introClosing: rest.introClosing ?? intro_closing,
     ingredients: rest.ingredients.map(ing => ({
       ...ing,
-      quantity: typeof ing.quantity === 'string' ? (parseFloat(ing.quantity) || 0) : (ing.quantity ?? 0),
+      // Coercition : virgule décimale française normalisée ('1,5' → 1.5) ; toute
+      // valeur non numérique ('une pincée', '') devient 0 — convention du repo :
+      // 0 = quantité non scalable (pincée, qs), l'info reste dans name/unit.
+      quantity: typeof ing.quantity === 'string'
+        ? (parseFloat(ing.quantity.replace(',', '.')) || 0)
+        : (ing.quantity ?? 0),
     })),
   } as unknown as PendingRecipe;
+  // Cast : le schéma zod reste plus large (servings nullable) que PendingRecipe ; désalignement historique, assumé.
 }
 
 /**

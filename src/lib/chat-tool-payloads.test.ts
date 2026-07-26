@@ -240,6 +240,26 @@ describe('buildPendingRecipeFromToolCall — propose_recipe', () => {
     expect(out!.ingredients[0].quantity).toBe(1.5);
   });
 
+  it('normalise la virgule décimale française et zérise les valeurs texte', () => {
+    const out = buildPendingRecipeFromToolCall(
+      {
+        type: 'propose_recipe',
+        data: {
+          ...data,
+          ingredients: [
+            { name: 'Lait', quantity: '1,5', unit: 'l' },
+            { name: 'Sel', quantity: 'une pincée', unit: '' },
+            { name: 'Poivre', quantity: '', unit: '' },
+          ],
+        },
+      },
+      null,
+    );
+    expect(out!.ingredients[0].quantity).toBe(1.5);
+    expect(out!.ingredients[1].quantity).toBe(0); // 0 = non scalable, volontaire
+    expect(out!.ingredients[2].quantity).toBe(0);
+  });
+
   it('tolère l\'absence des champs riches (rétrocompat save_recipe)', () => {
     const out = buildPendingRecipeFromToolCall({ type: 'save_recipe', data: { ...data, intro: undefined, introClosing: undefined, tip: undefined } }, null);
     expect(out).not.toBeNull();
