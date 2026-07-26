@@ -22,6 +22,8 @@ export function scaleIngredients(
   }
   const factor = targetServings / baseServings;
   return ingredients.map(ing => {
+    // Garde runtime volontaire : les recettes historiques en DB peuvent porter
+    // une quantity en string (anciens payloads save_recipe) malgré le type.
     const qty = typeof ing.quantity === 'number' ? ing.quantity : 0;
     if (qty <= 0) return { ...ing };
     return { ...ing, quantity: roundQuantity(qty * factor) };

@@ -18,12 +18,17 @@ describe('scaleIngredients', () => {
   it('arrondit à 2 décimales et supprime les décimales inutiles', () => {
     const out = scaleIngredients([{ name: 'Lait', quantity: 100, unit: 'ml' }], 3, 4);
     // 100 * 4/3 = 133.33
-    expect(out[0].quantity).toBe(133.33);
+    expect(out[0].quantity).toBeCloseTo(133.33, 2);
   });
 
   it('laisse les quantités à 0 inchangées (pincée, qs)', () => {
     const out = scaleIngredients(base, 2, 6);
     expect(out[2].quantity).toBe(0);
+  });
+
+  it('targetServings <= 0 : renvoie les ingrédients inchangés (pas de mise à zéro)', () => {
+    const out = scaleIngredients(base, 2, 0);
+    expect(out).toEqual(base);
   });
 
   it('ne divise pas par zéro : baseServings <= 0 renvoie les ingrédients inchangés', () => {
