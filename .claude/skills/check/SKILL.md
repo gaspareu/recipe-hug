@@ -18,7 +18,7 @@ Comparer au baseline plutôt que d'exiger zéro. Au **2026-07-23** :
 
 | Commande | Baseline (dette préexistante) |
 |----------|-------------------------------|
-| `npm run test:run` | **0 échec** (446 tests) — doit rester à 0 |
+| `npm run test:run` | **0 échec** (491 tests) — doit rester à 0 |
 | `npm run typecheck` | **0 erreur** |
 | `npm run lint` | **0 problème** |
 
