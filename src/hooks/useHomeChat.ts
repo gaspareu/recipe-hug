@@ -1,11 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useRecipes } from './useRecipes';
 import { useUserPreferences } from './useUserPreferences';
 import { supabase } from '@/integrations/supabase/client';
-import { useChatEngine, ActiveRecipeData, ChatEngineConfig, ToolCallAction } from './useChatEngine';
+import { useChatEngine, ActiveRecipeData, ChatEngineConfig, ToolCallAction, RecipeCard } from './useChatEngine';
+import type { Ingredient } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
 import { triggerRecipeCompletion } from '@/lib/recipe-completion';
 import { generateRecipeImageInBackground } from '@/lib/recipe-image';
@@ -44,7 +45,13 @@ export function useHomeChat() {
           const matchesFavorite = !favoritesOnly || r.is_favorite;
           return matchesQuery && matchesStatus && matchesFavorite;
         }).slice(0, 10);
-        return results.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite ?? false }));
+        const summaries = results.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite ?? false }));
+        const cards: RecipeCard[] = results.map(r => ({
+          status: 'saved', id: r.id, title: r.title,
+          servings: r.servings ?? 2, ingredients: r.ingredients,
+          stepsCount: r.steps.length, isUpdate: false,
+        }));
+        return { summaries, cards };
       }
 
       case 'get_recipe_details': {
@@ -125,18 +132,28 @@ export function useHomeChat() {
         catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }
 
+      case 'propose_recipe':
       case 'save_recipe':
       case 'extract_modified_recipe':
       case 'create_new_recipe': {
         const pending = buildPendingRecipeFromToolCall(action, activeRecipe);
-        // eslint-disable-next-line react-hooks/immutability -- `engine` n'existe pas encore ici (dépendance circulaire avec useChatEngine, cf. commentaire du dep array) ; son setter est stable.
-        if (pending) engine.setPendingRecipe(pending);
-        return null;
+        if (!pending) return null;
+        const card: RecipeCard = {
+          status: 'proposed',
+          title: pending.title,
+          servings: pending.servings ?? 2,
+          ingredients: pending.ingredients,
+          stepsCount: pending.steps.length,
+          intro: pending.intro,
+          introClosing: pending.introClosing,
+          tip: pending.tip,
+          isUpdate: !!pending.isUpdate,
+        };
+        return { card, pending };
       }
 
       default: console.log('Unknown tool call:', action.type); return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables. La recette active vient désormais du 2e argument.
   }, [recipes, navigate, preferences, updatePreferencesAsync]);
 
   const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
@@ -154,70 +171,68 @@ export function useHomeChat() {
     buildRequest,
   });
 
-  // Save pending recipe
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
-  const savePendingRecipe = useCallback(async () => {
-    const pending = engine.pendingRecipe;
-    if (!pending) return;
+  // Ref synchrone pour la garde anti double-clic (isSavingRecipe est asynchrone :
+  // le state React n'est pas encore mis à jour au deuxième appel synchrone).
+  const isSavingRef = useRef(false);
+
+  const createProposedRecipe = useCallback(async (
+    messageId: string,
+    override: { servings: number; ingredients: Ingredient[] },
+  ) => {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
+    const pending = engine.getProposedPending(messageId);
+    if (!pending) { isSavingRef.current = false; return; }
     setIsSavingRecipe(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) throw new Error('Tu dois être connecté pour enregistrer une recette.');
+      const toSave = { ...pending, servings: override.servings, ingredients: override.ingredients };
 
-      let recipeId = pending.originalRecipeId ?? '';
-
-      if (pending.isUpdate && pending.originalRecipeId) {
+      let recipeId = toSave.originalRecipeId ?? '';
+      // Limitation connue (héritée de savePendingRecipe) : un update qui ne
+      // touche aucune ligne (id inexistant, RLS) ne renvoie pas d'erreur —
+      // la carte passerait en saved sans écriture réelle.
+      if (toSave.isUpdate && toSave.originalRecipeId) {
         const { error } = await supabase.from('recipes').update({
-          title: pending.title, servings: pending.servings,
-          ingredients: pending.ingredients as unknown as Json, steps: pending.steps as unknown as Json,
+          title: toSave.title, servings: toSave.servings,
+          ingredients: toSave.ingredients as unknown as Json, steps: toSave.steps as unknown as Json,
           updated_at: new Date().toISOString(),
-        }).eq('id', pending.originalRecipeId);
+        }).eq('id', toSave.originalRecipeId);
         if (error) throw error;
       } else {
         const { data: newRecipe, error } = await supabase.from('recipes').insert({
-          user_id: session.user.id, title: pending.title, servings: pending.servings,
-          ingredients: pending.ingredients as unknown as Json, steps: pending.steps as unknown as Json,
+          user_id: session.user.id, title: toSave.title, servings: toSave.servings,
+          ingredients: toSave.ingredients as unknown as Json, steps: toSave.steps as unknown as Json,
           source_type: 'ai', status: 'draft',
         }).select('id').single();
         if (error) throw error;
         recipeId = newRecipe?.id ?? '';
         if (recipeId) {
           generateRecipeImageInBackground({
-            recipeId, title: pending.title, ingredients: pending.ingredients,
+            recipeId, title: toSave.title, ingredients: toSave.ingredients,
             accessToken: session.access_token, onSuccess: refetchRecipes,
           });
           triggerRecipeCompletion(
             recipeId,
-            {
-              title: pending.title,
-              ingredients: pending.ingredients,
-              steps: pending.steps,
-              ai_summary: null,
-              calorie_score: null,
-              nutrition_tags: null,
-              season: null,
-            },
+            { title: toSave.title, ingredients: toSave.ingredients, steps: toSave.steps,
+              ai_summary: null, calorie_score: null, nutrition_tags: null, season: null },
             refetchRecipes,
           );
         }
       }
 
       await refetchRecipes();
-      // Rafraîchit aussi la fiche détail en cache (['recipe', id]) : refetchRecipes
-      // ne couvre que la liste (['recipes']).
-      if (recipeId) {
-        queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
-      }
-      engine.setPendingRecipe(null);
+      if (recipeId) queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
+      engine.updateMessageCard(messageId, {
+        status: 'saved', id: recipeId,
+        servings: toSave.servings, ingredients: toSave.ingredients,
+      });
+      engine.clearProposedPending(messageId);
+      // Parité avec l'ancien savePendingRecipe : la recette active sort du
+      // contexte une fois enregistrée (sinon les tours suivants la traînent).
       engine.setActiveRecipe(null);
-      engine.setMessages(prev => [...prev, {
-        id: `assistant-${Date.now()}`, role: 'assistant',
-        content: pending.isUpdate
-          ? `✅ J'ai mis à jour ta recette "${pending.title}" !`
-          : `✅ J'ai enregistré ta nouvelle recette "${pending.title}" ! Une image est en cours de génération.`,
-        timestamp: new Date(),
-        recipeCard: recipeId ? { id: recipeId, title: pending.title, servings: pending.servings, isUpdate: !!pending.isUpdate } : undefined,
-      }]);
     } catch (error) {
       console.error('Error saving recipe:', error);
       engine.setMessages(prev => [...prev, {
@@ -226,32 +241,22 @@ export function useHomeChat() {
         timestamp: new Date(),
       }]);
     } finally {
+      isSavingRef.current = false;
       setIsSavingRecipe(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
-  }, [engine.pendingRecipe, refetchRecipes, queryClient]);
-
-  const cancelPendingRecipe = useCallback(() => {
-    if (isSavingRecipe) return;
-    engine.setPendingRecipe(null);
-    engine.setMessages(prev => [...prev, {
-      id: `assistant-${Date.now()}`, role: 'assistant',
-      content: "D'accord, on continue la discussion. Qu'est-ce que tu aimerais modifier ?",
-      timestamp: new Date(),
-    }]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
-  }, [isSavingRecipe]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.*` sont stables ; la garde anti double-clic lit isSavingRef (ref), pas le state
+  }, [refetchRecipes, queryClient]);
 
   const startCooking = useCallback((recipeId: string) => setCookingRecipeId(recipeId), []);
   const stopCooking = useCallback(() => setCookingRecipeId(null), []);
 
   return {
     messages: engine.messages, isStreaming: engine.isStreaming,
-    activeRecipe: engine.activeRecipe, pendingRecipe: engine.pendingRecipe,
+    activeRecipe: engine.activeRecipe,
     searchResults: engine.searchResults,
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
     regenerateResponse: engine.regenerateResponse, stopGeneration: engine.stopGeneration,
-    savePendingRecipe, cancelPendingRecipe, isSavingRecipe,
+    createProposedRecipe, isSavingRecipe,
     cookingRecipeId, startCooking, stopCooking,
   };
 }

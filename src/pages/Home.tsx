@@ -1,8 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, User, CalendarDays } from 'lucide-react';
+import { Plus, BookOpen, User, CalendarDays, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { ChatInterface } from '@/components/chat/ChatInterface';
@@ -12,8 +18,8 @@ import { InstallBanner } from '@/components/InstallBanner';
 export default function Home() {
   const navigate = useNavigate();
   const {
-    messages, isStreaming, pendingRecipe, isSavingRecipe,
-    sendMessage, resetChat, savePendingRecipe, cancelPendingRecipe, regenerateResponse, stopGeneration,
+    messages, isStreaming, isSavingRecipe,
+    sendMessage, resetChat, createProposedRecipe, regenerateResponse, stopGeneration,
     cookingRecipeId, startCooking, stopCooking,
   } = useHomeChat();
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -44,17 +50,27 @@ export default function Home() {
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/meal-planning')} title="Planning repas" className="h-9 w-9">
-              <CalendarDays className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} title="Livre de recettes" className="h-9 w-9">
-              <BookOpen className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} title="Profil" className="h-9 w-9">
-              <User className="h-4 w-4" />
-            </Button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Menu" className="h-9 w-9">
+                <Menu className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => navigate('/meal-planning')}>
+                <CalendarDays className="mr-2 h-4 w-4" />
+                Planning repas
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                <BookOpen className="mr-2 h-4 w-4" />
+                Livre de recettes
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/profile')}>
+                <User className="mr-2 h-4 w-4" />
+                Profil
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -63,14 +79,12 @@ export default function Home() {
         <ChatInterface
           messages={messages}
           isStreaming={isStreaming}
-          pendingRecipe={pendingRecipe}
           isSavingRecipe={isSavingRecipe}
           sendMessage={sendMessage}
-          savePendingRecipe={savePendingRecipe}
-          cancelPendingRecipe={cancelPendingRecipe}
+          onCreateRecipe={createProposedRecipe}
+          onStartCooking={startCooking}
           regenerateResponse={regenerateResponse}
           stopGeneration={stopGeneration}
-          onStartCooking={startCooking}
           suggestions={defaultSuggestions}
           placeholder="Poser une question"
           showWelcomeScreen={true}
@@ -83,6 +97,7 @@ export default function Home() {
                 transition={{ duration: 0.5, ease: 'easeOut' }}
                 className="flex flex-col items-center"
               >
+                <img src="/icons/icon-192x192.png" alt="" className="w-[72px] h-[72px] rounded-[18px] mb-[18px] opacity-95" />
                 <h1 className="text-3xl md:text-4xl font-solitreo text-foreground text-center mb-2">
                   Toujours prêt à cuisiner.
                 </h1>

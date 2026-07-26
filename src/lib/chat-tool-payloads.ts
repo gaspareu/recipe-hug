@@ -6,11 +6,12 @@ import type { PreferenceOperation } from '@/lib/preference-operations';
 // Validation des payloads d'outils émis par le LLM (via le stream de
 // `home-assistant`). Ce sont des données externes non fiables : on valide leur
 // STRUCTURE avant de les utiliser (mise en attente d'une recette, écriture des
-// préférences). Les schémas restent volontairement tolérants sur les TYPES que
-// le modèle produit réellement — la tool definition envoie `quantity` en string
-// pour `save_recipe` mais en number pour `extract`/`create`, et plusieurs champs
-// sont optionnels/nullables (cf. schémas côté `home-assistant`). Un schéma trop
-// strict rejetterait des recettes valides.
+// préférences). Les schémas acceptent `quantity` en string OU number selon
+// l'outil émetteur, mais `parseRecipePayload` coerce toujours la valeur en
+// number (string → parseFloat) pour garantir la compatibilité avec le
+// recalcul de portions sans branche côté consommateurs. Plusieurs champs
+// sont optionnels/nullables (cf. schémas côté `home-assistant`) : un schéma
+// trop strict rejetterait des recettes valides.
 
 const IngredientPayloadSchema = z.object({
   name: z.string().min(1),
@@ -46,6 +47,12 @@ const RecipePayloadSchema = z.object({
   servings: z.number().nullable().optional(),
   ingredients: z.array(IngredientPayloadSchema),
   steps: z.array(StepPayloadSchema),
+  // Champs riches pour l'outil propose_recipe (optionnels : absents sur save_recipe).
+  intro: z.array(z.string()).optional(),
+  introClosing: z.string().optional(),
+  /** Forme snake_case émise par la tool def backend (Task 6) — normalisé en introClosing par parseRecipePayload. */
+  intro_closing: z.string().optional(),
+  tip: z.string().optional(),
   // Marqueurs de mise à jour éventuellement portés par le payload : l'assistant
   // peut renvoyer save_recipe avec isUpdate/originalRecipeId (routage UPDATE),
   // et extract/create les positionnent côté hook. On les conserve donc.
@@ -64,9 +71,14 @@ const PreferenceOperationSchema = z.object({
 
 /**
  * Valide un payload de recette (save_recipe / extract_modified_recipe /
- * create_new_recipe). Retourne `null` si la structure est invalide (l'appelant
- * n'ouvre alors pas de recette en attente) plutôt que de propager des données
- * malformées vers l'UI puis la base.
+ * create_new_recipe / propose_recipe). Retourne `null` si la structure est
+ * invalide (l'appelant n'ouvre alors pas de recette en attente) plutôt que de
+ * propager des données malformées vers l'UI puis la base.
+ *
+ * Normalisations appliquées :
+ * - `intro_closing` (snake_case du backend) est fusionné dans `introClosing` ;
+ * - `quantity` est coercé en number (string → parseFloat) pour garantir la
+ *   compatibilité avec le recalcul de portions.
  */
 export function parseRecipePayload(data: unknown): PendingRecipe | null {
   const result = RecipePayloadSchema.safeParse(data);
@@ -74,16 +86,28 @@ export function parseRecipePayload(data: unknown): PendingRecipe | null {
     console.error('Payload de recette invalide, ignoré:', result.error.issues);
     return null;
   }
-  // `quantity` peut être string (save_recipe) ou number (extract/create) selon
-  // la tool definition : on conserve la valeur telle quelle (comportement
-  // historique), la validation ne garantit que la structure.
-  return result.data as unknown as PendingRecipe;
+  const { intro_closing, ...rest } = result.data;
+  return {
+    ...rest,
+    introClosing: rest.introClosing ?? intro_closing,
+    ingredients: rest.ingredients.map(ing => ({
+      ...ing,
+      // Coercition : virgule décimale française normalisée ('1,5' → 1.5) ; toute
+      // valeur non numérique ('une pincée', '') devient 0 — convention du repo :
+      // 0 = quantité non scalable (pincée, qs), l'info reste dans name/unit.
+      quantity: typeof ing.quantity === 'string'
+        ? (parseFloat(ing.quantity.replace(',', '.')) || 0)
+        : (ing.quantity ?? 0),
+    })),
+  } as unknown as PendingRecipe;
+  // Cast : le schéma zod reste plus large (servings nullable) que PendingRecipe ; désalignement historique, assumé.
 }
 
 /**
  * Construit la recette « en attente » à partir d'un appel d'outil du LLM
- * (`save_recipe` / `extract_modified_recipe` / `create_new_recipe`). Logique
- * commune à `useHomeChat` et `useRecipeChat` (auparavant dupliquée) :
+ * (`propose_recipe` / `save_recipe` / `extract_modified_recipe` / `create_new_recipe`).
+ * Logique commune à `useHomeChat` et `useRecipeChat` (auparavant dupliquée) :
+ * - `propose_recipe` : recette proposée avec champs riches (intro, astuce) ;
  * - `save_recipe` : recette telle quelle (peut porter ses propres marqueurs) ;
  * - `extract_modified_recipe` : marquée comme mise à jour de la recette active ;
  * - `create_new_recipe` : porte `relationToOriginal` issu du payload.
@@ -98,6 +122,7 @@ export function buildPendingRecipeFromToolCall(
   if (!recipe) return null;
 
   switch (action.type) {
+    case 'propose_recipe':
     case 'save_recipe':
       return recipe;
     case 'extract_modified_recipe':

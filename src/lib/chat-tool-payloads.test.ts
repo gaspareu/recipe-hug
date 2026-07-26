@@ -6,8 +6,9 @@ import {
 } from './chat-tool-payloads';
 
 // Les payloads viennent du LLM (via le stream d'outils) : données externes non
-// fiables. On valide la STRUCTURE en restant tolérant sur les types que le
-// modèle produit réellement (quantity string OU number selon l'outil).
+// fiables. On valide la STRUCTURE et on normalise les types : quantity est
+// coercé en number (string → parseFloat) pour permettre le recalcul des
+// portions sans branche dans les hooks consommateurs.
 
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -200,5 +201,68 @@ describe('buildPendingRecipeFromToolCall', () => {
       null,
     );
     expect(pending).toBeNull();
+  });
+});
+
+describe('buildPendingRecipeFromToolCall — propose_recipe', () => {
+  const data = {
+    title: 'Buddha bowl',
+    servings: 2,
+    ingredients: [{ name: 'Avocat', quantity: 1, unit: '' }],
+    steps: [{ order: 1, text: 'Couper' }],
+    intro: ['Avocat mûr et œufs mollets.', 'Champignons poêlés.'],
+    introClosing: 'Assembler à la dernière minute.',
+    tip: 'Poêler à feu vif pour garder du croquant.',
+  };
+
+  it('conserve les champs riches intro/introClosing/tip', () => {
+    const out = buildPendingRecipeFromToolCall({ type: 'propose_recipe', data }, null);
+    expect(out).not.toBeNull();
+    expect(out!.title).toBe('Buddha bowl');
+    expect(out!.intro).toEqual(['Avocat mûr et œufs mollets.', 'Champignons poêlés.']);
+    expect(out!.introClosing).toBe('Assembler à la dernière minute.');
+    expect(out!.tip).toBe('Poêler à feu vif pour garder du croquant.');
+  });
+
+  it('normalise intro_closing (snake_case émis par la tool def backend)', () => {
+    const out = buildPendingRecipeFromToolCall(
+      { type: 'propose_recipe', data: { ...data, introClosing: undefined, intro_closing: 'Assembler à la dernière minute.' } },
+      null,
+    );
+    expect(out!.introClosing).toBe('Assembler à la dernière minute.');
+  });
+
+  it('coerce quantity string → number (nécessaire au recalcul des portions)', () => {
+    const out = buildPendingRecipeFromToolCall(
+      { type: 'propose_recipe', data: { ...data, ingredients: [{ name: 'Avocat', quantity: '1.5', unit: '' }] } },
+      null,
+    );
+    expect(out!.ingredients[0].quantity).toBe(1.5);
+  });
+
+  it('normalise la virgule décimale française et zérise les valeurs texte', () => {
+    const out = buildPendingRecipeFromToolCall(
+      {
+        type: 'propose_recipe',
+        data: {
+          ...data,
+          ingredients: [
+            { name: 'Lait', quantity: '1,5', unit: 'l' },
+            { name: 'Sel', quantity: 'une pincée', unit: '' },
+            { name: 'Poivre', quantity: '', unit: '' },
+          ],
+        },
+      },
+      null,
+    );
+    expect(out!.ingredients[0].quantity).toBe(1.5);
+    expect(out!.ingredients[1].quantity).toBe(0); // 0 = non scalable, volontaire
+    expect(out!.ingredients[2].quantity).toBe(0);
+  });
+
+  it('tolère l\'absence des champs riches (rétrocompat save_recipe)', () => {
+    const out = buildPendingRecipeFromToolCall({ type: 'save_recipe', data: { ...data, intro: undefined, introClosing: undefined, tip: undefined } }, null);
+    expect(out).not.toBeNull();
+    expect(out!.intro).toBeUndefined();
   });
 });

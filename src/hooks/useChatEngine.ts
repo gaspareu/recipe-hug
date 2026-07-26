@@ -3,10 +3,19 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Ingredient, Step } from '@/types/recipe';
 
+export type RecipeCardStatus = 'proposed' | 'saved';
+
 export interface RecipeCard {
-  id: string;
+  /** Présent uniquement en état 'saved' (recette en DB). */
+  id?: string;
+  status: RecipeCardStatus;
   title: string;
   servings: number;
+  ingredients: Ingredient[];
+  stepsCount: number;
+  intro?: string[];
+  introClosing?: string;
+  tip?: string;
   isUpdate: boolean;
 }
 
@@ -18,6 +27,8 @@ export interface ChatMessage {
   timestamp: Date;
   /** Carte de recette affichée après création/mise à jour, avec lien vers la fiche */
   recipeCard?: RecipeCard;
+  /** Cartes des résultats de recherche (branché en Task 4) */
+  recipeCards?: RecipeCard[];
 }
 
 export type MessageContent =
@@ -41,6 +52,9 @@ export interface PendingRecipe {
   servings: number;
   ingredients: Ingredient[];
   steps: Step[];
+  intro?: string[];
+  introClosing?: string;
+  tip?: string;
   isUpdate?: boolean;
   originalRecipeId?: string;
   relationToOriginal?: string;
@@ -88,6 +102,25 @@ export function useChatEngine(config: ChatEngineConfig) {
   const [pendingRecipe, setPendingRecipe] = useState<PendingRecipe | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
+  // Stocke les recettes en attente de confirmation, indexées par messageId.
+  // Permet à useHomeChat de les récupérer pour createProposedRecipe.
+  const proposedPendingRef = useRef<Map<string, PendingRecipe>>(new Map());
+
+  const getProposedPending = useCallback(
+    (messageId: string): PendingRecipe | null => proposedPendingRef.current.get(messageId) ?? null,
+    [],
+  );
+
+  const clearProposedPending = useCallback((messageId: string) => {
+    proposedPendingRef.current.delete(messageId);
+  }, []);
+
+  const updateMessageCard = useCallback((messageId: string, patch: Partial<RecipeCard>) => {
+    setMessages(prev => prev.map(m =>
+      m.id === messageId && m.recipeCard ? { ...m, recipeCard: { ...m.recipeCard, ...patch } } : m,
+    ));
+  }, []);
+
   // Recette active lue pendant le streaming (les callbacks sont mémoïsés sans
   // `activeRecipe` en dépendance, pour éviter les closures périmées) : elle est
   // injectée en 2e argument d'onToolCall. Synchronisée après le rendu, et de façon
@@ -132,22 +165,29 @@ export function useChatEngine(config: ChatEngineConfig) {
         return currentContent;
       }
 
-      // Handle search results
-      if (name === 'search_recipes' && result) {
-        const list = result as SearchResult[];
-        let content = currentContent;
+      // Handle { card, pending } : carte de recette proposée (useHomeChat uniquement).
+      // useRecipeChat renvoie null pour ces mêmes outils (setPendingRecipe), donc ce
+      // bloc ne s'exécute que si le handler a renvoyé un objet avec 'card' et 'pending'.
+      if (result && typeof result === 'object' && 'card' in result && 'pending' in result) {
+        const { card, pending } = result as { card: RecipeCard; pending: PendingRecipe };
+        proposedPendingRef.current.set(assistantMessageId, pending);
+        setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, recipeCard: card } : m));
+        return currentContent;
+      }
 
-        if (list.length === 0) {
-          content += "\n\nJe n'ai trouvé aucune recette correspondante. Tu veux que je t'en crée une nouvelle ?";
-        } else {
-          content += '\n\n**Résultats trouvés :**\n';
-          list.forEach((r, i) => {
-            const statusLabel = { draft: '📝 brouillon', tested: '🧪 testée', validated: '✅ validée', archived: '📦 archivée' }[r.status] || r.status;
-            content += `${i + 1}. **${r.title}** - ${statusLabel}${r.is_favorite ? ' ⭐' : ''}\n`;
-          });
-          content += '\nDis-moi laquelle tu veux ouvrir, cuisiner ou modifier !';
-        }
-        setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content } : m));
+      // Handle search results — accepte le nouveau format { summaries, cards }
+      // (useHomeChat) ou le format tableau legacy (useRecipeChat / tests directs).
+      if (name === 'search_recipes' && result) {
+        const { summaries, cards } = Array.isArray(result)
+          ? { summaries: result as SearchResult[], cards: [] as RecipeCard[] }
+          : result as { summaries: SearchResult[]; cards: RecipeCard[] };
+        let content = currentContent;
+        content += summaries.length === 0
+          ? "\n\nJe n'ai trouvé aucune recette correspondante. Tu veux que je t'en crée une nouvelle ?"
+          : `\n\nJ'ai trouvé : ${summaries.map(r => r.title).join(', ')}.`;
+        setMessages(prev => prev.map(m => m.id === assistantMessageId
+          ? { ...m, content, recipeCards: cards.length > 0 ? cards : undefined }
+          : m));
         return content;
       }
     } catch (e) {
@@ -169,7 +209,7 @@ export function useChatEngine(config: ChatEngineConfig) {
           search_recipes: 'search_recipes', open_recipe: 'open_recipe',
           navigate: 'navigate', save_recipe: 'save_recipe',
           extract_modified_recipe: 'extract_modified_recipe',
-          create_new_recipe: 'create_new_recipe',
+          create_new_recipe: 'create_new_recipe', propose_recipe: 'propose_recipe',
           get_preferences: 'get_preferences', update_preferences: 'update_preferences',
           start_cooking: 'start_cooking',
         };
@@ -409,11 +449,13 @@ export function useChatEngine(config: ChatEngineConfig) {
     setActiveRecipe(initialActiveRecipe);
     setPendingRecipe(null);
     setSearchResults([]);
+    proposedPendingRef.current.clear();
   }, [welcomeMessage, initialActiveRecipe]);
 
   return {
     messages, isStreaming, activeRecipe, pendingRecipe, searchResults,
     setActiveRecipe, setPendingRecipe, setSearchResults, setMessages,
     sendMessage, resetChat, regenerateResponse, stopGeneration,
+    getProposedPending, clearProposedPending, updateMessageCard,
   };
 }
