@@ -269,10 +269,8 @@ describe("sendMessage — tool calls", () => {
     await act(() => hook.result.current.sendMessage("Cherche une tarte"));
 
     const last = lastMessage(hook.result.current.messages);
-    expect(last.content).toContain("Résultats trouvés");
+    expect(last.content).toContain("J'ai trouvé");
     expect(last.content).toContain("Tarte aux pommes");
-    expect(last.content).toContain("✅ validée");
-    expect(last.content).toContain("⭐");
   });
 
   it("propose de créer une recette quand la recherche ne donne rien", async () => {

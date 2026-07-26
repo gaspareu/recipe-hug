@@ -5,7 +5,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRecipes } from './useRecipes';
 import { useUserPreferences } from './useUserPreferences';
 import { supabase } from '@/integrations/supabase/client';
-import { useChatEngine, ActiveRecipeData, ChatEngineConfig, ToolCallAction } from './useChatEngine';
+import { useChatEngine, ActiveRecipeData, ChatEngineConfig, ToolCallAction, RecipeCard } from './useChatEngine';
+import type { Ingredient } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
 import { triggerRecipeCompletion } from '@/lib/recipe-completion';
 import { generateRecipeImageInBackground } from '@/lib/recipe-image';
@@ -44,7 +45,13 @@ export function useHomeChat() {
           const matchesFavorite = !favoritesOnly || r.is_favorite;
           return matchesQuery && matchesStatus && matchesFavorite;
         }).slice(0, 10);
-        return results.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite ?? false }));
+        const summaries = results.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite ?? false }));
+        const cards: RecipeCard[] = results.map(r => ({
+          status: 'saved', id: r.id, title: r.title,
+          servings: r.servings ?? 2, ingredients: r.ingredients,
+          stepsCount: r.steps.length, isUpdate: false,
+        }));
+        return { summaries, cards };
       }
 
       case 'get_recipe_details': {
@@ -125,13 +132,24 @@ export function useHomeChat() {
         catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }
 
+      case 'propose_recipe':
       case 'save_recipe':
       case 'extract_modified_recipe':
       case 'create_new_recipe': {
         const pending = buildPendingRecipeFromToolCall(action, activeRecipe);
-        // eslint-disable-next-line react-hooks/immutability -- `engine` n'existe pas encore ici (dépendance circulaire avec useChatEngine, cf. commentaire du dep array) ; son setter est stable.
-        if (pending) engine.setPendingRecipe(pending);
-        return null;
+        if (!pending) return null;
+        const card: RecipeCard = {
+          status: 'proposed',
+          title: pending.title,
+          servings: pending.servings ?? 2,
+          ingredients: pending.ingredients,
+          stepsCount: pending.steps.length,
+          intro: pending.intro,
+          introClosing: pending.introClosing,
+          tip: pending.tip,
+          isUpdate: !!pending.isUpdate,
+        };
+        return { card, pending };
       }
 
       default: console.log('Unknown tool call:', action.type); return null;
@@ -242,6 +260,67 @@ export function useHomeChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
   }, [isSavingRecipe]);
 
+  const createProposedRecipe = useCallback(async (
+    messageId: string,
+    override: { servings: number; ingredients: Ingredient[] },
+  ) => {
+    const pending = engine.getProposedPending(messageId);
+    if (!pending) return;
+    setIsSavingRecipe(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) throw new Error('Tu dois être connecté pour enregistrer une recette.');
+      const toSave = { ...pending, servings: override.servings, ingredients: override.ingredients };
+
+      let recipeId = toSave.originalRecipeId ?? '';
+      if (toSave.isUpdate && toSave.originalRecipeId) {
+        const { error } = await supabase.from('recipes').update({
+          title: toSave.title, servings: toSave.servings,
+          ingredients: toSave.ingredients as unknown as Json, steps: toSave.steps as unknown as Json,
+          updated_at: new Date().toISOString(),
+        }).eq('id', toSave.originalRecipeId);
+        if (error) throw error;
+      } else {
+        const { data: newRecipe, error } = await supabase.from('recipes').insert({
+          user_id: session.user.id, title: toSave.title, servings: toSave.servings,
+          ingredients: toSave.ingredients as unknown as Json, steps: toSave.steps as unknown as Json,
+          source_type: 'ai', status: 'draft',
+        }).select('id').single();
+        if (error) throw error;
+        recipeId = newRecipe?.id ?? '';
+        if (recipeId) {
+          generateRecipeImageInBackground({
+            recipeId, title: toSave.title, ingredients: toSave.ingredients,
+            accessToken: session.access_token, onSuccess: refetchRecipes,
+          });
+          triggerRecipeCompletion(
+            recipeId,
+            { title: toSave.title, ingredients: toSave.ingredients, steps: toSave.steps,
+              ai_summary: null, calorie_score: null, nutrition_tags: null, season: null },
+            refetchRecipes,
+          );
+        }
+      }
+
+      await refetchRecipes();
+      if (recipeId) queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
+      engine.updateMessageCard(messageId, {
+        status: 'saved', id: recipeId,
+        servings: toSave.servings, ingredients: toSave.ingredients,
+      });
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      engine.setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`, role: 'assistant',
+        content: "⚠️ Je n'ai pas pu enregistrer la recette. Vérifie ta connexion et réessaie.",
+        timestamp: new Date(),
+      }]);
+    } finally {
+      setIsSavingRecipe(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.*` sont stables (même motif que savePendingRecipe)
+  }, [refetchRecipes, queryClient]);
+
   const startCooking = useCallback((recipeId: string) => setCookingRecipeId(recipeId), []);
   const stopCooking = useCallback(() => setCookingRecipeId(null), []);
 
@@ -251,7 +330,7 @@ export function useHomeChat() {
     searchResults: engine.searchResults,
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
     regenerateResponse: engine.regenerateResponse, stopGeneration: engine.stopGeneration,
-    savePendingRecipe, cancelPendingRecipe, isSavingRecipe,
+    savePendingRecipe, cancelPendingRecipe, createProposedRecipe, isSavingRecipe,
     cookingRecipeId, startCooking, stopCooking,
   };
 }

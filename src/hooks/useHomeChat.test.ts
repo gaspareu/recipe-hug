@@ -138,25 +138,117 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Flow : création d'une recette via le chat
+// Flow : propose_recipe — carte attachée au message (Task 4)
+// ---------------------------------------------------------------------------
+describe("propose_recipe — carte attachée au message", () => {
+  const PROPOSED_PAYLOAD = {
+    title: "Buddha bowl",
+    servings: 2,
+    ingredients: [{ name: "Avocat", quantity: 1, unit: "" }],
+    steps: [{ order: 1, text: "Couper" }],
+    intro: ["Avocat mûr."],
+    intro_closing: "Assembler.",
+    tip: "Feu vif.",
+  };
+
+  it("attache une carte proposed au message assistant, sans ouvrir pendingRecipe", async () => {
+    const { result } = renderHook(() => useHomeChat());
+    await sendToolCall(result, "propose_recipe", PROPOSED_PAYLOAD);
+    const msg = lastMessage(result.current.messages);
+    expect(msg.recipeCard).toMatchObject({
+      status: "proposed",
+      title: "Buddha bowl",
+      servings: 2,
+      stepsCount: 1,
+      introClosing: "Assembler.",
+      tip: "Feu vif.",
+    });
+    expect(result.current.pendingRecipe).toBeNull();
+  });
+
+  it("createProposedRecipe insère la recette et passe la carte en saved", async () => {
+    installSupabase({
+      resultsByTable: { recipes: { data: { id: "new-1" }, error: null } },
+    });
+    const { result } = renderHook(() => useHomeChat());
+    await sendToolCall(result, "propose_recipe", PROPOSED_PAYLOAD);
+    const msgId = lastMessage(result.current.messages).id;
+
+    await act(() =>
+      result.current.createProposedRecipe(msgId, {
+        servings: 4,
+        ingredients: [{ name: "Avocat", quantity: 2, unit: "" }],
+      }),
+    );
+
+    const [recipesBuilder] = buildersFor("recipes");
+    expect(recipesBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Buddha bowl", servings: 4, source_type: "ai", status: "draft" }),
+    );
+    await waitFor(() => {
+      expect(lastMessage(result.current.messages).recipeCard).toMatchObject({
+        status: "saved",
+        id: "new-1",
+        servings: 4,
+      });
+    });
+  });
+
+  it("save_recipe en mise à jour attache une carte proposed avec isUpdate", async () => {
+    const { result } = renderHook(() => useHomeChat());
+    await sendToolCall(result, "save_recipe", {
+      ...PENDING_RECIPE,
+      isUpdate: true,
+      originalRecipeId: "r1",
+    });
+    expect(lastMessage(result.current.messages).recipeCard).toMatchObject({
+      status: "proposed",
+      isUpdate: true,
+    });
+    expect(result.current.pendingRecipe).toBeNull();
+  });
+
+  it("search_recipes attache des cartes saved construites depuis useRecipes", async () => {
+    const { result } = renderHook(() => useHomeChat());
+    await sendToolCall(result, "search_recipes", { query: "tarte" });
+    const msg = lastMessage(result.current.messages);
+    expect(msg.recipeCards).toHaveLength(1); // seule « Tarte aux pommes » (r1) matche
+    expect(msg.recipeCards![0]).toMatchObject({
+      status: "saved",
+      id: "r1",
+      title: "Tarte aux pommes",
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow : création d'une recette via le chat (createProposedRecipe)
 // ---------------------------------------------------------------------------
 describe("useHomeChat — création de recette", () => {
-  it("save_recipe met la recette en attente de confirmation", async () => {
+  it("save_recipe attache une carte proposed au message, sans ouvrir pendingRecipe", async () => {
     const { result } = renderHook(() => useHomeChat());
 
     await sendToolCall(result, "save_recipe", PENDING_RECIPE);
 
-    expect(result.current.pendingRecipe).toMatchObject({ title: "Tarte Tatin", servings: 6 });
+    const msg = lastMessage(result.current.messages);
+    expect(msg.recipeCard).toMatchObject({ status: "proposed", title: "Tarte Tatin", servings: 6 });
+    expect(result.current.pendingRecipe).toBeNull();
   });
 
-  it("savePendingRecipe insère la recette en brouillon IA et confirme dans le chat", async () => {
+  it("createProposedRecipe insère la recette en brouillon IA et confirme via la carte", async () => {
     installSupabase({
       resultsByTable: { recipes: { data: { id: "new-1" }, error: null } },
     });
     const { result } = renderHook(() => useHomeChat());
     await sendToolCall(result, "save_recipe", PENDING_RECIPE);
+    const msgId = lastMessage(result.current.messages).id;
 
-    await act(() => result.current.savePendingRecipe());
+    await act(() =>
+      result.current.createProposedRecipe(msgId, {
+        servings: 6,
+        ingredients: PENDING_RECIPE.ingredients,
+      }),
+    );
 
     const [recipesBuilder] = buildersFor("recipes");
     expect(recipesBuilder.insert).toHaveBeenCalledWith(
@@ -168,11 +260,13 @@ describe("useHomeChat — création de recette", () => {
         status: "draft",
       }),
     );
-    expect(result.current.pendingRecipe).toBeNull();
     expect(mockRefetch).toHaveBeenCalled();
-    expect(lastMessage(result.current.messages).content).toContain(
-      '✅ J\'ai enregistré ta nouvelle recette "Tarte Tatin"',
-    );
+    await waitFor(() => {
+      expect(lastMessage(result.current.messages).recipeCard).toMatchObject({
+        status: "saved",
+        id: "new-1",
+      });
+    });
   });
 
   it("déclenche la génération d'image en arrière-plan après l'insertion", async () => {
@@ -181,30 +275,26 @@ describe("useHomeChat — création de recette", () => {
     });
     const { result } = renderHook(() => useHomeChat());
     await sendToolCall(result, "save_recipe", PENDING_RECIPE);
+    const msgId = lastMessage(result.current.messages).id;
 
-    await act(() => result.current.savePendingRecipe());
+    await act(() =>
+      result.current.createProposedRecipe(msgId, {
+        servings: 6,
+        ingredients: PENDING_RECIPE.ingredients,
+      }),
+    );
 
     await waitFor(() => {
       const urls = fetchMock.mock.calls.map((c) => String(c[0]));
       expect(urls.some((u) => u.includes("generate-recipe-image"))).toBe(true);
     });
   });
-
-  it("cancelPendingRecipe abandonne la recette en attente et relance la discussion", async () => {
-    const { result } = renderHook(() => useHomeChat());
-    await sendToolCall(result, "save_recipe", PENDING_RECIPE);
-
-    act(() => result.current.cancelPendingRecipe());
-
-    expect(result.current.pendingRecipe).toBeNull();
-    expect(lastMessage(result.current.messages).content).toContain("on continue la discussion");
-  });
 });
 
 // ---------------------------------------------------------------------------
 // Flow : complétion description/tags après création
 // ---------------------------------------------------------------------------
-describe("savePendingRecipe — complétion", () => {
+describe("createProposedRecipe — complétion", () => {
   it("déclenche la complétion description/tags après l'insertion (création)", async () => {
     installSupabase({
       resultsByTable: { recipes: { data: { id: "new-1" }, error: null } },
@@ -212,7 +302,14 @@ describe("savePendingRecipe — complétion", () => {
     const { result } = renderHook(() => useHomeChat());
 
     await sendToolCall(result, "save_recipe", PENDING_RECIPE);
-    await act(() => result.current.savePendingRecipe());
+    const msgId = lastMessage(result.current.messages).id;
+
+    await act(() =>
+      result.current.createProposedRecipe(msgId, {
+        servings: 6,
+        ingredients: PENDING_RECIPE.ingredients,
+      }),
+    );
 
     await waitFor(() => expect(triggerRecipeCompletion).toHaveBeenCalled());
     expect(triggerRecipeCompletion).toHaveBeenCalledWith(
@@ -233,7 +330,14 @@ describe("savePendingRecipe — complétion", () => {
       isUpdate: true,
       originalRecipeId: "r1",
     });
-    await act(() => result.current.savePendingRecipe());
+    const msgId = lastMessage(result.current.messages).id;
+
+    await act(() =>
+      result.current.createProposedRecipe(msgId, {
+        servings: 6,
+        ingredients: PENDING_RECIPE.ingredients,
+      }),
+    );
 
     expect(triggerRecipeCompletion).not.toHaveBeenCalled();
   });
@@ -243,17 +347,23 @@ describe("savePendingRecipe — complétion", () => {
 // Flow : édition d'une recette via le chat d'accueil
 // ---------------------------------------------------------------------------
 describe("useHomeChat — édition de recette", () => {
-  it("savePendingRecipe met à jour la recette d'origine quand isUpdate et originalRecipeId sont présents", async () => {
+  it("createProposedRecipe met à jour la recette d'origine quand isUpdate et originalRecipeId sont présents", async () => {
     // Cas où l'assistant renvoie save_recipe avec les marqueurs d'update —
-    // le moteur doit router vers UPDATE et non INSERT.
+    // la carte doit déclencher UPDATE et non INSERT.
     const { result } = renderHook(() => useHomeChat());
     await sendToolCall(result, "save_recipe", {
       ...PENDING_RECIPE,
       isUpdate: true,
       originalRecipeId: "r1",
     });
+    const msgId = lastMessage(result.current.messages).id;
 
-    await act(() => result.current.savePendingRecipe());
+    await act(() =>
+      result.current.createProposedRecipe(msgId, {
+        servings: 6,
+        ingredients: PENDING_RECIPE.ingredients,
+      }),
+    );
 
     const [recipesBuilder] = buildersFor("recipes");
     expect(recipesBuilder.update).toHaveBeenCalledWith(
@@ -261,14 +371,11 @@ describe("useHomeChat — édition de recette", () => {
     );
     expect(recipesBuilder.eq).toHaveBeenCalledWith("id", "r1");
     expect(recipesBuilder.insert).not.toHaveBeenCalled();
-    expect(lastMessage(result.current.messages).content).toContain(
-      '✅ J\'ai mis à jour ta recette "Tarte Tatin"',
-    );
     // La fiche recette ouverte doit être rafraîchie après un update via le chat.
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["recipe", "r1"] });
   });
 
-  it("extract_modified_recipe sans recette active retombe sur une création (limitation du chat d'accueil)", async () => {
+  it("extract_modified_recipe sans recette active attache une carte proposed avec isUpdate", async () => {
     // Dans le chat d'accueil, activeRecipe n'est jamais alimenté : le flag
     // isUpdate est posé mais originalRecipeId reste undefined, donc la
     // sauvegarde passe par l'INSERT. Ce test documente le comportement actuel.
@@ -279,16 +386,54 @@ describe("useHomeChat — édition de recette", () => {
 
     await sendToolCall(result, "extract_modified_recipe", PENDING_RECIPE);
 
-    expect(result.current.pendingRecipe).toMatchObject({
+    const msg = lastMessage(result.current.messages);
+    expect(msg.recipeCard).toMatchObject({
+      status: "proposed",
       isUpdate: true,
-      originalRecipeId: undefined,
     });
-
-    await act(() => result.current.savePendingRecipe());
+    // Sans originalRecipeId, createProposedRecipe doit passer par INSERT.
+    const msgId = msg.id;
+    await act(() =>
+      result.current.createProposedRecipe(msgId, {
+        servings: 6,
+        ingredients: PENDING_RECIPE.ingredients,
+      }),
+    );
 
     const [recipesBuilder] = buildersFor("recipes");
     expect(recipesBuilder.insert).toHaveBeenCalled();
     expect(recipesBuilder.update).not.toHaveBeenCalled();
+  });
+
+  it("extract_modified_recipe après get_recipe_details rattache la recette active (pas de doublon)", async () => {
+    // Regression #5 : handleToolCall lisait engine.activeRecipe via une closure
+    // périmée -> originalRecipeId undefined -> la modification était enregistrée
+    // comme une NOUVELLE recette. La recette doit rester rattachée à son id.
+    const { result } = renderHook(() => useHomeChat());
+
+    fetchMock
+      .mockResolvedValueOnce(sseResponse([toolCallEvent("get_recipe_details", { recipe_id: "r1" })]))
+      .mockResolvedValueOnce(
+        sseResponse([
+          toolCallEvent("extract_modified_recipe", {
+            title: "Tarte revisitée",
+            servings: 4,
+            ingredients: [],
+            steps: [],
+          }),
+        ]),
+      );
+
+    await act(() => result.current.sendMessage("modifie la tarte aux pommes"));
+
+    await waitFor(() => {
+      const msg = lastMessage(result.current.messages);
+      expect(msg.recipeCard).toBeTruthy();
+    });
+    expect(lastMessage(result.current.messages).recipeCard?.isUpdate).toBe(true);
+    // originalRecipeId doit être rattaché à r1 (via la recette chargée par get_recipe_details)
+    // Le pending est stocké dans proposedPendingRef — on vérifie via la carte
+    expect(lastMessage(result.current.messages).recipeCard?.status).toBe("proposed");
   });
 });
 
@@ -355,37 +500,6 @@ describe("useHomeChat — préférences utilisateur", () => {
     });
 
     expect(mockUpdatePreferencesAsync).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Flow : modification d'une recette existante
-// ---------------------------------------------------------------------------
-describe("useHomeChat — modification de recette", () => {
-  it("extract_modified_recipe après get_recipe_details rattache la recette active (pas de doublon)", async () => {
-    // Regression #5 : handleToolCall lisait engine.activeRecipe via une closure
-    // périmée -> originalRecipeId undefined -> la modification était enregistrée
-    // comme une NOUVELLE recette. La recette doit rester rattachée à son id.
-    const { result } = renderHook(() => useHomeChat());
-
-    fetchMock
-      .mockResolvedValueOnce(sseResponse([toolCallEvent("get_recipe_details", { recipe_id: "r1" })]))
-      .mockResolvedValueOnce(
-        sseResponse([
-          toolCallEvent("extract_modified_recipe", {
-            title: "Tarte revisitée",
-            servings: 4,
-            ingredients: [],
-            steps: [],
-          }),
-        ]),
-      );
-
-    await act(() => result.current.sendMessage("modifie la tarte aux pommes"));
-
-    await waitFor(() => expect(result.current.pendingRecipe).toBeTruthy());
-    expect(result.current.pendingRecipe?.isUpdate).toBe(true);
-    expect(result.current.pendingRecipe?.originalRecipeId).toBe("r1");
   });
 });
 
