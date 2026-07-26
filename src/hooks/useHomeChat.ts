@@ -241,8 +241,8 @@ export function useHomeChat() {
       isSavingRef.current = false;
       setIsSavingRecipe(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.*` sont stables (même motif que savePendingRecipe)
-  }, [isSavingRecipe, refetchRecipes, queryClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.*` sont stables ; la garde anti double-clic lit isSavingRef (ref), pas le state
+  }, [refetchRecipes, queryClient]);
 
   const startCooking = useCallback((recipeId: string) => setCookingRecipeId(recipeId), []);
   const stopCooking = useCallback(() => setCookingRecipeId(null), []);
