@@ -151,7 +151,7 @@ describe("propose_recipe — carte attachée au message", () => {
     tip: "Feu vif.",
   };
 
-  it("attache une carte proposed au message assistant, sans ouvrir pendingRecipe", async () => {
+  it("attache une carte proposed au message assistant", async () => {
     const { result } = renderHook(() => useHomeChat());
     await sendToolCall(result, "propose_recipe", PROPOSED_PAYLOAD);
     const msg = lastMessage(result.current.messages);
@@ -163,7 +163,6 @@ describe("propose_recipe — carte attachée au message", () => {
       introClosing: "Assembler.",
       tip: "Feu vif.",
     });
-    expect(result.current.pendingRecipe).toBeNull();
   });
 
   it("createProposedRecipe insère la recette et passe la carte en saved", async () => {
@@ -205,7 +204,6 @@ describe("propose_recipe — carte attachée au message", () => {
       status: "proposed",
       isUpdate: true,
     });
-    expect(result.current.pendingRecipe).toBeNull();
 
     // Vérifie la chaîne complète de persistance : UPDATE sur la recette d'origine.
     const msgId = lastMessage(result.current.messages).id;
@@ -240,14 +238,13 @@ describe("propose_recipe — carte attachée au message", () => {
 // Flow : création d'une recette via le chat (createProposedRecipe)
 // ---------------------------------------------------------------------------
 describe("useHomeChat — création de recette", () => {
-  it("save_recipe attache une carte proposed au message, sans ouvrir pendingRecipe", async () => {
+  it("save_recipe attache une carte proposed au message", async () => {
     const { result } = renderHook(() => useHomeChat());
 
     await sendToolCall(result, "save_recipe", PENDING_RECIPE);
 
     const msg = lastMessage(result.current.messages);
     expect(msg.recipeCard).toMatchObject({ status: "proposed", title: "Tarte Tatin", servings: 6 });
-    expect(result.current.pendingRecipe).toBeNull();
   });
 
   it("createProposedRecipe insère la recette en brouillon IA et confirme via la carte", async () => {

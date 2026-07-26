@@ -11,6 +11,7 @@ const PORTIONS_MAX = 12;
 
 interface RecipeChatCardProps {
   card: RecipeCard;
+  isSaving?: boolean;
   onCreate: (data: { title: string; servings: number; ingredients: Ingredient[] }) => void;
   onStartCooking: (recipeId: string, servings: number) => void;
   onOpenDetail: (recipeId: string) => void;
@@ -30,6 +31,7 @@ function formatQuantity(quantity: number, unit: string): string {
 
 export function RecipeChatCard({
   card,
+  isSaving = false,
   onCreate,
   onStartCooking,
   onOpenDetail,
@@ -149,7 +151,7 @@ export function RecipeChatCard({
         {/* Boutons d'action */}
         <div className="px-4 py-3">
           {card.status === 'proposed' && (
-            <Button className="w-full" onClick={handleCreate}>
+            <Button className="w-full" onClick={handleCreate} disabled={isSaving}>
               {card.isUpdate ? 'Mettre à jour la recette' : 'Créer la recette'}
             </Button>
           )}

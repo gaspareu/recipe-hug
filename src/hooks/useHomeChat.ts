@@ -154,7 +154,6 @@ export function useHomeChat() {
 
       default: console.log('Unknown tool call:', action.type); return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables. La recette active vient désormais du 2e argument.
   }, [recipes, navigate, preferences, updatePreferencesAsync]);
 
   const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
@@ -172,96 +171,10 @@ export function useHomeChat() {
     buildRequest,
   });
 
-  // Save pending recipe
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
   // Ref synchrone pour la garde anti double-clic (isSavingRecipe est asynchrone :
   // le state React n'est pas encore mis à jour au deuxième appel synchrone).
   const isSavingRef = useRef(false);
-  const savePendingRecipe = useCallback(async () => {
-    const pending = engine.pendingRecipe;
-    if (!pending) return;
-    setIsSavingRecipe(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) throw new Error('Tu dois être connecté pour enregistrer une recette.');
-
-      let recipeId = pending.originalRecipeId ?? '';
-
-      if (pending.isUpdate && pending.originalRecipeId) {
-        const { error } = await supabase.from('recipes').update({
-          title: pending.title, servings: pending.servings,
-          ingredients: pending.ingredients as unknown as Json, steps: pending.steps as unknown as Json,
-          updated_at: new Date().toISOString(),
-        }).eq('id', pending.originalRecipeId);
-        if (error) throw error;
-      } else {
-        const { data: newRecipe, error } = await supabase.from('recipes').insert({
-          user_id: session.user.id, title: pending.title, servings: pending.servings,
-          ingredients: pending.ingredients as unknown as Json, steps: pending.steps as unknown as Json,
-          source_type: 'ai', status: 'draft',
-        }).select('id').single();
-        if (error) throw error;
-        recipeId = newRecipe?.id ?? '';
-        if (recipeId) {
-          generateRecipeImageInBackground({
-            recipeId, title: pending.title, ingredients: pending.ingredients,
-            accessToken: session.access_token, onSuccess: refetchRecipes,
-          });
-          triggerRecipeCompletion(
-            recipeId,
-            {
-              title: pending.title,
-              ingredients: pending.ingredients,
-              steps: pending.steps,
-              ai_summary: null,
-              calorie_score: null,
-              nutrition_tags: null,
-              season: null,
-            },
-            refetchRecipes,
-          );
-        }
-      }
-
-      await refetchRecipes();
-      // Rafraîchit aussi la fiche détail en cache (['recipe', id]) : refetchRecipes
-      // ne couvre que la liste (['recipes']).
-      if (recipeId) {
-        queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
-      }
-      engine.setPendingRecipe(null);
-      engine.setActiveRecipe(null);
-      engine.setMessages(prev => [...prev, {
-        id: `assistant-${Date.now()}`, role: 'assistant',
-        content: pending.isUpdate
-          ? `✅ J'ai mis à jour ta recette "${pending.title}" !`
-          : `✅ J'ai enregistré ta nouvelle recette "${pending.title}" ! Une image est en cours de génération.`,
-        timestamp: new Date(),
-        recipeCard: recipeId ? { id: recipeId, status: 'saved' as const, title: pending.title, servings: pending.servings, ingredients: pending.ingredients, stepsCount: pending.steps.length, isUpdate: !!pending.isUpdate } : undefined,
-      }]);
-    } catch (error) {
-      console.error('Error saving recipe:', error);
-      engine.setMessages(prev => [...prev, {
-        id: `error-${Date.now()}`, role: 'assistant',
-        content: "⚠️ Je n'ai pas pu enregistrer la recette. Vérifie ta connexion et réessaie.",
-        timestamp: new Date(),
-      }]);
-    } finally {
-      setIsSavingRecipe(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
-  }, [engine.pendingRecipe, refetchRecipes, queryClient]);
-
-  const cancelPendingRecipe = useCallback(() => {
-    if (isSavingRecipe) return;
-    engine.setPendingRecipe(null);
-    engine.setMessages(prev => [...prev, {
-      id: `assistant-${Date.now()}`, role: 'assistant',
-      content: "D'accord, on continue la discussion. Qu'est-ce que tu aimerais modifier ?",
-      timestamp: new Date(),
-    }]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
-  }, [isSavingRecipe]);
 
   const createProposedRecipe = useCallback(async (
     messageId: string,
@@ -336,11 +249,11 @@ export function useHomeChat() {
 
   return {
     messages: engine.messages, isStreaming: engine.isStreaming,
-    activeRecipe: engine.activeRecipe, pendingRecipe: engine.pendingRecipe,
+    activeRecipe: engine.activeRecipe,
     searchResults: engine.searchResults,
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
     regenerateResponse: engine.regenerateResponse, stopGeneration: engine.stopGeneration,
-    savePendingRecipe, cancelPendingRecipe, createProposedRecipe, isSavingRecipe,
+    createProposedRecipe, isSavingRecipe,
     cookingRecipeId, startCooking, stopCooking,
   };
 }

@@ -55,4 +55,9 @@ describe('RecipeChatCard', () => {
     render(<RecipeChatCard card={{ ...proposed, servings: 12 }} onCreate={vi.fn()} onStartCooking={vi.fn()} onOpenDetail={vi.fn()} />);
     expect(screen.getByRole('button', { name: /augmenter les portions/i })).toBeDisabled();
   });
+
+  it('isSaving=true désactive le bouton Créer la recette', () => {
+    render(<RecipeChatCard card={proposed} isSaving onCreate={vi.fn()} onStartCooking={vi.fn()} onOpenDetail={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /Créer la recette/i })).toBeDisabled();
+  });
 });

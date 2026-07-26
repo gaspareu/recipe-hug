@@ -12,8 +12,8 @@ import { InstallBanner } from '@/components/InstallBanner';
 export default function Home() {
   const navigate = useNavigate();
   const {
-    messages, isStreaming, pendingRecipe, isSavingRecipe,
-    sendMessage, resetChat, savePendingRecipe, cancelPendingRecipe, regenerateResponse, stopGeneration,
+    messages, isStreaming, isSavingRecipe,
+    sendMessage, resetChat, createProposedRecipe, regenerateResponse, stopGeneration,
     cookingRecipeId, startCooking, stopCooking,
   } = useHomeChat();
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -63,14 +63,12 @@ export default function Home() {
         <ChatInterface
           messages={messages}
           isStreaming={isStreaming}
-          pendingRecipe={pendingRecipe}
           isSavingRecipe={isSavingRecipe}
           sendMessage={sendMessage}
-          savePendingRecipe={savePendingRecipe}
-          cancelPendingRecipe={cancelPendingRecipe}
+          onCreateRecipe={createProposedRecipe}
+          onStartCooking={(recipeId) => startCooking(recipeId)}
           regenerateResponse={regenerateResponse}
           stopGeneration={stopGeneration}
-          onStartCooking={startCooking}
           suggestions={defaultSuggestions}
           placeholder="Poser une question"
           showWelcomeScreen={true}

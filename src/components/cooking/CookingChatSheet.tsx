@@ -1,7 +1,7 @@
 import { ChefHat } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { ChatInterface } from '@/components/chat/ChatInterface';
-import type { ChatMessage, PendingRecipe } from '@/hooks/useChatEngine';
+import type { ChatMessage } from '@/hooks/useChatEngine';
 
 interface CookingChatSheetProps {
   open: boolean;
@@ -10,11 +10,7 @@ interface CookingChatSheetProps {
   autoListen: boolean;
   messages: ChatMessage[];
   isStreaming: boolean;
-  pendingRecipe: PendingRecipe | null;
-  isSavingRecipe?: boolean;
   sendMessage: (content: string, imageDataUrl?: string) => void;
-  savePendingRecipe: () => void;
-  cancelPendingRecipe: () => void;
   regenerateResponse?: () => void;
   stopGeneration?: () => void;
 }
@@ -23,8 +19,8 @@ const COOKING_SUGGESTIONS = ['Par quoi remplacer ?', "C'est cuit ?", 'Une astuce
 
 export function CookingChatSheet({
   open, onOpenChange, autoListen,
-  messages, isStreaming, pendingRecipe, isSavingRecipe,
-  sendMessage, savePendingRecipe, cancelPendingRecipe, regenerateResponse, stopGeneration,
+  messages, isStreaming,
+  sendMessage, regenerateResponse, stopGeneration,
 }: CookingChatSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -43,11 +39,7 @@ export function CookingChatSheet({
           <ChatInterface
             messages={messages}
             isStreaming={isStreaming}
-            pendingRecipe={pendingRecipe}
-            isSavingRecipe={isSavingRecipe}
             sendMessage={sendMessage}
-            savePendingRecipe={savePendingRecipe}
-            cancelPendingRecipe={cancelPendingRecipe}
             regenerateResponse={regenerateResponse}
             stopGeneration={stopGeneration}
             suggestions={COOKING_SUGGESTIONS}

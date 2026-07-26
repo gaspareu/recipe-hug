@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Check, Copy, RotateCw, Loader2, ChefHat, Square } from 'lucide-react';
+import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Copy, RotateCw, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -9,12 +9,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { TextShimmer } from '@/components/ui/text-shimmer';
 import { toast } from '@/components/ui/sonner';
 import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
+import { RecipeChatCard } from './RecipeChatCard';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { shouldSpeakMessage } from './shouldSpeakMessage';
 import { messageVariants, messageTransition } from '@/lib/motion';
 import { useNavigate } from 'react-router-dom';
 
-import type { ChatMessage, PendingRecipe } from '@/hooks/useChatEngine';
+import type { ChatMessage } from '@/hooks/useChatEngine';
+import type { Ingredient } from '@/types/recipe';
 
 /** RegExp extraite au niveau module pour éviter une recréation à chaque rendu */
 const SUGGESTIONS_REGEX = /\[suggestions\]\s*(\[.*?\])\s*\[\/suggestions\]/s;
@@ -22,15 +24,14 @@ const SUGGESTIONS_REGEX = /\[suggestions\]\s*(\[.*?\])\s*\[\/suggestions\]/s;
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   isStreaming: boolean;
-  pendingRecipe: PendingRecipe | null;
   isSavingRecipe?: boolean;
   sendMessage: (content: string, imageDataUrl?: string) => void;
-  savePendingRecipe: () => void;
-  cancelPendingRecipe: () => void;
+  /** Appelé quand l'utilisateur clique « Créer / Mettre à jour » sur une carte proposed. */
+  onCreateRecipe?: (messageId: string, data: { servings: number; ingredients: Ingredient[] }) => void;
+  /** Appelé quand l'utilisateur clique « Commencer à cuisiner » sur une carte saved. */
+  onStartCooking?: (recipeId: string, servings: number) => void;
   regenerateResponse?: () => void;
   stopGeneration?: () => void;
-  /** Si fourni, affiche un bouton « Cuisiner » sur la carte recette (ouvre le mode cuisine). */
-  onStartCooking?: (recipeId: string) => void;
   suggestions: string[];
   placeholder?: string;
   showWelcomeScreen?: boolean;
@@ -46,14 +47,12 @@ interface ChatInterfaceProps {
 export function ChatInterface({
   messages,
   isStreaming,
-  pendingRecipe,
   isSavingRecipe = false,
   sendMessage,
-  savePendingRecipe,
-  cancelPendingRecipe,
+  onCreateRecipe,
+  onStartCooking,
   regenerateResponse,
   stopGeneration,
-  onStartCooking,
   suggestions,
   placeholder = 'Poser une question',
   showWelcomeScreen = false,
@@ -249,44 +248,35 @@ export function ChatInterface({
                         )}
                       </div>
                     )}
-                    {message.recipeCard && (() => {
-                      const cardId = message.recipeCard?.id;
-                      return (
-                        <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-border/50 bg-card p-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                              <ChefHat className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-foreground truncate">{message.recipeCard.title}</p>
-                              <p className="text-xs text-muted-foreground">{message.recipeCard.servings} portions</p>
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            {onStartCooking && cardId && (
-                              <Button
-                                size="sm"
-                                variant="default"
-                                className="gap-1.5"
-                                onClick={() => onStartCooking(cardId)}
-                              >
-                                <ChefHat className="h-4 w-4" aria-hidden="true" />
-                                Cuisiner
-                              </Button>
-                            )}
-                            {cardId && (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => navigate(`/recipes/${cardId}`)}
-                              >
-                                Voir
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    {message.recipeCard && (
+                      <RecipeChatCard
+                        card={message.recipeCard}
+                        isSaving={isSavingRecipe}
+                        onCreate={(data) => onCreateRecipe?.(message.id, { servings: data.servings, ingredients: data.ingredients })}
+                        onStartCooking={(recipeId, servings) => {
+                          // servings est transmis par la carte ; consommé par l'écran mode cuisine (plan séparé)
+                          onStartCooking?.(recipeId, servings);
+                        }}
+                        onOpenDetail={(recipeId) => navigate(`/recipes/${recipeId}`)}
+                        className="mt-2"
+                      />
+                    )}
+                    {message.recipeCards && message.recipeCards.length > 0 && (
+                      <div className="mt-2 flex flex-col gap-3">
+                        {message.recipeCards.map((card) => (
+                          <RecipeChatCard
+                            key={card.id}
+                            card={card}
+                            onCreate={() => { /* cartes saved : pas de création */ }}
+                            onStartCooking={(recipeId, servings) => {
+                              // servings transmis par la carte ; consommé par l'écran mode cuisine (plan séparé)
+                              onStartCooking?.(recipeId, servings);
+                            }}
+                            onOpenDetail={(recipeId) => navigate(`/recipes/${recipeId}`)}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {message.role === 'user' && message.content && message.content !== '📷 Image envoyée' && (
                     <Button
@@ -322,36 +312,10 @@ export function ChatInterface({
         </ScrollArea>
       )}
 
-      {/* Pending recipe bar */}
-      <AnimatePresence>
-      {pendingRecipe && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-        >
-        <div className="flex flex-col gap-3 p-3 mx-4 bg-primary/5 border border-primary/20 rounded-2xl">
-          <p className="text-sm text-foreground text-center break-words">
-            {pendingRecipe.isUpdate ? `Mettre à jour "${pendingRecipe.title}" ?` : `Enregistrer "${pendingRecipe.title}" ?`}
-          </p>
-          <div className="flex justify-end items-center gap-2">
-            <Button size="sm" onClick={savePendingRecipe} disabled={isSavingRecipe} className="gap-1">
-              {isSavingRecipe ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              {pendingRecipe.isUpdate ? 'Mettre à jour' : 'Créer'}
-            </Button>
-            <Button size="icon" variant="ghost" onClick={cancelPendingRecipe} disabled={isSavingRecipe} className="h-8 w-8 text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        </motion.div>
-      )}
-      </AnimatePresence>
-
       {/* Bottom area */}
       <div className="shrink-0 p-4 space-y-4">
         {/* Quick suggestions */}
-        {!pendingRecipe && activeSuggestions.length > 0 && (
+        {activeSuggestions.length > 0 && (
           <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] -mx-4 px-4" data-no-swipe-nav data-testid="suggestions-scroll">
             <div className="flex gap-2 w-max">
               {activeSuggestions.map((suggestion, i) => (

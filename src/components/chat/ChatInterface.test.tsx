@@ -65,8 +65,34 @@ vi.mock("@/components/voice/SoundWaveIndicator", () => ({
   SoundWaveIndicator: () => React.createElement("span", { "aria-hidden": "true" }),
 }));
 
+vi.mock("./RecipeChatCard", () => ({
+  RecipeChatCard: ({ card, isSaving, onCreate }: {
+    card: { status: string; title: string; id?: string; servings: number; stepsCount: number; isUpdate: boolean; ingredients: unknown[] };
+    isSaving?: boolean;
+    onCreate: () => void;
+  }) => {
+    if (card.status === "proposed") {
+      return React.createElement(
+        "div",
+        { "data-testid": "recipe-chat-card" },
+        React.createElement(
+          "button",
+          { onClick: onCreate, disabled: isSaving },
+          card.isUpdate ? "Mettre à jour la recette" : "Créer la recette",
+        ),
+      );
+    }
+    return React.createElement(
+      "div",
+      { "data-testid": "recipe-chat-card" },
+      React.createElement("p", null, card.title),
+      React.createElement("button", null, "Commencer à cuisiner"),
+    );
+  },
+}));
+
 import { ChatInterface } from "./ChatInterface";
-import type { ChatMessage, PendingRecipe } from "@/hooks/useChatEngine";
+import type { ChatMessage } from "@/hooks/useChatEngine";
 
 // --- helpers ---
 
@@ -83,10 +109,9 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
 const defaultProps = {
   messages: [makeMessage()] as ChatMessage[],
   isStreaming: false,
-  pendingRecipe: null as PendingRecipe | null,
   sendMessage: vi.fn(),
-  savePendingRecipe: vi.fn(),
-  cancelPendingRecipe: vi.fn(),
+  onCreateRecipe: vi.fn(),
+  onStartCooking: vi.fn(),
   suggestions: ["Suggestion 1", "Suggestion 2"],
   placeholder: "Poser une question",
 };
@@ -132,20 +157,65 @@ describe("ChatInterface — responsive", () => {
     });
   });
 
-  describe("état sans suggestions (pendingRecipe présent)", () => {
-    it("masque la zone de suggestions quand pendingRecipe est actif", () => {
-      const propsWithPending = {
-        ...defaultProps,
-        pendingRecipe: {
-          title: "Tarte aux pommes",
-          servings: 4,
-          ingredients: [],
-          steps: [],
-          isUpdate: false,
-        },
-      };
-      render(<ChatInterface {...propsWithPending} />);
-      expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
+  describe("RecipeChatCard dans les messages", () => {
+    it("un message porteur de recipeCard proposed affiche le bouton « Créer la recette »", () => {
+      const messages: ChatMessage[] = [
+        makeMessage({
+          id: "m1",
+          role: "assistant",
+          content: "Voici une recette.",
+          recipeCard: {
+            status: "proposed",
+            title: "Buddha bowl",
+            servings: 2,
+            stepsCount: 3,
+            isUpdate: false,
+            ingredients: [{ name: "Avocat", quantity: 1, unit: "" }],
+          },
+        }),
+      ];
+      render(<ChatInterface {...defaultProps} messages={messages} />);
+      expect(screen.getByRole("button", { name: /Créer la recette/i })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Commencer à cuisiner/i })).toBeNull();
+    });
+
+    it("un message porteur de recipeCard saved affiche le bouton « Commencer à cuisiner »", () => {
+      const messages: ChatMessage[] = [
+        makeMessage({
+          id: "m1",
+          role: "assistant",
+          content: "Recette enregistrée.",
+          recipeCard: {
+            status: "saved",
+            id: "r1",
+            title: "Buddha bowl",
+            servings: 2,
+            stepsCount: 3,
+            isUpdate: false,
+            ingredients: [{ name: "Avocat", quantity: 1, unit: "" }],
+          },
+        }),
+      ];
+      render(<ChatInterface {...defaultProps} messages={messages} />);
+      expect(screen.getByRole("button", { name: /Commencer à cuisiner/i })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Créer la recette/i })).toBeNull();
+    });
+
+    it("un message porteur de recipeCards (recherche) affiche une carte par recette", () => {
+      const messages: ChatMessage[] = [
+        makeMessage({
+          id: "m1",
+          role: "assistant",
+          content: "Voici les résultats.",
+          recipeCards: [
+            { status: "saved", id: "r1", title: "Tarte aux pommes", servings: 4, stepsCount: 2, isUpdate: false, ingredients: [] },
+            { status: "saved", id: "r2", title: "Soupe à l'oignon", servings: 2, stepsCount: 3, isUpdate: false, ingredients: [] },
+          ],
+        }),
+      ];
+      render(<ChatInterface {...defaultProps} messages={messages} />);
+      expect(screen.getByText("Tarte aux pommes")).toBeInTheDocument();
+      expect(screen.getByText("Soupe à l'oignon")).toBeInTheDocument();
     });
   });
 
