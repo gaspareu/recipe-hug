@@ -129,18 +129,36 @@ export default function RecipeDetail() {
         <RecipeDetailHeader title={recipe.title} description={recipe.ai_summary} />
 
         {recipe.ingredients.length === 0 ? (
-          <Card><CardHeader><CardTitle className="flex items-center gap-2"><ListChecks className="h-5 w-5" />Ingrédients{recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />{recipe.servings} portions</span>}</CardTitle></CardHeader><CardContent><p className="text-muted-foreground text-sm">Aucun ingrédient</p></CardContent></Card>
+          <Card className="rounded-2xl border-border bg-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-solitreo text-xl font-normal tracking-normal">
+                <ListChecks className="h-5 w-5" />
+                Ingrédients
+                {recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />{recipe.servings} portions</span>}
+              </CardTitle>
+            </CardHeader>
+            <CardContent><p className="text-muted-foreground text-sm">Aucun ingrédient</p></CardContent>
+          </Card>
         ) : (
-          <Card>
+          <Card className="rounded-2xl border-border bg-card">
             <IngredientChecklistWithHeader ingredients={recipe.ingredients} recipeId={id} renderHeader={toggleButton => (
-              <CardHeader className="pb-2"><CardTitle className="flex items-center justify-between"><span className="flex items-center gap-2"><ListChecks className="h-5 w-5" />Ingrédients{recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1 ml-1"><Users className="h-3.5 w-3.5" />{recipe.servings} portions</span>}</span>{toggleButton}</CardTitle></CardHeader>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between font-solitreo text-xl font-normal tracking-normal">
+                  <span className="flex items-center gap-2">
+                    <ListChecks className="h-5 w-5" />
+                    Ingrédients
+                    {recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1 ml-1"><Users className="h-3.5 w-3.5" />{recipe.servings} portions</span>}
+                  </span>
+                  {toggleButton}
+                </CardTitle>
+              </CardHeader>
             )} />
           </Card>
         )}
 
-        <Card>
+        <Card className="rounded-2xl border-border bg-card">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between">
+            <CardTitle className="flex items-center justify-between font-solitreo text-xl font-normal tracking-normal">
               <span>Étapes</span>
               {totalSteps > 0 && <span className="text-sm font-normal text-muted-foreground">{totalSteps} étapes</span>}
             </CardTitle>
