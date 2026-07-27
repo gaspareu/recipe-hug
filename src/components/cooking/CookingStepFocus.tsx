@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import { Timer } from 'lucide-react';
+import { Timer, Pause, Play } from 'lucide-react';
 import type { Step } from '@/types/recipe';
 import { cn } from '@/lib/utils';
 import { parseStepTimers } from '@/lib/parseStepTimers';
-import { formatTimer } from '@/hooks/useCookingTimers';
+import { formatTimer, type CookingTimer } from '@/hooks/useCookingTimers';
+import { deriveStepTitle } from '@/lib/step-title';
 
 function Progress({ idx, total }: { idx: number; total: number }) {
   return (
@@ -44,14 +45,39 @@ function TimerChip({ minutes, label, onStart }: TimerChipProps) {
   );
 }
 
+interface ActiveTimerDisplayProps {
+  timer: CookingTimer;
+  onToggle: (id: string) => void;
+}
+
+function ActiveTimerDisplay({ timer, onToggle }: ActiveTimerDisplayProps) {
+  return (
+    <div className="mt-[18px] flex items-center gap-4">
+      <span className="font-solitreo text-5xl leading-none text-primary">{formatTimer(timer.remaining)}</span>
+      <button
+        onClick={() => onToggle(timer.id)}
+        aria-label={timer.running ? 'mettre en pause' : 'reprendre'}
+        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"
+      >
+        {timer.running
+          ? <Pause className="h-5 w-5" aria-hidden="true" />
+          : <Play className="h-5 w-5" aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
+
 interface CookingStepFocusProps {
   step: Step;
   idx: number;
   total: number;
   onStartTimer: (label: string, seconds: number) => void;
+  /** Minuteur en cours lié à l'étape courante (null si aucun). */
+  activeTimer: CookingTimer | null;
+  onToggleTimer: (id: string) => void;
 }
 
-export function CookingStepFocus({ step, idx, total, onStartTimer }: CookingStepFocusProps) {
+export function CookingStepFocus({ step, idx, total, onStartTimer, activeTimer, onToggleTimer }: CookingStepFocusProps) {
   const { segments, offeredMinutes } = useMemo(() => {
     const parsed = parseStepTimers(step.text);
     // Durées proposées : celles repérées dans le texte, complétées par la durée
@@ -64,15 +90,15 @@ export function CookingStepFocus({ step, idx, total, onStartTimer }: CookingStep
   }, [step.text, step.duration_minutes]);
 
   const stepLabel = `Étape ${idx + 1}`;
+  const title = deriveStepTitle(step, idx);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-[22px] pb-4 pt-[22px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Progress idx={idx} total={total} />
       <div key={idx} className="flex-1 animate-cook-fade-up">
-        <div className="mb-3 flex items-baseline gap-4">
-          <span className="font-solitreo text-[78px] leading-[0.85] text-primary">{step.order}</span>
-          <span className="font-solitreo text-2xl leading-none text-accent">{stepLabel}</span>
-        </div>
+        <h2 className="mb-3 text-center font-solitreo text-4xl leading-tight text-primary [text-wrap:pretty]">
+          {title}
+        </h2>
         <p className="mt-1 font-crimson text-[25px] leading-relaxed text-foreground [text-wrap:pretty]">
           {segments.map((seg, i) =>
             seg.isDuration ? (
@@ -87,12 +113,16 @@ export function CookingStepFocus({ step, idx, total, onStartTimer }: CookingStep
             ),
           )}
         </p>
-        {offeredMinutes.length > 0 && (
-          <div className="mt-[18px] flex flex-wrap gap-2">
-            {offeredMinutes.map((min, i) => (
-              <TimerChip key={i} minutes={min} label={stepLabel} onStart={onStartTimer} />
-            ))}
-          </div>
+        {activeTimer ? (
+          <ActiveTimerDisplay timer={activeTimer} onToggle={onToggleTimer} />
+        ) : (
+          offeredMinutes.length > 0 && (
+            <div className="mt-[18px] flex flex-wrap gap-2">
+              {offeredMinutes.map((min, i) => (
+                <TimerChip key={i} minutes={min} label={stepLabel} onStart={onStartTimer} />
+              ))}
+            </div>
+          )
         )}
       </div>
     </div>

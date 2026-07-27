@@ -53,6 +53,10 @@ export function CookingMode({ recipe, onClose, onRecipeUpdate, onRecipeCreate }:
 
   const currentStep = sortedSteps[Math.min(idx, total - 1)];
 
+  // Minuteur en cours lié à l'étape affichée (au plus un, vu que TimerChip les
+  // étiquette « Étape N »), pour l'afficher en grand plutôt que dans la barre.
+  const currentTimer = (!done && timers.find(t => t.label === `Étape ${idx + 1}` && !t.done)) || null;
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background pt-[env(safe-area-inset-top)]">
       {/* En-tête */}
@@ -75,15 +79,23 @@ export function CookingMode({ recipe, onClose, onRecipeUpdate, onRecipeCreate }:
         <span className="h-[38px] w-[38px]" aria-hidden="true" />
       </header>
 
-      {/* Barre de minuteurs actifs */}
-      <CookingTimerBar timers={timers} onToggle={toggleTimer} onDismiss={dismissTimer} />
+      {/* Barre de minuteurs actifs (le minuteur de l'étape courante est affiché
+          en grand ci-dessous, pas dans la barre — on évite le doublon). */}
+      <CookingTimerBar timers={timers.filter(t => t.id !== currentTimer?.id)} onToggle={toggleTimer} onDismiss={dismissTimer} />
 
       {/* Corps */}
       <div className="relative min-h-0 flex-1">
         {done || !currentStep ? (
           <CookingDone recipeTitle={recipe.title} onRestart={restart} />
         ) : (
-          <CookingStepFocus step={currentStep} idx={idx} total={total} onStartTimer={addTimer} />
+          <CookingStepFocus
+            step={currentStep}
+            idx={idx}
+            total={total}
+            onStartTimer={addTimer}
+            activeTimer={currentTimer}
+            onToggleTimer={toggleTimer}
+          />
         )}
       </div>
 
