@@ -45,4 +45,9 @@ describe("RecipeImageDisplay", () => {
     renderRecipeImageDisplay({ title: "Crème brûlée" });
     expect(screen.getByText("Crème brûlée")).toBeInTheDocument();
   });
+
+  it("masque le titre en overlay quand showTitleOverlay={false}", () => {
+    renderRecipeImageDisplay({ title: "Crème brûlée", showTitleOverlay: false });
+    expect(screen.queryByText("Crème brûlée")).toBeNull();
+  });
 });
