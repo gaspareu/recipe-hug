@@ -266,3 +266,17 @@ describe('buildPendingRecipeFromToolCall — propose_recipe', () => {
     expect(out!.intro).toBeUndefined();
   });
 });
+
+describe('buildPendingRecipeFromToolCall — title d’étape', () => {
+  it('conserve steps[].title', () => {
+    const out = buildPendingRecipeFromToolCall({
+      type: 'propose_recipe',
+      data: {
+        title: 'Bowl', servings: 2,
+        ingredients: [{ name: 'Avocat', quantity: 1, unit: '' }],
+        steps: [{ order: 1, text: 'Faire cuire 6 min.', title: 'Cuire les œufs' }],
+      },
+    }, null);
+    expect(out?.steps[0].title).toBe('Cuire les œufs');
+  });
+});

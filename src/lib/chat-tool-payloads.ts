@@ -37,6 +37,7 @@ const Tm7ParamsPayloadSchema = z.object({
 const StepPayloadSchema = z.object({
   order: z.number().optional(),
   text: z.string().min(1),
+  title: z.string().optional(),
   duration_minutes: z.number().nullable().optional(),
   parallel_with: z.array(z.number()).optional(),
   tm7: Tm7ParamsPayloadSchema.nullable().optional(),
