@@ -2,20 +2,18 @@ import { useState, useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { toast } from '@/components/ui/sonner';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Users, ListChecks, Leaf, ChefHat, History } from 'lucide-react';
+import { ArrowLeft, Users, ListChecks, ChefHat, History } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
+import { RecipeDetailHeader } from '@/components/recipes/RecipeDetailHeader';
 import { RecipeActionsMenu } from '@/components/recipes/RecipeActionsMenu';
 import { RecipeStepsList } from '@/components/recipes/RecipeStepsList';
 import { RecipeVersionHistory } from '@/components/recipes/RecipeVersionHistory';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { RecipeStatusSelect } from '@/components/recipes/RecipeStatusSelect';
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { CookingModeContainer } from '@/components/cooking/CookingModeContainer';
@@ -25,7 +23,7 @@ import { useAsyncAction } from '@/hooks/useAsyncAction';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { buildRecipeImageObjectPath } from '@/lib/storage-paths';
-import type { RecipeStatus, Step } from '@/types/recipe';
+import type { Step } from '@/types/recipe';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -47,14 +45,6 @@ export default function RecipeDetail() {
   const handleToggleFavorite = () => {
     if (!recipe) return;
     toggleFavorite.mutate({ id: recipe.id, is_favorite: !recipe.is_favorite });
-  };
-
-  const handleStatusChange = (newStatus: RecipeStatus) => {
-    if (!recipe) return;
-    updateRecipe.mutate(
-      { id: recipe.id, status: newStatus },
-      { onError: () => toast('Impossible de changer le statut') },
-    );
   };
 
   const imageChange = useAsyncAction(
@@ -123,7 +113,7 @@ export default function RecipeDetail() {
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }}
         >
-          <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={imageChange.run} onImageRemove={imageRemove.run} />
+          <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={imageChange.run} onImageRemove={imageRemove.run} showTitleOverlay={false} />
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/50 to-transparent pointer-events-none rounded-t-lg" />
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Retour" className="absolute top-3 left-3 bg-background/60 backdrop-blur-sm hover:bg-background/80">
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
@@ -136,23 +126,7 @@ export default function RecipeDetail() {
           </div>
         </motion.div>
 
-        {/* Badges : statut → saison → nutrition → score (rangée scrollable).
-            Le fondu à droite signale qu'il reste des tags à faire défiler ; sur
-            fond uni sans débordement il est invisible (dégradé vers la même
-            couleur de fond). */}
-        <div className="relative">
-          <div className="overflow-x-auto pb-1 -mb-1">
-            <div className="flex items-center gap-2 min-w-max py-1 pr-8">
-              <RecipeStatusSelect status={recipe.status} onStatusChange={handleStatusChange} disabled={updateRecipe.isPending} />
-              {recipe.season && <><Separator orientation="vertical" className="h-4" /><Badge variant="outline" className="flex items-center gap-1 shrink-0"><Leaf className="h-3 w-3" />{recipe.season}</Badge></>}
-              {recipe.nutrition_tags && recipe.nutrition_tags.length > 0 && <><Separator orientation="vertical" className="h-4" />{recipe.nutrition_tags.map((tag, i) => <Badge key={i} variant="secondary" className="shrink-0">{tag}</Badge>)}</>}
-              {recipe.calorie_score && <><Separator orientation="vertical" className="h-4" /><Badge variant="outline" className="shrink-0">Score: {recipe.calorie_score}/5</Badge></>}
-            </div>
-          </div>
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent" aria-hidden="true" />
-        </div>
-
-        {recipe.ai_summary && <p className="text-sm text-muted-foreground">{recipe.ai_summary}</p>}
+        <RecipeDetailHeader title={recipe.title} description={recipe.ai_summary} />
 
         {recipe.ingredients.length === 0 ? (
           <Card><CardHeader><CardTitle className="flex items-center gap-2"><ListChecks className="h-5 w-5" />Ingrédients{recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />{recipe.servings} portions</span>}</CardTitle></CardHeader><CardContent><p className="text-muted-foreground text-sm">Aucun ingrédient</p></CardContent></Card>
@@ -192,7 +166,7 @@ export default function RecipeDetail() {
             <div className="max-w-2xl mx-auto">
               <Button onClick={() => setCooking(true)} size="lg" className="w-full h-12 gap-2 text-base font-semibold">
                 <ChefHat className="h-5 w-5" aria-hidden="true" />
-                Cuisiner
+                Commencer à cuisiner
               </Button>
             </div>
           </div>
