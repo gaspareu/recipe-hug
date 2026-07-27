@@ -15,10 +15,18 @@ describe('deriveStepTitle', () => {
 
   it('tronque une clause trop longue à ~40 caractères', () => {
     const long = 'Mélanger la farine le sucre les œufs le beurre et la levure ensemble';
-    expect(deriveStepTitle(mk({ text: long }), 0).length).toBeLessThanOrEqual(41);
+    expect(deriveStepTitle(mk({ text: long }), 0)).toBe('Mélanger la farine le sucre les œufs le …');
   });
 
   it('repli final « Étape N » si le texte est vide', () => {
     expect(deriveStepTitle(mk({ text: '' }), 2)).toBe('Étape 3');
+  });
+
+  it('ignore un premier segment vide (texte commençant par un séparateur) et prend la première clause non vide', () => {
+    expect(deriveStepTitle(mk({ text: ', Faire cuire les œufs' }), 0)).toBe('Faire cuire les œufs');
+  });
+
+  it('ne plante pas si step.text est nullish (donnée legacy non validée)', () => {
+    expect(deriveStepTitle(mk({ text: undefined as unknown as string }), 1)).toBe('Étape 2');
   });
 });

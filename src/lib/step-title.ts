@@ -9,7 +9,10 @@ const MAX_LEN = 40;
  */
 export function deriveStepTitle(step: Step, index: number): string {
   if (step.title && step.title.trim()) return step.title.trim();
-  const firstClause = step.text.split(/[,.;]/)[0]?.trim() ?? '';
+  const firstClause = (step.text ?? '')
+    .split(/[,.;]/)
+    .map((s) => s.trim())
+    .find(Boolean) ?? '';
   if (firstClause) {
     return firstClause.length > MAX_LEN ? `${firstClause.slice(0, MAX_LEN)}…` : firstClause;
   }
