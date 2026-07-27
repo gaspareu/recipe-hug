@@ -12,6 +12,7 @@ interface RecipeImageDisplayProps {
   onImageChange: (file: File) => Promise<void>;
   onImageRemove: () => Promise<void>;
   isEditable?: boolean;
+  showTitleOverlay?: boolean;
 }
 
 export function RecipeImageDisplay({
@@ -21,6 +22,7 @@ export function RecipeImageDisplay({
   onImageChange,
   onImageRemove,
   isEditable = true,
+  showTitleOverlay = true,
 }: RecipeImageDisplayProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -86,7 +88,7 @@ export function RecipeImageDisplay({
       <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300" />
 
       {/* Title centered on image */}
-      {title && !isHovered && !isBusy && (
+      {title && showTitleOverlay && !isHovered && !isBusy && (
         <div className="absolute inset-0 flex items-center justify-center p-4">
           <h2 className="text-center font-solitreo text-2xl sm:text-3xl leading-tight line-clamp-3 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white font-bold">
             {title}

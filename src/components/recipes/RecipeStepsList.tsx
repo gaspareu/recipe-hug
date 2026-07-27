@@ -17,13 +17,13 @@ export function RecipeStepsList({ steps }: RecipeStepsListProps) {
   }
 
   return (
-    <ol className="flex flex-col gap-3.5">
+    <ol className="flex flex-col gap-4">
       {sorted.map((step, index) => (
         <li key={step.order} className="flex items-start gap-3">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 font-solitreo text-base text-primary">
             {index + 1}
           </span>
-          <span className="pt-0.5 text-base leading-relaxed text-foreground">{step.text}</span>
+          <span className="pt-0.5 text-[15px] leading-relaxed text-foreground">{step.text}</span>
         </li>
       ))}
     </ol>
