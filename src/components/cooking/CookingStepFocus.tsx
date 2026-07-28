@@ -30,13 +30,14 @@ function Progress({ idx, total }: { idx: number; total: number }) {
 interface TimerChipProps {
   minutes: number;
   label: string;
-  onStart: (label: string, seconds: number) => void;
+  stepIndex: number;
+  onStart: (label: string, seconds: number, stepIndex: number) => void;
 }
 
-function TimerChip({ minutes, label, onStart }: TimerChipProps) {
+function TimerChip({ minutes, label, stepIndex, onStart }: TimerChipProps) {
   return (
     <button
-      onClick={() => onStart(label, minutes * 60)}
+      onClick={() => onStart(label, minutes * 60, stepIndex)}
       className="inline-flex items-center gap-2 rounded-full border-[1.5px] border-accent bg-accent/15 px-3 py-1.5 font-crimson text-sm font-bold text-secondary transition-colors hover:bg-accent hover:text-accent-foreground"
     >
       <Timer className="h-4 w-4" aria-hidden="true" />
@@ -71,7 +72,7 @@ interface CookingStepFocusProps {
   step: Step;
   idx: number;
   total: number;
-  onStartTimer: (label: string, seconds: number) => void;
+  onStartTimer: (label: string, seconds: number, stepIndex: number) => void;
   /** Minuteur en cours lié à l'étape courante (null si aucun). */
   activeTimer: CookingTimer | null;
   onToggleTimer: (id: string) => void;
@@ -119,7 +120,7 @@ export function CookingStepFocus({ step, idx, total, onStartTimer, activeTimer, 
           offeredMinutes.length > 0 && (
             <div className="mt-[18px] flex flex-wrap gap-2">
               {offeredMinutes.map((min, i) => (
-                <TimerChip key={i} minutes={min} label={stepLabel} onStart={onStartTimer} />
+                <TimerChip key={i} minutes={min} label={stepLabel} stepIndex={idx} onStart={onStartTimer} />
               ))}
             </div>
           )

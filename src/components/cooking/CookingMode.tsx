@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X, ChevronLeft, ArrowRight, Check, Mic, ChefHat, ChevronUp } from 'lucide-react';
 import type { Recipe, Step, Ingredient } from '@/types/recipe';
-import { useCookingTimers } from '@/hooks/useCookingTimers';
+import { useCookingTimers, findActiveStepTimer } from '@/hooks/useCookingTimers';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useRecipeChat } from '@/hooks/useRecipeChat';
 import { playChime } from '@/lib/playChime';
@@ -53,9 +53,9 @@ export function CookingMode({ recipe, onClose, onRecipeUpdate, onRecipeCreate }:
 
   const currentStep = sortedSteps[Math.min(idx, total - 1)];
 
-  // Minuteur en cours lié à l'étape affichée (au plus un, vu que TimerChip les
-  // étiquette « Étape N »), pour l'afficher en grand plutôt que dans la barre.
-  const currentTimer = done ? null : (timers.find(t => t.label === `Étape ${idx + 1}` && !t.done) ?? null);
+  // Minuteur en cours lié à l'étape affichée, pour l'afficher en grand plutôt
+  // que dans la barre.
+  const currentTimer = findActiveStepTimer(timers, idx, done);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background pt-[env(safe-area-inset-top)]">

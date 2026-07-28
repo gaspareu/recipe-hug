@@ -15,6 +15,8 @@ export interface CookingTimer {
   remaining: number;
   running: boolean;
   done: boolean;
+  /** Index de l'étape à laquelle ce minuteur est rattaché. */
+  stepIndex: number;
 }
 
 interface UseCookingTimersOptions {
@@ -57,7 +59,7 @@ export function useCookingTimers({ onTimerDone }: UseCookingTimersOptions = {}) 
     return () => clearInterval(interval);
   }, []);
 
-  const addTimer = useCallback((label: string, seconds: number) => {
+  const addTimer = useCallback((label: string, seconds: number, stepIndex: number) => {
     setTimers(prev => [
       ...prev,
       {
@@ -67,6 +69,7 @@ export function useCookingTimers({ onTimerDone }: UseCookingTimersOptions = {}) 
         remaining: seconds,
         running: true,
         done: false,
+        stepIndex,
       },
     ]);
   }, []);
@@ -80,4 +83,17 @@ export function useCookingTimers({ onTimerDone }: UseCookingTimersOptions = {}) 
   }, []);
 
   return { timers, addTimer, toggleTimer, dismissTimer };
+}
+
+/**
+ * Minuteur en cours lié à l'étape affichée : premier minuteur non terminé dont
+ * le stepIndex correspond. `null` si la session est terminée ou aucun ne correspond.
+ */
+export function findActiveStepTimer(
+  timers: readonly CookingTimer[],
+  stepIndex: number,
+  sessionDone: boolean,
+): CookingTimer | null {
+  if (sessionDone) return null;
+  return timers.find(t => t.stepIndex === stepIndex && !t.done) ?? null;
 }

@@ -22,7 +22,7 @@ describe('CookingStepFocus', () => {
     const onStartTimer = vi.fn();
     render(<CookingStepFocus step={step} idx={1} total={6} onStartTimer={onStartTimer} activeTimer={null} onToggleTimer={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /Minuteur 6:00/ }));
-    expect(onStartTimer).toHaveBeenCalledWith('Étape 2', 360);
+    expect(onStartTimer).toHaveBeenCalledWith('Étape 2', 360, 1);
   });
 
   it('propose un minuteur depuis duration_minutes même sans durée dans le texte', () => {
@@ -30,7 +30,7 @@ describe('CookingStepFocus', () => {
     const structured: Step = { order: 1, text: 'Laissez reposer la pâte.', duration_minutes: 30 };
     render(<CookingStepFocus step={structured} idx={0} total={3} onStartTimer={onStartTimer} activeTimer={null} onToggleTimer={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /Minuteur 30:00/ }));
-    expect(onStartTimer).toHaveBeenCalledWith('Étape 1', 1800);
+    expect(onStartTimer).toHaveBeenCalledWith('Étape 1', 1800, 0);
   });
 
   const titled: Step = { order: 1, text: 'Faire cuire 6 min à la casserole.', title: 'Cuire les œufs', duration_minutes: 6 };
@@ -41,14 +41,14 @@ describe('CookingStepFocus', () => {
   });
 
   it('affiche le gros compte à rebours + pause quand un minuteur de l’étape tourne', () => {
-    const activeTimer = { id: 't1', label: 'Étape 1', total: 360, remaining: 300, running: true, done: false };
+    const activeTimer = { id: 't1', label: 'Étape 1', total: 360, remaining: 300, running: true, done: false, stepIndex: 0 };
     render(<CookingStepFocus step={titled} idx={0} total={3} onStartTimer={vi.fn()} activeTimer={activeTimer} onToggleTimer={vi.fn()} />);
     expect(screen.getByText('5:00')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /mettre en pause/i })).toBeInTheDocument();
   });
 
   it('propose « reprendre » quand le minuteur de l’étape est en pause', () => {
-    const paused = { id: 't1', label: 'Étape 1', total: 360, remaining: 300, running: false, done: false };
+    const paused = { id: 't1', label: 'Étape 1', total: 360, remaining: 300, running: false, done: false, stepIndex: 0 };
     const onToggleTimer = vi.fn();
     render(<CookingStepFocus step={titled} idx={0} total={3} onStartTimer={vi.fn()} activeTimer={paused} onToggleTimer={onToggleTimer} />);
     fireEvent.click(screen.getByRole('button', { name: /reprendre/i }));

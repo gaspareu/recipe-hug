@@ -3,8 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { CookingTimerBar } from './CookingTimerBar';
 import type { CookingTimer } from '@/hooks/useCookingTimers';
 
-const running: CookingTimer = { id: '1', label: 'Œufs', total: 360, remaining: 357, running: true, done: false };
-const finished: CookingTimer = { id: '2', label: 'Champignons', total: 300, remaining: 0, running: false, done: true };
+const running: CookingTimer = { id: '1', label: 'Œufs', total: 360, remaining: 357, running: true, done: false, stepIndex: 0 };
+const finished: CookingTimer = { id: '2', label: 'Champignons', total: 300, remaining: 0, running: false, done: true, stepIndex: 1 };
 
 describe('CookingTimerBar', () => {
   it('ne rend rien sans minuteur', () => {
