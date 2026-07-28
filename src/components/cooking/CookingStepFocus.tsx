@@ -56,7 +56,7 @@ function ActiveTimerDisplay({ timer, onToggle }: ActiveTimerDisplayProps) {
       <span className="font-solitreo text-5xl leading-none text-primary">{formatTimer(timer.remaining)}</span>
       <button
         onClick={() => onToggle(timer.id)}
-        aria-label={timer.running ? 'mettre en pause' : 'reprendre'}
+        aria-label={timer.running ? `Mettre en pause ${timer.label}` : `Reprendre ${timer.label}`}
         className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"
       >
         {timer.running

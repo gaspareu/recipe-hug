@@ -55,7 +55,7 @@ export function CookingMode({ recipe, onClose, onRecipeUpdate, onRecipeCreate }:
 
   // Minuteur en cours lié à l'étape affichée (au plus un, vu que TimerChip les
   // étiquette « Étape N »), pour l'afficher en grand plutôt que dans la barre.
-  const currentTimer = (!done && timers.find(t => t.label === `Étape ${idx + 1}` && !t.done)) || null;
+  const currentTimer = done ? null : (timers.find(t => t.label === `Étape ${idx + 1}` && !t.done) ?? null);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background pt-[env(safe-area-inset-top)]">
