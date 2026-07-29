@@ -104,6 +104,7 @@ Format étapes — TOUTES les recettes sont destinées au Thermomix TM7. Rédige
 - Pour chaque étape réalisée par l'appareil, renseigne l'objet "tm7" (mode, seconds, temperature, speed, reverse, accessory, power) ET rédige le texte au format Cookidoo, ex. "Mixer 8 min/100°C/vitesse 2".
 - Étapes manuelles (éplucher, réserver, dresser) : PAS d'objet "tm7" ; renseigne "duration_minutes" si un temps d'attente s'applique.
 - Respecte STRICTEMENT le RÉFÉRENTIEL THERMOMIX TM7 (fourni plus bas) : n'invente jamais une fonction, une vitesse ou une température absente du TM7. "Varoma" = cuisson vapeur (pas de °C) ; "sens inverse" pour mélanger sans hacher.
+- Donne à CHAQUE étape un "title" court (2-4 mots) résumant l'action, en plus du "text" détaillé.
 
 ### Skill : Guidage cuisine
 Quand l'utilisateur veut cuisiner une recette (qui est en contexte ou identifiée) :
@@ -159,6 +160,11 @@ const STEP_ITEMS_SCHEMA = {
   type: "object",
   properties: {
     order: { type: "number" },
+    title: {
+      type: "string",
+      description:
+        "Titre court de l'étape (2-4 mots, ex. « Cuire les œufs », « Poêler les champignons ») affiché en grand dans le mode cuisson.",
+    },
     text: {
       type: "string",
       description:

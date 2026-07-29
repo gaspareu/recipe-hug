@@ -12,6 +12,8 @@ export interface Ingredient {
 export interface Step {
   order: number;
   text: string;
+  /** Titre court de l'étape (« Cuire les œufs »). Généré par l'agent ; absent sur les recettes anciennes. */
+  title?: string;
   duration_minutes?: number;
   parallel_with?: number[];
   /**
