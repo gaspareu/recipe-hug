@@ -8,7 +8,12 @@ export default {
   theme: {
   	container: {
   		center: true,
-  		padding: '2rem',
+  		// Une valeur simple s'appliquerait dès 0px : sur mobile les 2rem
+  		// s'ajoutaient au padding local des écrans (48px de marge latérale).
+  		padding: {
+  			DEFAULT: '1rem',
+  			sm: '2rem'
+  		},
   		screens: {
   			'2xl': '1400px'
   		}

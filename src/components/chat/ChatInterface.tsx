@@ -191,8 +191,11 @@ export function ChatInterface({
       {showWelcomeScreen && !hasConversation ? (
         welcomeContent
       ) : (
-        <ScrollArea className="flex-1 px-4" ref={scrollRef}>
-          <div role="log" aria-label="Conversation" aria-live="polite" className="flex flex-col justify-end min-h-full py-4 space-y-6">
+        <ScrollArea className="flex-1" ref={scrollRef}>
+          {/* px-4 porté par le contenu, pas par la racine : une marge négative
+              (rangée d'actions) sortirait à gauche de l'origine du scroller et
+              serait clippée sans possibilité de défiler jusqu'à elle. */}
+          <div role="log" aria-label="Conversation" aria-live="polite" className="flex flex-col justify-end min-h-full px-4 py-4 space-y-6">
             {displayMessages.map(message => {
               const displayContent = getDisplayContent(message);
               const isLast = message.id === messages[messages.length - 1]?.id;
@@ -210,7 +213,7 @@ export function ChatInterface({
                   <div className={`min-w-0 break-words ${message.role === 'user' ? 'max-w-[80%] bg-muted rounded-3xl px-4 py-3' : 'max-w-full sm:max-w-[85%]'}`}>
                     {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
                     {message.role === 'assistant' ? (
-                      <div className="prose prose-sm max-w-none break-words text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-p:leading-relaxed prose-li:text-foreground">
+                      <div className="prose prose-base max-w-none break-words text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-p:leading-relaxed prose-li:text-foreground prose-p:my-0 prose-p:[&+p]:mt-4">
                         <ReactMarkdown>{displayContent}</ReactMarkdown>
                         {showCaret && (
                           <motion.span
@@ -221,7 +224,7 @@ export function ChatInterface({
                         )}
                       </div>
                     ) : message.content && message.content !== '📷 Image envoyée' && (
-                      <p className="text-sm whitespace-pre-wrap text-foreground">{message.content}</p>
+                      <p className="text-base whitespace-pre-wrap text-foreground">{message.content}</p>
                     )}
                     {showActions && (
                       <div className="flex items-center gap-1 mt-1 -ml-2">

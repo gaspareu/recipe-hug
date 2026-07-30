@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useHomeChat } from '@/hooks/useHomeChat';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
+import { useViewportHeight } from '@/hooks/useViewportHeight';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { CookingModeContainer } from '@/components/cooking/CookingModeContainer';
 import { InstallBanner } from '@/components/InstallBanner';
@@ -27,6 +28,7 @@ export default function Home() {
   const { handlers: swipeHandlers, style: swipeStyle } = useSwipeNavigation({
     targetRoute: '/dashboard', direction: 'left', threshold: 80,
   });
+  const viewportHeight = useViewportHeight();
 
   useEffect(() => {
     const isMobile = window.innerWidth < 768;
@@ -41,10 +43,14 @@ export default function Home() {
   const hasConversation = messages.length > 1;
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-background pt-[env(safe-area-inset-top)]" {...swipeHandlers} style={swipeStyle}>
+    <div
+      className="h-[100dvh] flex flex-col bg-background pt-[env(safe-area-inset-top)]"
+      {...swipeHandlers}
+      style={{ ...swipeStyle, ...(viewportHeight ? { height: `${viewportHeight}px` } : {}) }}
+    >
       {/* Minimal header */}
-      <header className="absolute top-0 left-0 right-0 z-10 p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
-        <div className="container max-w-4xl mx-auto flex items-center justify-between">
+      <header className="absolute top-0 left-0 right-0 z-10 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] bg-background/80 backdrop-blur-sm">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={resetChat} disabled={isStreaming || !hasConversation} title="Nouvelle conversation" className="h-9 w-9">
               <Plus className="h-4 w-4" />
@@ -75,7 +81,7 @@ export default function Home() {
       </header>
 
       {/* Chat area */}
-      <div className="flex-1 flex flex-col container max-w-3xl mx-auto w-full pt-16 min-h-0">
+      <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full pt-16 min-h-0">
         <ChatInterface
           messages={messages}
           isStreaming={isStreaming}
