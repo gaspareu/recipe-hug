@@ -63,7 +63,7 @@ export function useSwipeNavigation({
       return;
     }
 
-    const shouldNavigate = 
+    const shouldNavigate =
       (direction === 'left' && translateX < -threshold) ||
       (direction === 'right' && translateX > threshold);
 
@@ -78,11 +78,22 @@ export function useSwipeNavigation({
     isHorizontalSwipe.current = null;
   }, [navigate, targetRoute, direction, threshold, translateX]);
 
+  const handleTouchCancel = useCallback(() => {
+    // iOS peut interrompre un geste sans déclencher touchend (retour système,
+    // notification, multi-touch...) : sans ce reset, translateX reste bloqué
+    // et le décalage visuel de la page persiste indéfiniment.
+    setTranslateX(0);
+    touchStartX.current = null;
+    touchStartY.current = null;
+    isHorizontalSwipe.current = null;
+  }, []);
+
   return {
     handlers: {
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
+      onTouchCancel: handleTouchCancel,
     },
     style: {
       transform: translateX !== 0 ? `translateX(${translateX}px)` : undefined,

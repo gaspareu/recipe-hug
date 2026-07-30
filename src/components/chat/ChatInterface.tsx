@@ -313,10 +313,10 @@ export function ChatInterface({
       )}
 
       {/* Bottom area */}
-      <div className="shrink-0 p-4 space-y-4">
+      <div className="shrink-0 p-4 space-y-4 bg-background/80 backdrop-blur-sm border-t border-border relative z-10">
         {/* Quick suggestions */}
         {activeSuggestions.length > 0 && (
-          <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] -mx-4 px-4" data-no-swipe-nav data-testid="suggestions-scroll">
+          <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-no-swipe-nav data-testid="suggestions-scroll">
             <div className="flex gap-2 w-max">
               {activeSuggestions.map((suggestion, i) => (
                 <Button
