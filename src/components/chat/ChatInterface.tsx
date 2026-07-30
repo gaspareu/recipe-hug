@@ -213,7 +213,7 @@ export function ChatInterface({
                   <div className={`min-w-0 break-words ${message.role === 'user' ? 'max-w-[80%] bg-muted rounded-3xl px-4 py-3' : 'max-w-full sm:max-w-[85%]'}`}>
                     {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
                     {message.role === 'assistant' ? (
-                      <div className="prose prose-base max-w-none break-words text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-p:leading-relaxed prose-li:text-foreground prose-p:my-0 prose-p:[&+p]:mt-4">
+                      <div className="prose prose-base max-w-none break-words text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground prose-p:first:mt-0 prose-p:last:mb-0">
                         <ReactMarkdown>{displayContent}</ReactMarkdown>
                         {showCaret && (
                           <motion.span

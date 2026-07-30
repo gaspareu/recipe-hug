@@ -28,7 +28,7 @@ export default function Home() {
   const { handlers: swipeHandlers, style: swipeStyle } = useSwipeNavigation({
     targetRoute: '/dashboard', direction: 'left', threshold: 80,
   });
-  const viewportHeight = useViewportHeight();
+  useViewportHeight();
 
   useEffect(() => {
     const isMobile = window.innerWidth < 768;
@@ -43,11 +43,7 @@ export default function Home() {
   const hasConversation = messages.length > 1;
 
   return (
-    <div
-      className="h-[100dvh] flex flex-col bg-background pt-[env(safe-area-inset-top)]"
-      {...swipeHandlers}
-      style={{ ...swipeStyle, ...(viewportHeight ? { height: `${viewportHeight}px` } : {}) }}
-    >
+    <div className="h-[var(--app-vh,100dvh)] flex flex-col bg-background pt-[env(safe-area-inset-top)]" {...swipeHandlers} style={swipeStyle}>
       {/* Minimal header */}
       <header className="absolute top-0 left-0 right-0 z-10 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] bg-background/80 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
