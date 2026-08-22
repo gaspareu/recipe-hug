@@ -1,7 +1,7 @@
 # Edge Functions — Documentation
 
 > Référentiel des 13 fonctions backend. Toutes les fonctions IA utilisent le pattern unifié `resolveAIConfig` + modules partagés `_shared/`.
-> Pour le déploiement et les secrets, voir **`supabase/functions/CLAUDE.md`**.
+> Pour le déploiement et les secrets, voir **`supabase/functions/AGENTS.md`**.
 
 ---
 
@@ -15,7 +15,7 @@
 | `ai-providers.ts` | `callAINonStreaming`, `callAIStreaming`, `buildToolCallRequest`, `extractToolCallResult`, `buildVisionRequest`, `buildSimpleRequest`, `buildRequestHeaders`, `extractContentFromResponse` | Appels IA unifiés, transforms de stream, helpers tool-calling et vision |
 | `decrypt-keys.ts` | `encryptValue`, `decryptValue`, `decryptProviderKeys`, `maskApiKey` | Chiffrement/déchiffrement AES-GCM des clés API |
 | `thermomix/reference.ts` | `TM7_MODES`, `TM7_CONVERSION_CHEATSHEET`, `normalizeSpeed`, `clampTemperature`, `buildTm7ReferenceForPrompt` | **Référentiel machine TM7** (vitesses, températures, modes, accessoires, barème). Miroir front synchronisé : `src/lib/thermomix/reference.ts` |
-| `cookidoo/{mapper,validate,client,auth,types}.ts` | `mapRecipeToCookidoo`, `validateCookidooPayload`, `createRecipe`, `fillRecipe`, `setRecipeImage`, `login` | Connecteur Cookidoo (export TM7, annotations guided cooking). Détail : `supabase/functions/CLAUDE.md` |
+| `cookidoo/{mapper,validate,client,auth,types}.ts` | `mapRecipeToCookidoo`, `validateCookidooPayload`, `createRecipe`, `fillRecipe`, `setRecipeImage`, `login` | Connecteur Cookidoo (export TM7, annotations guided cooking). Détail : `supabase/functions/AGENTS.md` |
 
 ### Résolution de configuration (`resolveAIConfig`)
 

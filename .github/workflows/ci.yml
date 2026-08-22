@@ -2,9 +2,8 @@ name: CI
 
 on:
   push:
-    # claude/** : les pushes du bot Claude Code ne déclenchent pas les
-    # évènements pull_request (synchronize) — on couvre via push.
-    branches: [main, "claude/**"]
+    # Les branches de travail Codex sont aussi couvertes directement par push.
+    branches: [main, "codex/**"]
   pull_request:
 
 # Moindre privilège pour le GITHUB_TOKEN (lecture seule du dépôt).
@@ -38,18 +37,12 @@ jobs:
       - name: Build de production
         run: npm run build
 
-      # Typecheck non-bloquant : erreurs de type préexistantes (tests + RecipeNew.tsx).
-      # `vite build` ne vérifie pas les types ; ce step les surface via `tsc -b`.
-      # À repasser en bloquant une fois cette dette résorbée.
-      - name: Typecheck (informatif)
+      # `vite build` ne vérifie pas les types ; ce step est donc un garde-fou distinct.
+      - name: Typecheck
         run: npm run typecheck
-        continue-on-error: true
 
-      # Lint non-bloquant : le repo porte une dette `no-explicit-any` préexistante.
-      # À repasser en bloquant une fois cette dette résorbée.
-      - name: Lint (informatif)
+      - name: Lint
         run: npm run lint
-        continue-on-error: true
 
   edge-functions:
     name: Edge functions (tests Deno)

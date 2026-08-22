@@ -92,7 +92,7 @@ constantes module (le reste — `CollapsibleCard` partagé, type `ByokProvider`,
   - `verify_jwt` — **✅ fait (branche `fix/medium-verify-jwt`).** Toutes les fonctions passées à
     `verify_jwt = true` sauf `webhook-recipe` (auth par token UUID). Le front envoie déjà le JWT sur
     tous les appels (vérifié call-site par call-site) → sûr. `config.toml` ajouté au trigger du
-    workflow de déploiement (sinon non redéployé). Doc `functions/CLAUDE.md` alignée.
+    workflow de déploiement (sinon non redéployé). Doc `functions/AGENTS.md` alignée.
   - `get_user_id_by_phone` **exécutable par `anon`** — **✅ fait (branche `fix/c-db-storage-hardening`).**
     Recon MCP : la fonction `SECURITY DEFINER` (lit `auth.users`) restait appelable sans auth (oracle
     d'énumération par téléphone) — l'ACL prod montrait `{postgres, anon, service_role}`, la migration

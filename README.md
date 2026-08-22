@@ -11,17 +11,20 @@ Application **PWA** de gestion de recettes avec assistant IA conversationnel (ch
 
 ## Démarrage
 
-Pré-requis : Node.js & npm (ou [bun](https://bun.sh)).
+Pré-requis : Node.js 22 (voir `.nvmrc`) et npm.
 
 ```sh
 # 1. Cloner le dépôt
 git clone <YOUR_GIT_URL>
 cd recipe-hug
 
-# 2. Installer les dépendances
-npm install
+# 2. Installer exactement les dépendances verrouillées
+npm ci
 
-# 3. Lancer le serveur de dev (http://localhost:8080)
+# 3. Préparer la configuration publique Supabase
+cp .env.example .env
+
+# 4. Lancer le serveur de dev (http://localhost:8080)
 npm run dev
 ```
 
@@ -29,8 +32,9 @@ npm run dev
 
 ```sh
 npm run dev          # Serveur de dev (Vite)
-npm run build        # Build de production (+ vérification TypeScript)
+npm run build        # Build de production (sans vérification TypeScript)
 npm run build:dev    # Build en mode development
+npm run typecheck    # Vérification TypeScript
 npm run lint         # ESLint
 npm run preview      # Prévisualise le build
 npm test             # Vitest (watch)
@@ -58,9 +62,18 @@ dashboard Supabase (**Authentication → Providers**) avec l'URL de redirection 
 
 Déployé sur **Vercel** (branche `main` → auto-deploy). `vercel.json` gère le routing SPA.
 
+## Codex
+
+- `AGENTS.md` contient l'architecture, les conventions et les commandes chargées automatiquement.
+- `.agents/skills/` contient les workflows projet (`check`, `pre-pr`, `git-github`, UI/UX).
+- `.codex/config.toml` configure les MCP Supabase et Vercel ; au premier lancement,
+  marquer le projet comme fiable puis terminer leur authentification OAuth si Codex le demande.
+- `.codex/hooks.json` installe les dépendances au démarrage si le lockfile a changé et
+  active les garde-fous Git/fichiers. Les hooks doivent être approuvés une première fois.
+
 ## Documentation
 
-- `CLAUDE.md` — guide pour les assistants IA travaillant sur le dépôt
+- `AGENTS.md` — guide de travail chargé par Codex
 - `EDGE_FUNCTIONS.md` — référentiel des edge functions et du pattern IA partagé
 - `docs/CODEMAPS/` — cartes du code (architecture, frontend, backend, data, dependencies)
-- `docs/BACKLOG.md` - liste des améliorations à réaliser; 
+- `docs/BACKLOG.md` — liste des améliorations à réaliser.

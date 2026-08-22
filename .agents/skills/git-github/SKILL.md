@@ -9,8 +9,8 @@ description: Bonnes pratiques git/GitHub du projet recipe-hug — branches, comm
 
 - **Jamais de commit direct sur `main`** (un hook le bloque). `main` est déployée
   automatiquement sur Vercel : tout passe par une branche + PR.
-- Nommage : `claude/<sujet-en-kebab-case>-<suffixe>` pour les sessions Claude,
-  sinon `feat/...`, `fix/...`, `chore/...`.
+- Nommage Codex : `codex/<sujet-en-kebab-case>` ; accepter aussi les conventions
+  métier existantes `feat/...`, `fix/...`, `chore/...`.
 - Créer la branche depuis `main` à jour : `git fetch origin main` puis
   `git checkout -b <branche> origin/main`.
 
@@ -31,14 +31,15 @@ Lancer au minimum :
 
 ```bash
 npm run test:run     # Vitest (single run)
-npm run build        # inclut la vérification TypeScript
+npm run typecheck    # TypeScript (vite build ne vérifie pas les types)
+npm run lint         # ESLint
+npm run build        # bundle de production
 ```
 
 Si les edge functions sont touchées :
 
 ```bash
-deno test supabase/functions/_shared/decrypt-keys_test.ts
-deno test supabase/functions/_shared/ai-providers_test.ts
+deno test --allow-env --node-modules-dir=none --min-dep-age=0 supabase/functions/_shared/
 ```
 
 La CI (`.github/workflows/ci.yml`) rejoue tests + build + deno test ;
@@ -61,7 +62,8 @@ si les tests échouent localement.
   validation (résultats de tests).
 - Vérifier que la CI est verte avant de proposer le merge ; ne jamais merger
   sans accord de l'utilisateur.
-- Utiliser les outils MCP GitHub (pas de `gh` CLI dans les conteneurs web).
+- Préférer les outils GitHub connectés lorsqu'ils sont disponibles ; sinon utiliser
+  `gh` uniquement si le client est installé et authentifié.
 
 ## Fichiers protégés
 
@@ -76,7 +78,7 @@ Modifier `supabase/functions/` dans le repo **ne change rien en production**
 tant que la fonction n'est pas redéployée (MCP Supabase ou CLI). Après tout
 commit touchant une edge function :
 
-1. Redéployer la fonction (voir `supabase/functions/CLAUDE.md` pour la
+1. Redéployer la fonction (voir `supabase/functions/AGENTS.md` pour la
    structure `files` exigée par le déploiement MCP).
 2. Vérifier avec `get_edge_function` que la version a augmenté.
 3. **Attention aux sessions parallèles** : un déploiement depuis une autre
