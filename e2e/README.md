@@ -1,7 +1,8 @@
 # Tests E2E (Playwright)
 
-Tests end-to-end **locaux** du parcours authentifié. Pas encore câblés en CI :
-ils nécessitent un compte de test et écrivent potentiellement des données réelles.
+Tests end-to-end du parcours authentifié, exécutables localement et en CI après merge
+sur `main`. Ils nécessitent un compte de test et écrivent des données réelles avant leur
+nettoyage.
 
 ## Prérequis
 

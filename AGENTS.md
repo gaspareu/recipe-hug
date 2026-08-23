@@ -8,11 +8,14 @@ Ce fichier fournit les consignes de dépôt chargées automatiquement par Codex.
 
 **Tout l'outillage agent doit être committé dans le repo** pour être disponible automatiquement. Privilégier des artefacts versionnés :
 
-- **`.codex/config.toml`** (committé) — déclare les serveurs MCP Supabase et Vercel ainsi que les réglages Codex propres au projet.
+- **`.codex/config.toml`** (committé) — déclare les serveurs MCP Supabase et Vercel ainsi que les réglages Codex propres au projet. L'accès Supabase de production est limité en lecture ; les écritures passent par un environnement de développement isolé ou la CI.
 - **`.codex/hooks.json`** + **`.codex/hooks/`** (committés) — `SessionStart` maintient `node_modules` à jour ; `PreToolUse`/`PostToolUse` bloquent les opérations Git interdites et l'édition des fichiers générés, puis rappellent le redéploiement des edge functions.
 - **`.agents/skills/git-github/`** (committé) — bonnes pratiques Git/GitHub (branches, commits conventionnels en français, validation avant push, PR, redéploiement edge functions). À consulter avant tout commit, push ou création de PR.
 - **`.agents/skills/check/`** (committé) — garde-fou qualité rapide et déterministe (tests + typecheck + lint, comparés au baseline de non-régression). À lancer pendant le développement et avant tout commit.
 - **`.agents/skills/pre-pr/`** (committé) — revue approfondie avant PR : garde-fou, simplification, correctness et sécurité. À lancer une fois quand une feature est prête.
+- **`.agents/skills/feature-workflow/`** (committé) — conduit une évolution de ses critères d'acceptation jusqu'au diff prêt pour revue.
+- **`.agents/skills/debug/`** (committé) — diagnostic de bout en bout : local, navigateur, Vercel et Supabase.
+- **`.agents/skills/dependency-updates/`** (committé) — revue des PR Dependabot et des montées de version.
 - **`.agents/skills/ui-ux-pro-max/`** (committé) — référentiel UI/UX local à utiliser pour les travaux de design et d'interface.
 - **CI GitHub Actions** (`.github/workflows/ci.yml`) — tests + typecheck + lint + build + `deno test` ; c'est le **garde-fou de non-régression**.
 - **`.github/dependabot.yml`** (committé) — PR hebdomadaires de mise à jour des dépendances npm et des GitHub Actions.
@@ -30,9 +33,12 @@ npm run typecheck    # Vérification de types TypeScript (tsc -b --noEmit)
 npm run preview      # Prévisualise le build
 npm test             # Vitest (watch mode)
 npm run test:run     # Vitest (single run) — à utiliser en validation/CI
+npm run test:edge    # Tests Deno des modules partagés des edge functions
+npm run check        # Tests + typecheck + lint
+npm run check:all    # Check + build + tests Deno
 
 # Tests Deno des modules partagés des edge functions
-deno test --allow-env --node-modules-dir=none --min-dep-age=0 supabase/functions/_shared/
+deno test --allow-env=ANTHROPIC_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,AI_KEYS_ENCRYPTION_SECRET --node-modules-dir=none --frozen --min-dep-age=0 supabase/functions/_shared/
 ```
 
 ⚠️ **`npm run build` ne vérifie pas les types.** `vite build` (SWC) transpile sans passer par `tsc` : un build vert ne prouve rien sur la validité des types. La vérification est `npm run typecheck` (`tsc -b --noEmit`), et c'est elle qu'il faut lancer avant de conclure qu'un changement compile.
@@ -103,6 +109,7 @@ Migrations horodatées dans `supabase/migrations/` (appliquées dans l'ordre). T
 - **UI** : composer à partir de `src/components/ui/` (shadcn) + classes Tailwind via `cn()`. Suivre les patterns existants du domaine concerné.
 - **Langue** : l'UI et les commentaires sont en **français** — rester cohérent.
 - **Fichiers auto-générés à NE PAS éditer** : `src/integrations/supabase/client.ts`, `src/integrations/supabase/types.ts`.
+- **Lockfiles** : `package-lock.json` et `deno.lock` sont versionnés ; les tests Deno utilisent `--frozen`.
 - **Tests** : Vitest + Testing Library (jsdom), setup dans `src/test/setup.ts`, fichiers `*.test.ts(x)` colocalisés. Tests Deno pour le chiffrement des edge functions.
 
 ## Déploiement

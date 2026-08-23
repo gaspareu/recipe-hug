@@ -27,6 +27,14 @@ Baseline vérifié au **2026-08-22** :
 
 ## Procédure
 
+La commande agrégée couvre les trois garde-fous :
+
+```bash
+npm run check
+```
+
+Pour diagnostiquer ou comparer précisément au baseline, lancer séparément :
+
 1. **Tests** (bloquant — doit rester à 0 échec) :
    ```bash
    npm run test:run

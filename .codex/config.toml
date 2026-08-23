@@ -2,9 +2,11 @@
 hooks = true
 
 [mcp_servers.supabase]
-url = "https://mcp.supabase.com/mcp?project_ref=ifpqsyyvytfpossqycpc"
+# La production est volontairement limitée aux lectures et au diagnostic.
+# Configurer séparément une branche/projet de développement pour les migrations.
+url = "https://mcp.supabase.com/mcp?project_ref=ifpqsyyvytfpossqycpc&read_only=true&features=docs,database,debugging"
 auth = "oauth"
-default_tools_approval_mode = "writes"
+default_tools_approval_mode = "prompt"
 
 [mcp_servers.vercel]
 url = "https://mcp.vercel.com"

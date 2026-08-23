@@ -34,8 +34,10 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (recipeId) {
-    await client.from('meal_plans').delete().eq('recipe_id', recipeId);
-    await client.from('recipes').delete().eq('id', recipeId);
+    const { error: planError } = await client.from('meal_plans').delete().eq('recipe_id', recipeId);
+    if (planError) throw planError;
+    const { error: recipeError } = await client.from('recipes').delete().eq('id', recipeId);
+    if (recipeError) throw recipeError;
   }
 });
 

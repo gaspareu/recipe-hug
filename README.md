@@ -1,79 +1,145 @@
 # recipe-hug
 
-Application **PWA** de gestion de recettes avec assistant IA conversationnel (chat streaming, vision, génération d'images), planification de repas et préférences culinaires personnalisées.
+PWA de gestion de recettes pensée comme un compagnon de cuisine personnel : bibliothèque
+de recettes, assistant IA conversationnel, import par image, planification des repas,
+liste de courses, mode vocal et export Cookidoo pour Thermomix TM7.
+
+L'application est déployée sur [recipe-hug.vercel.app](https://recipe-hug.vercel.app).
+
+## Fonctionnalités
+
+- création, édition, favoris, statuts, partage et historique des versions d'une recette ;
+- assistant IA unifié en streaming pour créer ou modifier une recette, naviguer dans
+  l'application, enregistrer des préférences et préparer un planning ;
+- analyse de photos de recettes et génération d'illustrations ;
+- planification des repas et génération d'une liste de courses ;
+- assistant de cuisson, checklist d'ingrédients et commandes vocales ElevenLabs ;
+- export asynchrone vers Cookidoo, limité au référentiel Thermomix TM7 ;
+- installation PWA, mise à jour automatique et comportement hors ligne.
+
+## Architecture
+
+```text
+PWA React / Vite
+├── pages et composants shadcn/ui
+├── hooks métier + TanStack Query
+└── client Supabase
+    ├── Auth, PostgreSQL, RLS et Storage
+    └── Edge Functions Deno
+        ├── assistant IA et traitements vision/image
+        ├── Anthropic, Gemini et OpenAI
+        ├── voix ElevenLabs
+        └── connecteur Cookidoo TM7
+```
+
+Le frontend ne porte pas la logique métier non triviale : elle vit dans `src/hooks/`.
+Les appels IA passent par `resolveAIConfig`, puis par la couche fournisseur partagée des
+edge functions. Les clés utilisateur sont chiffrées en AES-GCM et ne sont jamais
+retournées en clair. L'isolation des données est assurée par les politiques RLS.
 
 ## Stack
 
-- **Frontend** : React 18 + TypeScript + Vite (SWC), Tailwind CSS + shadcn/ui (Radix)
-- **Backend** : Supabase (auth, PostgreSQL, storage, edge functions Deno)
-- **Data fetching** : TanStack Query v5 · **Routing** : React Router v7 · **PWA** : vite-plugin-pwa
-- **IA** : multi-fournisseurs — Anthropic (défaut, clé serveur), Gemini, OpenAI
+- **Frontend** : React 18, TypeScript strict, Vite/SWC, Tailwind CSS, shadcn/ui ;
+- **Données** : Supabase Auth, PostgreSQL, Storage, TanStack Query v5 ;
+- **Backend** : Supabase Edge Functions sous Deno ;
+- **IA** : Anthropic par défaut, Gemini et OpenAI en BYOK, Gemini pour les images ;
+- **PWA** : React Router v7 et `vite-plugin-pwa` ;
+- **Déploiement** : Vercel pour le frontend, GitHub Actions pour la CI et les edge functions.
 
-## Démarrage
+## Démarrage local
 
-Pré-requis : Node.js 22 (voir `.nvmrc`) et npm.
+Pré-requis : Node.js 22.12 ou supérieur (branche 22.x), npm et Git. Deno 2 est nécessaire pour tester les edge
+functions ; Playwright est nécessaire uniquement pour les tests E2E.
 
 ```sh
-# 1. Cloner le dépôt
-git clone <YOUR_GIT_URL>
+git clone https://github.com/gaspareu/recipe-hug.git
 cd recipe-hug
 
-# 2. Installer exactement les dépendances verrouillées
+nvm use
 npm ci
-
-# 3. Préparer la configuration publique Supabase
 cp .env.example .env
-
-# 4. Lancer le serveur de dev (http://localhost:8080)
 npm run dev
 ```
 
-## Scripts
+Le serveur Vite écoute sur <http://localhost:8080>. Renseigner dans `.env` les valeurs
+publiques d'une branche ou d'un projet Supabase de développement. Le template ne pointe
+volontairement pas vers la production, car les écritures faites dans l'app sont réelles.
+Les secrets IA, Cookidoo et ElevenLabs restent dans Supabase.
+
+## Commandes
 
 ```sh
-npm run dev          # Serveur de dev (Vite)
-npm run build        # Build de production (sans vérification TypeScript)
-npm run build:dev    # Build en mode development
-npm run typecheck    # Vérification TypeScript
-npm run lint         # ESLint
-npm run preview      # Prévisualise le build
-npm test             # Vitest (watch)
-npm run test:run     # Vitest (single run) — validation / CI
+npm run dev           # serveur Vite
+npm run test:run      # tests unitaires Vitest
+npm run typecheck     # TypeScript ; le build Vite ne vérifie pas les types
+npm run lint          # ESLint
+npm run check         # tests + typecheck + lint
+npm run build         # bundle de production et PWA
+npm run test:edge     # tests Deno des modules partagés
+npm run check:all     # garde-fous complets avant livraison
+npm run test:e2e      # parcours authentifiés Playwright
+npm run preview       # prévisualisation locale du build
 ```
+
+Les E2E exigent un compte jetable dans `.env.test`. Ils écrivent temporairement des
+données puis les nettoient ; voir [`e2e/README.md`](e2e/README.md).
 
 ## Variables d'environnement
 
-Front (préfixe `VITE_`, dans `.env`) :
+Variables publiques du frontend, dans `.env` :
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_SUPABASE_PROJECT_ID`
 
-Les secrets des edge functions (clé IA par défaut `ANTHROPIC_API_KEY`, clé de chiffrement
-`AI_KEYS_ENCRYPTION_SECRET`, clés ElevenLabs, `APP_URL`) sont gérés côté Supabase, hors du dépôt.
+Principaux secrets des edge functions, configurés dans Supabase :
 
-## Authentification
+- `ANTHROPIC_API_KEY` et `GEMINI_API_KEY` ;
+- `AI_KEYS_ENCRYPTION_SECRET` ;
+- `ELEVENLABS_API_KEY` ;
+- `APP_URL`.
 
-OAuth Google via Supabase Auth natif (`supabase.auth.signInWithOAuth`), en plus de
-l'authentification email/mot de passe. Le provider Google doit être configuré dans le
-dashboard Supabase (**Authentication → Providers**) avec l'URL de redirection de l'app.
+## Développement avec Codex
 
-## Déploiement
+Le setup Codex est versionné avec le projet :
 
-Déployé sur **Vercel** (branche `main` → auto-deploy). `vercel.json` gère le routing SPA.
+- `AGENTS.md` décrit l'architecture, les conventions et les fichiers protégés ;
+- `.codex/config.toml` connecte Vercel et un accès Supabase de production limité en
+  lecture seule ;
+- `.codex/hooks.json` maintient les dépendances à jour sans exécuter leurs scripts
+  lifecycle, et bloque les opérations Git dangereuses ou l'édition des fichiers Supabase générés ;
+- `.agents/skills/` contient les workflows `feature-workflow`, `debug`, `check`,
+  `dependency-updates`, `pre-pr`, `git-github` et `ui-ux-pro-max`.
 
-## Codex
+Au premier lancement dans Codex, marquer le projet comme fiable, approuver les hooks,
+puis terminer l'authentification OAuth de GitHub, Vercel et Supabase. Utiliser un task
+et un worktree par feature, puis y recréer `.env` depuis `.env.example`. Le MCP de
+production reste volontairement en lecture seule ;
+les migrations doivent être développées sur une branche Supabase isolée.
 
-- `AGENTS.md` contient l'architecture, les conventions et les commandes chargées automatiquement.
-- `.agents/skills/` contient les workflows projet (`check`, `pre-pr`, `git-github`, UI/UX).
-- `.codex/config.toml` configure les MCP Supabase et Vercel ; au premier lancement,
-  marquer le projet comme fiable puis terminer leur authentification OAuth si Codex le demande.
-- `.codex/hooks.json` installe les dépendances au démarrage si le lockfile a changé et
-  active les garde-fous Git/fichiers. Les hooks doivent être approuvés une première fois.
+Le workflow complet — feature, debug, PR, base de données, dépendances, plugins et
+automatisations recommandées — est détaillé dans
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+
+## CI, livraison et dépendances
+
+- toute évolution passe par une branche et une pull request vers `main` ;
+- la CI bloque sur la dependency review, Vitest, build, typecheck, lint et tests Deno ;
+- les E2E authentifiés tournent après merge sur `main`, sans exposer leurs secrets aux PR ;
+- Vercel crée les previews et déploie automatiquement `main` ;
+- les edge functions modifiées sont déployées par GitHub Actions après merge ;
+- Dependabot ouvre chaque semaine des PR npm et GitHub Actions, avec majors séparées
+  et mises à jour mineures/patch regroupées.
+
+Le projet conserve **Dependabot plutôt que Renovate** : pour ce dépôt npm unique, il
+couvre déjà les dépendances et les Actions avec moins d'outillage. Les deux bots ne
+doivent pas être activés ensemble. Renovate ne deviendrait pertinent qu'avec plusieurs
+écosystèmes, un monorepo ou le besoin d'un Dependency Dashboard avancé.
 
 ## Documentation
 
-- `AGENTS.md` — guide de travail chargé par Codex
-- `EDGE_FUNCTIONS.md` — référentiel des edge functions et du pattern IA partagé
-- `docs/CODEMAPS/` — cartes du code (architecture, frontend, backend, data, dependencies)
-- `docs/BACKLOG.md` — liste des améliorations à réaliser.
+- [`AGENTS.md`](AGENTS.md) — référence chargée automatiquement par Codex ;
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — workflow de développement complet ;
+- [`EDGE_FUNCTIONS.md`](EDGE_FUNCTIONS.md) — edge functions et couche IA partagée ;
+- [`docs/CODEMAPS/`](docs/CODEMAPS/) — cartes frontend, backend, données et dépendances ;
+- [`docs/BACKLOG.md`](docs/BACKLOG.md) — améliorations produit à venir.

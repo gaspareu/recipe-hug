@@ -20,7 +20,9 @@ if (dependenciesAreCurrent) {
   process.exit(0);
 }
 
-const result = spawnSync("npm", ["ci"], {
+// Une branche non revue peut modifier le lockfile : ne jamais exécuter ses scripts
+// lifecycle automatiquement au démarrage de Codex.
+const result = spawnSync("npm", ["ci", "--ignore-scripts"], {
   cwd: root,
   encoding: "utf8",
   maxBuffer: 20 * 1024 * 1024,
@@ -32,4 +34,4 @@ if (result.status !== 0) {
 }
 
 copyFileSync(lockfile, cachedLockfile);
-process.stdout.write("Dépendances installées avec npm ci.\n");
+process.stdout.write("Dépendances installées avec npm ci --ignore-scripts.\n");

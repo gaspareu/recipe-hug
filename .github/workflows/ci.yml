@@ -16,14 +16,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Refuser les nouvelles vulnérabilités élevées
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime, development
+
   frontend:
     name: Frontend (tests, build, lint)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -48,10 +60,10 @@ jobs:
     name: Edge functions (tests Deno)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Deno
-        uses: denoland/setup-deno@v2
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.x
 
@@ -60,15 +72,16 @@ jobs:
       #   « byonm » et exige ce node_modules pour résoudre @types/node (référencé
       #   par les types supabase-js). Ce flag force la résolution par le cache
       #   Deno (comme le runtime edge en prod, sans node_modules).
-      # --allow-env : les tests decrypt-keys manipulent AI_KEYS_ENCRYPTION_SECRET
-      #   via Deno.env pour vérifier le comportement fail-closed.
+      # --allow-env limité : les tests manipulent uniquement les clés IA factices
+      #   et AI_KEYS_ENCRYPTION_SECRET via Deno.env.
+      # --frozen : garantit que la résolution Deno correspond au deno.lock versionné.
       # --min-dep-age=0 : Deno résout aussi les dépendances npm du package.json
       #   racine (frontend), qu'aucun module `_shared/` n'importe. Sa politique
       #   d'âge minimal (24 h) faisait donc échouer le job sur chaque PR
       #   Dependabot rebasée le jour d'une publication npm. Le garde-fou
       #   supply-chain reste assuré côté frontend par `npm ci` (lockfile).
       - name: Tests Deno (modules partagés)
-        run: deno test --allow-env --node-modules-dir=none --min-dep-age=0 supabase/functions/_shared/
+        run: deno test --allow-env=ANTHROPIC_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,AI_KEYS_ENCRYPTION_SECRET --node-modules-dir=none --frozen --min-dep-age=0 supabase/functions/_shared/
 
   e2e:
     name: E2E (Playwright)
@@ -83,14 +96,11 @@ jobs:
       VITE_SUPABASE_URL: https://ifpqsyyvytfpossqycpc.supabase.co
       VITE_SUPABASE_PROJECT_ID: ifpqsyyvytfpossqycpc
       VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmcHFzeXl2eXRmcG9zc3F5Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTA2MzIsImV4cCI6MjA5NjA4NjYzMn0.8bJ-S00EJG8nrKyfsBbOPPr3BrHtti5lOgBvIXBQ6xE
-      # Compte de test (secrets de dépôt).
-      TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
-      TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -103,10 +113,15 @@ jobs:
 
       - name: Tests E2E
         run: npm run test:e2e
+        env:
+          # Les secrets ne sont accessibles qu'au processus de test, pas à npm ci
+          # ni à l'installation du navigateur.
+          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
 
       - name: Rapport Playwright (en cas d'échec)
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-report
           path: playwright-report/

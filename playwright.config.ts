@@ -20,9 +20,9 @@ loadEnvFile('.env.test');
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
 
 /**
- * Config E2E Playwright — exécution LOCALE (pas encore câblée en CI : nécessite
- * .env.test avec un compte de test + le serveur de dev, et écrit des données
- * réelles sur ce compte). Voir e2e/README.md.
+ * Config E2E Playwright — exécution locale et post-merge sur main en CI. Nécessite
+ * un compte de test et écrit des données réelles sur ce compte avant nettoyage.
+ * Voir e2e/README.md.
  */
 export default defineConfig({
   testDir: './e2e',

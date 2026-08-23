@@ -39,12 +39,12 @@ npm run build        # bundle de production
 Si les edge functions sont touchées :
 
 ```bash
-deno test --allow-env --node-modules-dir=none --min-dep-age=0 supabase/functions/_shared/
+deno test --allow-env=ANTHROPIC_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,AI_KEYS_ENCRYPTION_SECRET --node-modules-dir=none --frozen --min-dep-age=0 supabase/functions/_shared/
 ```
 
-La CI (`.github/workflows/ci.yml`) rejoue tests + build + deno test ;
-`typecheck` et `lint` y sont informatifs (dette préexistante). Ne pas pousser
-si les tests échouent localement.
+La CI (`.github/workflows/ci.yml`) rejoue tests, build, typecheck, lint et tests
+Deno. Tous ces garde-fous sont bloquants. Ne pas pousser si l'un d'eux échoue
+localement.
 
 ## Push
 
