@@ -91,13 +91,26 @@ export function ChatInterface({
     }
   }, [autoListenOnMount, enableAndListen]);
 
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    if (el) el.scrollTop = el.scrollHeight;
+  }, []);
+
   // Auto-scroll
   useEffect(() => {
-    if (scrollRef.current) {
-      const el = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (el) el.scrollTop = el.scrollHeight;
-    }
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  // Le clavier virtuel réduit la zone de conversation sans déplacer son scroll :
+  // le dernier message se retrouve masqué par la barre de saisie. On recolle en
+  // bas à chaque changement de hauteur visible (ouverture *et* fermeture).
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    viewport.addEventListener('resize', scrollToBottom);
+    return () => viewport.removeEventListener('resize', scrollToBottom);
+  }, [scrollToBottom]);
 
   // Auto-speak new assistant messages
   useEffect(() => {
