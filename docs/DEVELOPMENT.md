@@ -27,26 +27,53 @@ approbation pour chaque appel.
 
 ### Actions uniques restantes
 
-État vérifié le **2026-08-22**. Revalider ces constats avant d'agir sur une plateforme
+État vérifié le **2026-08-23**. Revalider ces constats avant d'agir sur une plateforme
 distante.
 
-1. Créer une branche Supabase persistante `development`, ou activer les branches de
-   preview par PR, puis donner au MCP Codex l'identifiant de cette branche.
-2. Réparer l'état `MIGRATIONS_FAILED` actuellement signalé par la branche Supabase
-   `main` avant d'automatiser les previews de base de données. L'historique distant
-   contient notamment une migration Cookidoo appliquée sous deux versions ; comparer
-   l'historique distant aux fichiers du dépôt avant tout reset ou rebase.
-3. Dans les règles GitHub de `main`, exiger une PR, garder les checks `Frontend` et
+1. Recopier les cinq valeurs actuellement placées dans Database Vault vers
+   **Edge Functions → Secrets** sur `recipe-hug-dev`. Les fonctions utilisent
+   `Deno.env.get(...)` : Vault ne les injecte pas automatiquement. Ne jamais recopier une
+   donnée utilisateur ni un secret sans vérifier qu'il peut être utilisé hors production.
+2. Dans les règles GitHub de `main`, exiger une PR, garder les checks `Frontend` et
    `Edge functions`, ajouter `Dependency review`, puis activer la résolution des
    conversations. Pour un projet solo, zéro approbation obligatoire évite
    l'auto-approbation impossible.
-4. Activer `Automatically delete head branches`. N'activer l'auto-merge qu'après la
+3. Activer `Automatically delete head branches`. N'activer l'auto-merge qu'après la
    règle de PR et uniquement pour des mises à jour de dépendances à faible risque.
-5. Vérifier dans Vercel que les trois environnements `Development`, `Preview` et
-   `Production` utilisent les bonnes variables Supabase.
+4. Créer un compte E2E jetable dans `recipe-hug-dev` correspondant aux secrets GitHub
+   `TEST_EMAIL` et `TEST_PASSWORD`. Le workflow CI pointe désormais sur ce projet dev.
+5. Traiter les warnings des advisors dans des migrations dédiées : privilèges `EXECUTE`
+   des fonctions `SECURITY DEFINER`, appels `auth.uid()` dans les policies et deux clés
+   étrangères sans index.
 6. Traiter la dette `npm audit` dans une PR dédiée : l'audit courant ne signale aucun
    niveau critique, mais plusieurs avis élevés restent dans React Router et la chaîne
    de build/PWA. Ne pas lancer `npm audit fix` sans revue du diff et validation complète.
+
+### Historique de réparation Supabase
+
+Le **2026-08-23**, l'entrée distante surnuméraire `20260719170220_cookidoo_exports` a
+été retirée de `supabase_migrations.schema_migrations`. Elle contenait le SQL déjà
+représenté dans le dépôt par `20260719000000_cookidoo_exports`, lui-même marqué appliqué
+côté distant. Cette opération a modifié uniquement l'historique de suivi, sans supprimer
+ni rejouer le schéma : la table `cookidoo_exports`, ses 15 colonnes, ses 2 index et sa
+policy RLS ont été revérifiés après l'opération. Le dépôt et le distant comptent désormais
+34 versions chacun, sans version manquante ni surnuméraire. Une tentative de validation
+par branche temporaire a ensuite été refusée avant création par Supabase, car Branching
+nécessite un plan Pro ; aucune branche et aucun coût n'ont été engendrés.
+
+Le même jour, le projet Free `recipe-hug-dev` (`dltaxjvwtxjpbzcwdqvu`) a été créé en
+`eu-west-1` pour isoler le développement. Les 34 migrations ont été rejouées depuis une
+base vide avec leurs timestamps d'origine. Le résultat contient les mêmes 10 tables que
+la production, toutes avec RLS, ainsi que 33 policies, 3 vues et 5 fonctions. Le serveur
+MCP `supabase-dev` est versionné dans `.codex/config.toml` et les variables Vite locales
+sont conservées dans `.env.development.local`, qui est gitignoré.
+
+Les 13 edge functions ont ensuite été déployées en version 1 sur ce projet et leur état
+`ACTIVE` a été vérifié. Supabase Auth autorise l'email/mot de passe, avec
+`http://localhost:8080` comme Site URL et les redirects localhost/Vercel Preview ; Google
+OAuth reste désactivé. Sur Vercel, les trois variables `VITE_SUPABASE_*` de Production
+restent reliées à la production, tandis que Preview et Development utilisent
+`recipe-hug-dev`.
 
 ## Nouvelle feature
 

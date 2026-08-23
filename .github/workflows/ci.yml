@@ -92,10 +92,11 @@ jobs:
     # réelles sur le compte test (nettoyées en fin de test).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     env:
-      # Valeurs publiques (clé anon, déjà exposée dans le bundle client).
-      VITE_SUPABASE_URL: https://ifpqsyyvytfpossqycpc.supabase.co
-      VITE_SUPABASE_PROJECT_ID: ifpqsyyvytfpossqycpc
-      VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmcHFzeXl2eXRmcG9zc3F5Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTA2MzIsImV4cCI6MjA5NjA4NjYzMn0.8bJ-S00EJG8nrKyfsBbOPPr3BrHtti5lOgBvIXBQ6xE
+      # Valeurs publiques du projet Supabase de développement. Les E2E ne doivent
+      # jamais écrire dans la base de production.
+      VITE_SUPABASE_URL: https://dltaxjvwtxjpbzcwdqvu.supabase.co
+      VITE_SUPABASE_PROJECT_ID: dltaxjvwtxjpbzcwdqvu
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_weMLl8YF7Q_hLtPcxoPioQ_HWMWl738
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

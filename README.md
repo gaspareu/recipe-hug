@@ -92,7 +92,8 @@ Variables publiques du frontend, dans `.env` :
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_SUPABASE_PROJECT_ID`
 
-Principaux secrets des edge functions, configurés dans Supabase :
+Principaux secrets des edge functions, configurés dans Supabase sous
+**Edge Functions → Secrets** (et non dans Database Vault) :
 
 - `ANTHROPIC_API_KEY` et `GEMINI_API_KEY` ;
 - `AI_KEYS_ENCRYPTION_SECRET` ;
@@ -104,8 +105,8 @@ Principaux secrets des edge functions, configurés dans Supabase :
 Le setup Codex est versionné avec le projet :
 
 - `AGENTS.md` décrit l'architecture, les conventions et les fichiers protégés ;
-- `.codex/config.toml` connecte Vercel et un accès Supabase de production limité en
-  lecture seule ;
+- `.codex/config.toml` connecte Vercel, le projet Supabase de développement et un accès
+  Supabase de production limité en lecture seule ;
 - `.codex/hooks.json` maintient les dépendances à jour sans exécuter leurs scripts
   lifecycle, et bloque les opérations Git dangereuses ou l'édition des fichiers Supabase générés ;
 - `.agents/skills/` contient les workflows `feature-workflow`, `debug`, `check`,
@@ -113,9 +114,9 @@ Le setup Codex est versionné avec le projet :
 
 Au premier lancement dans Codex, marquer le projet comme fiable, approuver les hooks,
 puis terminer l'authentification OAuth de GitHub, Vercel et Supabase. Utiliser un task
-et un worktree par feature, puis y recréer `.env` depuis `.env.example`. Le MCP de
-production reste volontairement en lecture seule ;
-les migrations doivent être développées sur une branche Supabase isolée.
+et un worktree par feature, puis y recréer les variables locales depuis `.env.example`.
+Le MCP de production reste volontairement en lecture seule ; les migrations sont
+développées et vérifiées sur le projet isolé `recipe-hug-dev`.
 
 Le workflow complet — feature, debug, PR, base de données, dépendances, plugins et
 automatisations recommandées — est détaillé dans

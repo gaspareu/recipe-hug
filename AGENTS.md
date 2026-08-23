@@ -120,9 +120,9 @@ Migrations horodatées dans `supabase/migrations/` (appliquées dans l'ordre). T
 
 ## Variables d'environnement
 
-Front (préfixe `VITE_`, dans `.env` — voir `.env.example` ; `.env` est gitignoré) : `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`. Valeurs publiques (la publishable key est la clé anon). Projet Supabase : `ifpqsyyvytfpossqycpc`.
+Front (préfixe `VITE_`, dans `.env` — voir `.env.example` ; `.env` est gitignoré) : `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`. Valeurs publiques. Projet Supabase de production : `ifpqsyyvytfpossqycpc` ; projet de développement : `dltaxjvwtxjpbzcwdqvu`.
 
-Secrets edge functions (Supabase Dashboard → Project Settings → Edge Functions) :
+Secrets edge functions (Supabase Dashboard → Edge Functions → Secrets, pas Database Vault) :
 
 | Secret | Usage |
 |--------|-------|
