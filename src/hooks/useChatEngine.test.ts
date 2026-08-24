@@ -235,6 +235,19 @@ describe("sendMessage — streaming", () => {
 // Tool calls
 // ---------------------------------------------------------------------------
 describe("sendMessage — tool calls", () => {
+  it("expose l'action en cours pendant l'exécution d'un outil", async () => {
+    const onToolCall = vi.fn().mockResolvedValue(null);
+    fetchMock.mockResolvedValue(sseResponse([toolCallEvent("save_recipe", { title: "Tarte" })]));
+    const { result } = setup({ onToolCall });
+
+    let sending!: Promise<void>;
+    act(() => { sending = result.current.sendMessage("Crée une tarte"); });
+
+    await waitFor(() => expect(result.current.toolActivity).toBe("save_recipe"));
+    await act(() => sending);
+    await waitFor(() => expect(result.current.toolActivity).toBeNull());
+  });
+
   it("exécute le tool call quand finish_reason vaut tool_calls", async () => {
     fetchMock.mockResolvedValue(
       sseResponse([

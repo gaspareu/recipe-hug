@@ -21,6 +21,20 @@ import type { Ingredient } from '@/types/recipe';
 /** RegExp extraite au niveau module pour éviter une recréation à chaque rendu */
 const SUGGESTIONS_REGEX = /\[suggestions\]\s*(\[.*?\])\s*\[\/suggestions\]/s;
 const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const TOOL_ACTIVITY_LABELS: Record<string, string> = {
+  create_new_recipe: 'Préparation de votre recette...',
+  extract_modified_recipe: 'Préparation de votre recette...',
+  propose_recipe: 'Préparation de votre recette...',
+  save_recipe: 'Préparation de votre recette...',
+  search_recipes: 'Recherche dans vos recettes...',
+  get_recipe_details: 'Lecture de la recette...',
+  save_meal_plan: 'Organisation de votre planning...',
+  update_preferences: 'Mise à jour de vos préférences...',
+  get_preferences: 'Lecture de vos préférences...',
+  navigate: 'Ouverture de la page...',
+  open_recipe: 'Ouverture de la recette...',
+  start_cooking: 'Préparation du mode cuisine...',
+};
 
 // Only the streaming message changes on each token. Memoizing Markdown prevents
 // the full history from being parsed again while a response is arriving.
@@ -42,6 +56,8 @@ const AssistantMarkdown = memo(function AssistantMarkdown({ content, showCaret }
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   isStreaming: boolean;
+  /** Action locale actuellement exécutée à la demande de l'assistant. */
+  toolActivity?: string | null;
   isSavingRecipe?: boolean;
   sendMessage: (content: string, imageDataUrl?: string) => void;
   /** Appelé quand l'utilisateur clique « Créer / Mettre à jour » sur une carte proposed. */
@@ -65,6 +81,7 @@ interface ChatInterfaceProps {
 export function ChatInterface({
   messages,
   isStreaming,
+  toolActivity = null,
   isSavingRecipe = false,
   sendMessage,
   onCreateRecipe,
@@ -233,6 +250,22 @@ export function ChatInterface({
     return lastMessage.role === 'assistant' && getDisplayContent(lastMessage) === '';
   }, [messages, isStreaming, getDisplayContent]);
 
+  const processingLabel = isSavingRecipe
+    ? 'Enregistrement de la recette...'
+    : toolActivity
+      ? (TOOL_ACTIVITY_LABELS[toolActivity] ?? 'Traitement en cours...')
+      : 'Réflexion en cours...';
+  const processingAriaLabel = processingLabel.replace(/\.\.\.$/, '');
+  const showProcessingIndicator = isSavingRecipe || Boolean(toolActivity) || showThinkingIndicator;
+  const showSuggestions = activeSuggestions.length > 0 && input.length === 0 && !selectedImage;
+
+  // Une activité déclenchée depuis une carte peut se situer sous le bord visible
+  // de l'historique. On la rend immédiatement lisible si l'utilisateur suivait
+  // déjà le dernier échange.
+  useEffect(() => {
+    if (showProcessingIndicator) scrollToBottom();
+  }, [showProcessingIndicator, scrollToBottom]);
+
   return (
     <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
       {headerContent}
@@ -337,10 +370,10 @@ export function ChatInterface({
               );
             })}
 
-            {showThinkingIndicator && (
-              <div className="flex justify-start" role="status" aria-live="polite" aria-label="Réflexion en cours">
+            {showProcessingIndicator && (
+              <div className="flex justify-start" role="status" aria-live="polite" aria-label={processingAriaLabel}>
                 <TextShimmer className="font-mono text-sm" duration={1}>
-                  Réflexion en cours...
+                  {processingLabel}
                 </TextShimmer>
               </div>
             )}
@@ -359,7 +392,7 @@ export function ChatInterface({
       {/* Bottom area */}
       <div className="shrink-0 p-4 space-y-4 bg-background/80 backdrop-blur-sm border-t border-border relative z-10">
         {/* Quick suggestions */}
-        {activeSuggestions.length > 0 && (
+        {showSuggestions && (
           <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-no-swipe-nav data-testid="suggestions-scroll">
             <div className="flex gap-2 w-max">
               {activeSuggestions.map((suggestion, i) => (

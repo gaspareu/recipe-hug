@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 
 // --- mocks hoistés ---
@@ -140,6 +140,17 @@ describe("ChatInterface — responsive", () => {
       render(<ChatInterface {...defaultProps} />);
       expect(screen.getByText("Suggestion 1")).toBeInTheDocument();
       expect(screen.getByText("Suggestion 2")).toBeInTheDocument();
+    });
+
+    it("masque les suggestions pendant la saisie et les réaffiche quand le composeur est vide", () => {
+      render(<ChatInterface {...defaultProps} />);
+      const input = screen.getByRole("textbox", { name: "Poser une question" });
+
+      fireEvent.change(input, { target: { value: "Je veux une tarte" } });
+      expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
+
+      fireEvent.change(input, { target: { value: "" } });
+      expect(screen.getByTestId("suggestions-scroll")).toBeInTheDocument();
     });
   });
 
@@ -452,6 +463,18 @@ describe("ChatInterface — accessibilité", () => {
       if (status) {
         expect(status).toHaveAttribute("aria-live", "polite");
       }
+    });
+  });
+
+  describe("Indicateur d'activité", () => {
+    it("adapte le feedback lorsqu'un outil prépare une recette", () => {
+      render(<ChatInterface {...defaultProps} isStreaming={true} toolActivity="save_recipe" />);
+      expect(screen.getByRole("status", { name: "Préparation de votre recette" })).toBeInTheDocument();
+    });
+
+    it("reste visible pendant l'enregistrement local de la recette", () => {
+      render(<ChatInterface {...defaultProps} isSavingRecipe={true} />);
+      expect(screen.getByRole("status", { name: "Enregistrement de la recette" })).toBeInTheDocument();
     });
   });
 

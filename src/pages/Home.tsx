@@ -19,7 +19,7 @@ import { InstallBanner } from '@/components/InstallBanner';
 export default function Home() {
   const navigate = useNavigate();
   const {
-    messages, isStreaming, isSavingRecipe,
+    messages, isStreaming, toolActivity, isSavingRecipe,
     sendMessage, resetChat, createProposedRecipe, regenerateResponse, stopGeneration,
     cookingRecipeId, startCooking, stopCooking,
   } = useHomeChat();
@@ -89,6 +89,7 @@ export default function Home() {
         <ChatInterface
           messages={messages}
           isStreaming={isStreaming}
+          toolActivity={toolActivity}
           isSavingRecipe={isSavingRecipe}
           sendMessage={sendMessage}
           onCreateRecipe={createProposedRecipe}

@@ -23,6 +23,14 @@ if (
 }
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
+const baseUrl = new URL(BASE_URL);
+const LOCAL_E2E_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+if (!LOCAL_E2E_HOSTS.has(baseUrl.hostname)) {
+  throw new Error(
+    `E2E refusés hors de localhost (reçu ${baseUrl.origin}). ` +
+      'E2E_BASE_URL doit pointer vers le serveur local de développement.',
+  );
+}
 
 /**
  * Config E2E Playwright — exécution locale et post-merge sur main en CI. Nécessite

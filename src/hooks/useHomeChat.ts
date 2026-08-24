@@ -259,7 +259,7 @@ export function useHomeChat() {
   const stopCooking = useCallback(() => setCookingRecipeId(null), []);
 
   return {
-    messages: engine.messages, isStreaming: engine.isStreaming,
+    messages: engine.messages, isStreaming: engine.isStreaming, toolActivity: engine.toolActivity,
     activeRecipe: engine.activeRecipe,
     searchResults: engine.searchResults,
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,

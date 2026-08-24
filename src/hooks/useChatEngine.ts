@@ -9,6 +9,9 @@ const MAX_API_MESSAGES = 30;
 const IMAGE_SENTINEL = '📷 Image envoyée';
 const SUGGESTIONS_REGEX = /\[suggestions\]\s*\[.*?\]\s*\[\/suggestions\]/s;
 const STREAM_TIMEOUT_MS = 90_000;
+// Un outil local peut se résoudre en moins d'une frame. Cette durée rend le
+// retour visuel lisible, sans retarder l'exécution ni la réponse de l'agent.
+const TOOL_ACTIVITY_MIN_DURATION_MS = 400;
 
 export type RecipeCardStatus = 'proposed' | 'saved';
 
@@ -104,6 +107,11 @@ export function useChatEngine(config: ChatEngineConfig) {
     { id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() },
   ]);
   const [isStreaming, setIsStreaming] = useState(false);
+  // Nom de l'action locale déclenchée par l'assistant. Il permet à l'interface
+  // de distinguer l'attente réseau initiale du traitement concret demandé.
+  const [toolActivity, setToolActivity] = useState<string | null>(null);
+  const toolActivityIdRef = useRef(0);
+  const toolActivityClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // State updates are asynchronous. This ref prevents two synchronous sources
   // (voice, keyboard, pointer) from starting concurrent assistant requests.
   const isStreamingRef = useRef(false);
@@ -145,6 +153,30 @@ export function useChatEngine(config: ChatEngineConfig) {
     activeRecipeRef.current = activeRecipe;
   });
 
+  const runToolAction = useCallback(async (
+    action: ToolCallAction,
+    activeRecipe: ActiveRecipeData | null,
+  ): Promise<unknown> => {
+    const activityId = ++toolActivityIdRef.current;
+    const startedAt = Date.now();
+    if (toolActivityClearTimerRef.current !== null) {
+      window.clearTimeout(toolActivityClearTimerRef.current);
+      toolActivityClearTimerRef.current = null;
+    }
+    setToolActivity(action.type);
+    try {
+      return await onToolCallRef.current(action, activeRecipe);
+    } finally {
+      const clearActivity = () => {
+        if (toolActivityIdRef.current === activityId) setToolActivity(null);
+        toolActivityClearTimerRef.current = null;
+      };
+      const delay = Math.max(0, TOOL_ACTIVITY_MIN_DURATION_MS - (Date.now() - startedAt));
+      if (delay === 0) clearActivity();
+      else toolActivityClearTimerRef.current = window.setTimeout(clearActivity, delay);
+    }
+  }, []);
+
   // Tracks a recipe loaded via get_recipe_details during a streaming turn,
   // so runAssistantRequest can retry with the enriched context.
   const retryWithRecipeRef = useRef<ActiveRecipeData | null>(null);
@@ -161,7 +193,7 @@ export function useChatEngine(config: ChatEngineConfig) {
   ): Promise<string> => {
     try {
       const args = JSON.parse(argsStr);
-      const result = await onToolCallRef.current({ type: name, data: args }, activeRecipeRef.current);
+      const result = await runToolAction({ type: name, data: args }, activeRecipeRef.current);
 
       // Handle get_recipe_details: store recipe for auto-retry, don't alter content
       if (name === 'get_recipe_details' && result) {
@@ -204,7 +236,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       console.error('Failed to parse/execute tool call:', e, argsStr);
     }
     return currentContent;
-  }, []);
+  }, [runToolAction]);
 
   const parseTextActions = useCallback((content: string, assistantMessageId: string): string => {
     const actionRegex = /\{\s*"action"\s*:\s*"([^"]+)"\s*,\s*"parameters"\s*:\s*(\{[^}]*\})\s*\}/g;
@@ -225,7 +257,8 @@ export function useChatEngine(config: ChatEngineConfig) {
         };
         const toolType = actionMap[actionType];
         if (toolType) {
-          onToolCallRef.current({ type: toolType, data: { ...parameters } }, activeRecipeRef.current);
+          void runToolAction({ type: toolType, data: { ...parameters } }, activeRecipeRef.current)
+            .catch((error) => console.error('Failed to execute fallback action:', error));
         }
         cleaned = cleaned.replace(match[0], '').trim();
       } catch (e) {
@@ -237,7 +270,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: cleaned } : m));
     }
     return cleaned;
-  }, []);
+  }, [runToolAction]);
 
   // --- SSE streaming parser ---
   const parseSSEStream = useCallback(async (
@@ -494,6 +527,9 @@ export function useChatEngine(config: ChatEngineConfig) {
   useEffect(() => {
     return () => {
       abortControllerRef.current?.abort();
+      if (toolActivityClearTimerRef.current !== null) {
+        window.clearTimeout(toolActivityClearTimerRef.current);
+      }
     };
   }, []);
 
@@ -533,15 +569,21 @@ export function useChatEngine(config: ChatEngineConfig) {
 
   const resetChat = useCallback(() => {
     abortControllerRef.current?.abort();
+    toolActivityIdRef.current += 1;
+    if (toolActivityClearTimerRef.current !== null) {
+      window.clearTimeout(toolActivityClearTimerRef.current);
+      toolActivityClearTimerRef.current = null;
+    }
     setMessages([{ id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() }]);
     setActiveRecipe(initialActiveRecipe);
     setPendingRecipe(null);
     setSearchResults([]);
+    setToolActivity(null);
     proposedPendingRef.current.clear();
   }, [welcomeMessage, initialActiveRecipe]);
 
   return {
-    messages, isStreaming, activeRecipe, pendingRecipe, searchResults,
+    messages, isStreaming, toolActivity, activeRecipe, pendingRecipe, searchResults,
     setActiveRecipe, setPendingRecipe, setSearchResults, setMessages,
     sendMessage, resetChat, regenerateResponse, stopGeneration,
     getProposedPending, clearProposedPending, updateMessageCard,
