@@ -30,24 +30,21 @@ approbation pour chaque appel.
 État vérifié le **2026-08-23**. Revalider ces constats avant d'agir sur une plateforme
 distante.
 
-1. Recopier les cinq valeurs actuellement placées dans Database Vault vers
-   **Edge Functions → Secrets** sur `recipe-hug-dev`. Les fonctions utilisent
-   `Deno.env.get(...)` : Vault ne les injecte pas automatiquement. Ne jamais recopier une
-   donnée utilisateur ni un secret sans vérifier qu'il peut être utilisé hors production.
-2. Dans les règles GitHub de `main`, exiger une PR, garder les checks `Frontend` et
+1. Dans les règles GitHub de `main`, exiger une PR, garder les checks `Frontend` et
    `Edge functions`, ajouter `Dependency review`, puis activer la résolution des
    conversations. Pour un projet solo, zéro approbation obligatoire évite
    l'auto-approbation impossible.
-3. Activer `Automatically delete head branches`. N'activer l'auto-merge qu'après la
+2. Activer `Automatically delete head branches`. N'activer l'auto-merge qu'après la
    règle de PR et uniquement pour des mises à jour de dépendances à faible risque.
-4. Créer un compte E2E jetable dans `recipe-hug-dev` correspondant aux secrets GitHub
-   `TEST_EMAIL` et `TEST_PASSWORD`. Le workflow CI pointe désormais sur ce projet dev.
-5. Traiter les warnings des advisors dans des migrations dédiées : privilèges `EXECUTE`
+3. Traiter les warnings des advisors dans des migrations dédiées : privilèges `EXECUTE`
    des fonctions `SECURITY DEFINER`, appels `auth.uid()` dans les policies et deux clés
    étrangères sans index.
-6. Traiter la dette `npm audit` dans une PR dédiée : l'audit courant ne signale aucun
+4. Traiter la dette `npm audit` dans une PR dédiée : l'audit courant ne signale aucun
    niveau critique, mais plusieurs avis élevés restent dans React Router et la chaîne
    de build/PWA. Ne pas lancer `npm audit fix` sans revue du diff et validation complète.
+5. Planifier la revue Codex hebdomadaire `dependency-updates`, idéalement le lundi à
+   09:00 après les passages Dependabot de 08:00 et 08:15. Cette automatisation Codex
+   n'est pas encore créée ; elle doit produire un rapport sans merger les PR.
 
 ### Historique de réparation Supabase
 
@@ -74,6 +71,12 @@ Les 13 edge functions ont ensuite été déployées en version 1 sur ce projet e
 OAuth reste désactivé. Sur Vercel, les trois variables `VITE_SUPABASE_*` de Production
 restent reliées à la production, tandis que Preview et Development utilisent
 `recipe-hug-dev`.
+
+Les cinq secrets nécessaires ont été ajoutés sous **Edge Functions → Secrets** sur le
+projet dev. Un compte E2E jetable et confirmé y a également été créé ; ses identifiants
+sont stockés dans les secrets GitHub `TEST_EMAIL` et `TEST_PASSWORD`, ainsi que dans le
+fichier local gitignoré `.env.test`. Les 8 scénarios Playwright authentifiés ont été
+exécutés avec succès contre cet environnement.
 
 ## Nouvelle feature
 
@@ -163,7 +166,8 @@ Utiliser le skill `dependency-updates` sur chaque PR de bot.
 
 Politique retenue :
 
-- Dependabot passe le lundi matin ;
+- Dependabot npm passe le lundi à 08:00 et GitHub Actions à 08:15
+  (`Europe/Paris`) ;
 - les mineures/patch runtime et développement sont regroupées séparément ;
 - les majors restent isolées et nécessitent lecture du guide de migration ;
 - un délai de stabilisation retarde les versions toutes fraîches, sans retarder les
@@ -172,25 +176,32 @@ Politique retenue :
 - pas de Renovate en parallèle, afin d'éviter les PR et lockfiles concurrents.
 
 Pour une PR simple : inspecter le changelog officiel, le diff de lockfile et les scripts
-d'installation, lancer `check:all`, puis vérifier les zones à risque. Une mise à jour de
-Vite, React, Supabase, TypeScript, Vitest ou d'une GitHub Action mérite une revue dédiée,
-même si SemVer l'annonce comme mineure.
+d'installation. Si `package.json` change, régénérer également `deno.lock` avec
+`deno install --lockfile-only --frozen=false --node-modules-dir=none --minimum-dependency-age=0`,
+puis lancer `check:all` et vérifier les zones à risque. Une mise à jour de Vite, React,
+Supabase, TypeScript, Vitest ou d'une GitHub Action mérite une revue dédiée, même si
+SemVer l'annonce comme mineure.
 
 Renovate pourra remplacer — pas compléter — Dependabot si le dépôt devient un monorepo
 multi-écosystème ou si son Dependency Dashboard et ses règles d'automerge avancées
 deviennent nécessaires.
 
-## Automatisations Codex recommandées
+## Automatisations GitHub et Codex
 
 Les automatisations doivent rester en lecture seule et ouvrir un rapport, pas merger ou
 déployer seules.
 
-| Fréquence | Tâche | Sortie attendue |
-|---|---|---|
-| lundi 09:00 | trier les PR Dependabot | risque, changelogs, état CI, ordre de traitement |
-| chaque matin | surveiller `main` | CI rouge, déploiement Vercel en échec, E2E post-merge |
-| chaque mois | audit Supabase | advisors sécurité/performance et dérive des migrations |
-| chaque mois | dette technique | gros bundles, images lourdes, dépendances obsolètes |
+| Système | Fréquence | Tâche | État |
+|---|---|---|---|
+| GitHub Dependabot | lundi 08:00 / 08:15 | ouvrir les PR npm / GitHub Actions | actif |
+| Codex | lundi 09:00 | trier les PR avec `dependency-updates` | à planifier |
+| Codex | chaque matin | surveiller `main`, Vercel et les E2E post-merge | à planifier |
+| Codex | chaque mois | auditer Supabase et la dérive des migrations | à planifier |
+| Codex | chaque mois | relever dette technique et dépendances obsolètes | à planifier |
+
+État vérifié le **2026-08-23** : aucune tâche récurrente Codex n'est enregistrée. Le
+planning Dependabot dans `.github/dependabot.yml` est indépendant et fonctionne déjà ;
+il ouvre les PR mais n'exécute pas leur revue avec le skill `dependency-updates`.
 
 Tester chaque prompt manuellement avant de le planifier. Utiliser un worktree de fond
 dédié et des permissions étroites. Toute réparation reste une tâche séparée et validée.
