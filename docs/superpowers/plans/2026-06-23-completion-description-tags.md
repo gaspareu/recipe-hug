@@ -455,7 +455,7 @@ Expected: Build réussi, pas d'erreur de type.
 
 - [ ] **Step 4 : Bump de version**
 
-Incrémenter `version` dans `package.json` (évolution notable, cf. CLAUDE.md). Commit :
+Incrémenter `version` dans `package.json` (évolution notable, cf. AGENTS.md). Commit :
 
 ```bash
 git add package.json

@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // `createClient` instancie un RealtimeClient qui exige un `WebSocket` global,
-// absent en Node < 21 (la CI tourne en Node 20). On ne se sert **jamais** du
+// absent en Node < 21 (utile si les tests sont lancés avec un ancien Node). On ne se sert **jamais** du
 // realtime ici (auth + REST uniquement) : un stub inoffensif suffit à éviter
 // l'erreur « Node.js detected without native WebSocket support » au construct.
 if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === 'undefined') {
@@ -35,5 +35,6 @@ export async function createTestUserClient(): Promise<SupabaseClient> {
 
 /** Supprime les recettes du compte test dont le titre correspond (nettoyage). */
 export async function deleteRecipesByTitle(client: SupabaseClient, title: string): Promise<void> {
-  await client.from('recipes').delete().eq('title', title);
+  const { error } = await client.from('recipes').delete().eq('title', title);
+  if (error) throw error;
 }

@@ -5,10 +5,23 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Paris
     open-pull-requests-limit: 5
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
-      # Regroupe les bumps mineurs/patch pour limiter le bruit de PR
-      minor-and-patch:
+      # Sépare le risque runtime de l'outillage ; les majors restent isolées.
+      runtime-minor-and-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      dev-minor-and-patch:
+        dependency-type: development
         update-types:
           - minor
           - patch
@@ -18,4 +31,12 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+      day: monday
+      time: "08:15"
+      timezone: Europe/Paris
     open-pull-requests-limit: 5
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - minor
+          - patch

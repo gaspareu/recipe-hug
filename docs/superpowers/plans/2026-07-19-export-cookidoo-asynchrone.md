@@ -1399,12 +1399,12 @@ Attendu : erreur RLS — aucune policy d'écriture n'existe.
 
 - [ ] **Step 6: Mettre à jour la documentation**
 
-Dans `supabase/functions/CLAUDE.md`, section `export-recipe-cookidoo`, indiquer que la fonction est asynchrone : elle répond `{ ok, export_id, status: 'pending' }` et journalise l'issue dans `public.cookidoo_exports`.
+Dans `supabase/functions/AGENTS.md`, section `export-recipe-cookidoo`, indiquer que la fonction est asynchrone : elle répond `{ ok, export_id, status: 'pending' }` et journalise l'issue dans `public.cookidoo_exports`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/functions/CLAUDE.md
+git add supabase/functions/AGENTS.md
 git commit -m "docs: documente l'export Cookidoo asynchrone"
 ```
 

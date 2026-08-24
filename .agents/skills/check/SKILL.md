@@ -1,31 +1,39 @@
 ---
 name: check
-description: Garde-fou qualité rapide du projet recipe-hug — lance tests + typecheck + lint et compare le nombre d'erreurs au baseline de non-régression. À utiliser à volonté pendant le dev et avant tout commit. Déterministe, ~40 s. Pour la revue approfondie (agents), voir /pre-pr.
+description: Garde-fou qualité rapide du projet recipe-hug — lance tests, typecheck et lint puis compare les résultats au baseline de non-régression. À utiliser pendant le développement et avant tout commit. Pour la revue approfondie, utiliser le skill pre-pr.
 ---
 
-# /check — garde-fou qualité rapide
+# check — garde-fou qualité rapide
 
-Vérifie qu'un changement n'introduit **aucune régression**, sans exiger zéro erreur
-(le projet porte une dette de types/lint préexistante — cf. baseline ci-dessous).
+Vérifie qu'un changement n'introduit **aucune régression** par rapport au
+baseline ci-dessous.
 Rapide et déterministe : à lancer autant de fois que nécessaire pendant le dev.
 
-Pour la revue approfondie par agents (simplification, correctness, sécurité)
-avant d'ouvrir une PR, utiliser plutôt **/pre-pr**.
+Pour la revue approfondie (simplification, correctness, sécurité) avant d'ouvrir
+une PR, utiliser plutôt le skill **pre-pr**.
 
 ## Baseline de non-régression
 
-Comparer au baseline plutôt que d'exiger zéro. Au **2026-07-23** :
+Baseline vérifié au **2026-08-23** :
 
 | Commande | Baseline (dette préexistante) |
 |----------|-------------------------------|
-| `npm run test:run` | **0 échec** (491 tests) — doit rester à 0 |
+| `npm run test:run` | **0 échec** (505 tests) — doit rester à 0 |
 | `npm run typecheck` | **0 erreur** |
 | `npm run lint` | **0 problème** |
 
 > Ces chiffres évoluent avec la dette. Si tu résorbes ou ajoutes de la dette
-> légitimement, **mets à jour ce tableau ET celui du `CLAUDE.md`** dans le même commit.
+> légitimement, **mets à jour ce tableau ET celui d'`AGENTS.md`** dans le même commit.
 
 ## Procédure
+
+La commande agrégée couvre les trois garde-fous :
+
+```bash
+npm run check
+```
+
+Pour diagnostiquer ou comparer précisément au baseline, lancer séparément :
 
 1. **Tests** (bloquant — doit rester à 0 échec) :
    ```bash
@@ -43,9 +51,10 @@ Comparer au baseline plutôt que d'exiger zéro. Au **2026-07-23** :
    ```
 
 4. **En cas de doute sur le baseline** (chiffre supérieur : est-ce ma faute ?),
-   comparer à `origin/main` sur un arbre propre :
+   comparer à `origin/main` dans un worktree temporaire ou, avec accord explicite,
+   via un stash sur un arbre propre. Ne jamais masquer les changements de l'utilisateur.
    ```bash
-   git stash push -u -m baseline && npm run typecheck 2>&1 | grep -cE "error TS"; git stash pop
+   git worktree add /tmp/recipe-hug-baseline origin/main
    ```
    Les erreurs réellement ajoutées se trouvent dans les fichiers que tu as touchés :
    filtrer la sortie sur ces chemins pour les identifier.

@@ -6,7 +6,7 @@
 > garde-fou contre le principal piège de ce chantier — écrire du code (et des
 > tests verts !) contre un format inventé.
 >
-> Doc opérationnelle du connecteur : `supabase/functions/CLAUDE.md`.
+> Doc opérationnelle du connecteur : `supabase/functions/AGENTS.md`.
 > Dernière vérification : **19 juillet 2026** (sondes d'écriture réelles, cf. §10).
 
 ## Niveaux de confiance
