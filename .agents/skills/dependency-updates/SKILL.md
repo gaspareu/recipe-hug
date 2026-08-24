@@ -24,6 +24,10 @@ PR sans demande explicite de l'utilisateur.
 
 ## Validation
 
+- Si `package.json` change, régénérer aussi `deno.lock` avec
+  `deno install --lockfile-only --frozen=false --node-modules-dir=none --minimum-dependency-age=0`.
+  Le job Edge Functions utilise `--frozen` et échoue si les dépendances npm du lockfile
+  Deno ne correspondent plus au manifeste racine.
 - Lancer `npm ci`, puis `npm run check:all`.
 - Vérifier le parcours navigateur si une dépendance runtime ou UI change.
 - Comparer le résultat au baseline du skill `check` et lire les logs CI de la PR.
