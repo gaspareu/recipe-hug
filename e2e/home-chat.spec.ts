@@ -11,6 +11,9 @@ function cannedProposeRecipeStream(): string {
         servings: 4,
         ingredients: [{ name: 'Pommes', quantity: 4, unit: '' }],
         steps: [{ order: 1, text: 'Préchauffer le four.' }],
+        intro: ['Cette phrase ne doit pas apparaître.'],
+        introClosing: 'Cette conclusion ne doit pas apparaître.',
+        tip: 'Servir tiède.',
       }),
     } }] } }] }) +
     chunk({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }) +
@@ -57,5 +60,8 @@ test.describe('chat Home — mobile', () => {
 
     await expect(page.getByRole('status', { name: 'Préparation de votre recette' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Créer la recette' })).toBeVisible();
+    await expect(page.getByText('Cette phrase ne doit pas apparaître.')).toBeHidden();
+    await expect(page.getByText('Cette conclusion ne doit pas apparaître.')).toBeHidden();
+    await expect(page.getByText('Astuce :')).toBeVisible();
   });
 });

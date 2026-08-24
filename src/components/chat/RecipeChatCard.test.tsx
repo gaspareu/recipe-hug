@@ -11,6 +11,13 @@ const proposed: RecipeCard = {
 const saved: RecipeCard = { ...proposed, status: 'saved', id: 'r1' };
 
 describe('RecipeChatCard', () => {
+  it("n'affiche pas l'introduction contextuelle de la recette", () => {
+    render(<RecipeChatCard card={proposed} onCreate={vi.fn()} onStartCooking={vi.fn()} onOpenDetail={vi.fn()} />);
+    expect(screen.queryByText('Avocat mûr.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Assembler.')).not.toBeInTheDocument();
+    expect(screen.getByText('Astuce :')).toBeInTheDocument();
+  });
+
   it('état proposed : affiche un seul bouton « Créer la recette »', () => {
     render(<RecipeChatCard card={proposed} onCreate={vi.fn()} onStartCooking={vi.fn()} onOpenDetail={vi.fn()} />);
     expect(screen.getByRole('button', { name: /Créer la recette/i })).toBeInTheDocument();
