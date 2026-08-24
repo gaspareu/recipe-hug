@@ -133,6 +133,49 @@ describe("sendMessage — streaming", () => {
     ]);
   });
 
+  it("ne rejoue pas une image ni les suggestions dans les tours suivants", async () => {
+    fetchMock
+      .mockResolvedValueOnce(sseResponse([contentEvent('Belle photo. [suggestions]["La recuisiner"][/suggestions]')]))
+      .mockResolvedValueOnce(sseResponse([contentEvent("D'accord.")]));
+    const { result, buildRequest } = setup();
+
+    await act(() => result.current.sendMessage("", "data:image/png;base64,xyz"));
+    await act(() => result.current.sendMessage("Que dois-je acheter ?"));
+
+    expect(buildRequest.mock.calls[1][0].apiMessages).toEqual([
+      { role: "user", content: "Image partagée précédemment." },
+      { role: "assistant", content: "Belle photo." },
+      { role: "user", content: "Que dois-je acheter ?" },
+    ]);
+  });
+
+  it("borne l'historique envoyé et conserve un premier message utilisateur", async () => {
+    fetchMock.mockResolvedValue(sseResponse([contentEvent("Ok")]));
+    const { result, buildRequest } = setup();
+
+    for (let index = 0; index < 17; index += 1) {
+      await act(() => result.current.sendMessage(`Question ${index}`));
+    }
+
+    const apiMessages = buildRequest.mock.calls.at(-1)[0].apiMessages;
+    expect(apiMessages.length).toBeLessThanOrEqual(30);
+    expect(apiMessages[0].role).toBe("user");
+  });
+
+  it("ignore une seconde soumission synchrone pendant le démarrage du stream", async () => {
+    fetchMock.mockResolvedValue(sseResponse([contentEvent("Ok")]));
+    const { result } = setup();
+
+    await act(async () => {
+      void result.current.sendMessage("Premier");
+      void result.current.sendMessage("Second");
+    });
+
+    await waitFor(() => expect(result.current.messages).toHaveLength(3));
+    expect(result.current.messages[1]).toMatchObject({ content: "Premier" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("reconstitue les lignes SSE coupées entre deux chunks", async () => {
     const payload = toSSEPayload([contentEvent("Bonjour"), contentEvent(" Chef !")]);
     const mid = Math.floor(payload.length / 2);
@@ -228,6 +271,28 @@ describe("sendMessage — tool calls", () => {
     await act(() => result.current.sendMessage("Va sur mon profil"));
 
     expect(onToolCall).toHaveBeenCalledWith({ type: "navigate", data: { destination: "profile" } }, null);
+  });
+
+  it("garde les appels d'outils parallèles séparés par leur index", async () => {
+    fetchMock.mockResolvedValue(sseResponse([
+      {
+        choices: [{
+          delta: {
+            tool_calls: [
+              { index: 0, function: { name: "navigate", arguments: '{"destination":"dashboard"}' } },
+              { index: 1, function: { name: "get_preferences", arguments: "{}" } },
+            ],
+          },
+          finish_reason: "tool_calls",
+        }],
+      },
+    ]));
+    const { result, onToolCall } = setup();
+
+    await act(() => result.current.sendMessage("Prépare mon espace"));
+
+    expect(onToolCall).toHaveBeenNthCalledWith(1, { type: "navigate", data: { destination: "dashboard" } }, null);
+    expect(onToolCall).toHaveBeenNthCalledWith(2, { type: "get_preferences", data: {} }, null);
   });
 
   it("exécute un tool call accumulé même sans finish_reason (fallback fin de stream)", async () => {

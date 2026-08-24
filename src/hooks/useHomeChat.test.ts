@@ -194,6 +194,7 @@ describe("propose_recipe — carte attachée au message", () => {
   });
 
   it("save_recipe en mise à jour attache une carte proposed avec isUpdate", async () => {
+    installSupabase({ resultsByTable: { recipes: { data: { id: "r1" }, error: null } } });
     const { result } = renderHook(() => useHomeChat());
     await sendToolCall(result, "save_recipe", {
       ...PENDING_RECIPE,
@@ -411,6 +412,7 @@ describe("useHomeChat — édition de recette", () => {
   it("createProposedRecipe met à jour la recette d'origine quand isUpdate et originalRecipeId sont présents", async () => {
     // Cas où l'assistant renvoie save_recipe avec les marqueurs d'update —
     // la carte doit déclencher UPDATE et non INSERT.
+    installSupabase({ resultsByTable: { recipes: { data: { id: "r1" }, error: null } } });
     const { result } = renderHook(() => useHomeChat());
     await sendToolCall(result, "save_recipe", {
       ...PENDING_RECIPE,
