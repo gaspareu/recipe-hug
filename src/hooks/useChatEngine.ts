@@ -3,6 +3,13 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Ingredient, Step } from '@/types/recipe';
 
+// A long-running conversation must never hit the Edge Function's message
+// limit. Keeping a recent, coherent window also bounds prompt cost and latency.
+const MAX_API_MESSAGES = 30;
+const IMAGE_SENTINEL = '📷 Image envoyée';
+const SUGGESTIONS_REGEX = /\[suggestions\]\s*\[.*?\]\s*\[\/suggestions\]/s;
+const STREAM_TIMEOUT_MS = 90_000;
+
 export type RecipeCardStatus = 'proposed' | 'saved';
 
 export interface RecipeCard {
@@ -97,6 +104,9 @@ export function useChatEngine(config: ChatEngineConfig) {
     { id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() },
   ]);
   const [isStreaming, setIsStreaming] = useState(false);
+  // State updates are asynchronous. This ref prevents two synchronous sources
+  // (voice, keyboard, pointer) from starting concurrent assistant requests.
+  const isStreamingRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [activeRecipe, setActiveRecipe] = useState<ActiveRecipeData | null>(initialActiveRecipe);
   const [pendingRecipe, setPendingRecipe] = useState<PendingRecipe | null>(null);
@@ -238,8 +248,50 @@ export function useChatEngine(config: ChatEngineConfig) {
     const decoder = new TextDecoder();
     let buffer = '';
     let assistantContent = '';
-    let toolCallName = '';
-    let toolCallArguments = '';
+    const toolCalls = new Map<number, { name: string; arguments: string }>();
+    let pendingAnimationFrame: number | null = null;
+    let pendingContent = '';
+
+    const flushContent = () => {
+      pendingAnimationFrame = null;
+      setMessages(prev => prev.map(m =>
+        m.id === assistantMessageId ? { ...m, content: pendingContent } : m,
+      ));
+    };
+
+    const scheduleContentFlush = () => {
+      if (pendingAnimationFrame !== null) return;
+      // Coalesce token deltas to one React update per animation frame. The
+      // fallback keeps unit tests and older runtimes deterministic.
+      if (typeof requestAnimationFrame === 'function') {
+        pendingAnimationFrame = requestAnimationFrame(flushContent);
+      } else {
+        pendingAnimationFrame = -1;
+        queueMicrotask(flushContent);
+      }
+    };
+
+    const flushPendingContent = () => {
+      if (pendingAnimationFrame === null) return;
+      if (pendingAnimationFrame !== -1 && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(pendingAnimationFrame);
+      }
+      flushContent();
+    };
+
+    const executePendingToolCalls = async () => {
+      flushPendingContent();
+      for (const { name, arguments: args } of [...toolCalls.entries()]
+        .sort(([left], [right]) => left - right)
+        .map(([, toolCall]) => toolCall)) {
+        if (name && args) {
+          assistantContent = await executeToolCall(name, args, assistantMessageId, assistantContent);
+        }
+      }
+      toolCalls.clear();
+    };
+
+    let receivedDoneMarker = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -257,7 +309,10 @@ export function useChatEngine(config: ChatEngineConfig) {
         if (!line.startsWith('data: ')) continue;
 
         const jsonStr = line.slice(6).trim();
-        if (jsonStr === '[DONE]') break;
+        if (jsonStr === '[DONE]') {
+          receivedDoneMarker = true;
+          break;
+        }
 
         try {
           const parsed = JSON.parse(jsonStr);
@@ -265,35 +320,42 @@ export function useChatEngine(config: ChatEngineConfig) {
 
           if (delta?.content) {
             assistantContent += delta.content;
-            setMessages(prev => prev.map(m =>
-              m.id === assistantMessageId ? { ...m, content: assistantContent } : m
-            ));
+            pendingContent = assistantContent;
+            scheduleContentFlush();
           }
 
           if (delta?.tool_calls) {
             for (const toolCall of delta.tool_calls) {
-              if (toolCall.function?.name) toolCallName = toolCall.function.name;
-              if (toolCall.function?.arguments) toolCallArguments += toolCall.function.arguments;
+              const index = typeof toolCall.index === 'number' ? toolCall.index : 0;
+              const previous = toolCalls.get(index) ?? { name: '', arguments: '' };
+              if (toolCall.function?.name) previous.name = toolCall.function.name;
+              if (toolCall.function?.arguments) previous.arguments += toolCall.function.arguments;
+              toolCalls.set(index, previous);
             }
           }
 
           const finishReason = parsed.choices?.[0]?.finish_reason;
-          if (finishReason === 'tool_calls' && toolCallName && toolCallArguments) {
-            assistantContent = await executeToolCall(toolCallName, toolCallArguments, assistantMessageId, assistantContent);
-            toolCallName = '';
-            toolCallArguments = '';
+          if (finishReason === 'tool_calls') {
+            await executePendingToolCalls();
           }
         } catch {
           buffer = line + '\n' + buffer;
           break;
         }
       }
+      if (receivedDoneMarker) {
+        // Some lightweight test readers only implement read(). A browser
+        // ReadableStream reader always provides cancel(), but it is optional for
+        // this early-exit optimization.
+        const cancel = (reader as { cancel?: () => Promise<void> }).cancel;
+        if (cancel) await cancel.call(reader).catch(() => {});
+        break;
+      }
     }
 
     // Fallback: execute accumulated tool call if finish_reason was missing
-    if (toolCallName && toolCallArguments) {
-      assistantContent = await executeToolCall(toolCallName, toolCallArguments, assistantMessageId, assistantContent);
-    }
+    await executePendingToolCalls();
+    flushPendingContent();
 
     // Fallback: parse actions from text
     assistantContent = parseTextActions(assistantContent, assistantMessageId);
@@ -303,14 +365,26 @@ export function useChatEngine(config: ChatEngineConfig) {
 
   // Convertit les messages du fil en messages au format attendu par l'API.
   const toApiMessages = useCallback((chatMessages: ChatMessage[]): Array<{ role: string; content: MessageContent }> => {
-    return chatMessages.filter(m => m.id !== 'welcome').map(m => {
-      if (m.imageUrl) {
+    const recentMessages = chatMessages
+      .filter(m => m.id !== 'welcome')
+      .slice(-MAX_API_MESSAGES);
+    // Do not start a provider conversation with an orphan assistant response.
+    if (recentMessages[0]?.role === 'assistant') recentMessages.shift();
+
+    return recentMessages.map((m, index) => {
+      // An image only needs to be available for the turn in which it was sent.
+      // Replaying base64 images on future turns is slow and needlessly expensive.
+      const isCurrentImage = Boolean(m.imageUrl) && index === recentMessages.length - 1 && m.role === 'user';
+      if (isCurrentImage && m.imageUrl) {
         const parts: MessageContent = [];
-        if (m.content && m.content !== '📷 Image envoyée') parts.push({ type: 'text', text: m.content });
+        if (m.content && m.content !== IMAGE_SENTINEL) parts.push({ type: 'text', text: m.content });
         parts.push({ type: 'image_url', image_url: { url: m.imageUrl } });
         return { role: m.role, content: parts };
       }
-      return { role: m.role, content: m.content };
+      const content = m.role === 'assistant'
+        ? m.content.replace(SUGGESTIONS_REGEX, '').trim()
+        : m.content === IMAGE_SENTINEL ? 'Image partagée précédemment.' : m.content;
+      return { role: m.role, content };
     });
   }, []);
 
@@ -319,6 +393,8 @@ export function useChatEngine(config: ChatEngineConfig) {
     apiMessages: Array<{ role: string; content: MessageContent }>,
     lastUserContent: string,
   ) => {
+    if (isStreamingRef.current) return;
+    isStreamingRef.current = true;
     setIsStreaming(true);
     setSearchResults([]);
     retryWithRecipeRef.current = null;
@@ -326,6 +402,11 @@ export function useChatEngine(config: ChatEngineConfig) {
     const assistantMessageId = `assistant-${Date.now()}`;
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
+    let timedOut = false;
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      abortController.abort();
+    }, STREAM_TIMEOUT_MS);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -378,21 +459,27 @@ export function useChatEngine(config: ChatEngineConfig) {
         await parseSSEStream(reader2, retryMessageId, lastUserContent);
       }
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+      if (error instanceof DOMException && error.name === 'AbortError' && !timedOut) {
         // Arrêt volontaire : on garde le contenu déjà streamé tel quel.
         return;
       }
       console.error('Chat error:', error);
       // Affiche l'erreur dans le fil plutôt que de la masquer : l'utilisateur
       // doit savoir que sa demande a échoué (crédits IA épuisés, réseau, etc.).
-      const message = error instanceof Error ? error.message : "Erreur de communication avec l'assistant";
+      const message = timedOut
+        ? "La réponse a pris trop de temps. Réessaie."
+        : error instanceof Error ? error.message : "Erreur de communication avec l'assistant";
       setMessages(prev => [
         ...prev.filter(m => m.id !== assistantMessageId),
         { id: `error-${Date.now()}`, role: 'assistant', content: `⚠️ ${message}`, timestamp: new Date() },
       ]);
     } finally {
-      abortControllerRef.current = null;
-      setIsStreaming(false);
+      window.clearTimeout(timeoutId);
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+        isStreamingRef.current = false;
+        setIsStreaming(false);
+      }
     }
   }, [activeRecipe, parseSSEStream]);
 
@@ -412,12 +499,12 @@ export function useChatEngine(config: ChatEngineConfig) {
 
   // Send a message
   const sendMessage = useCallback(async (content: string, imageDataUrl?: string) => {
-    if ((!content.trim() && !imageDataUrl) || isStreaming) return;
+    if ((!content.trim() && !imageDataUrl) || isStreaming || isStreamingRef.current) return;
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: content.trim() || (imageDataUrl ? '📷 Image envoyée' : ''),
+      content: content.trim() || (imageDataUrl ? IMAGE_SENTINEL : ''),
       imageUrl: imageDataUrl,
       timestamp: new Date(),
     };
@@ -432,7 +519,7 @@ export function useChatEngine(config: ChatEngineConfig) {
   // messages assistant qui suivent le dernier message utilisateur et on
   // renvoie la même requête.
   const regenerateResponse = useCallback(async () => {
-    if (isStreaming) return;
+    if (isStreaming || isStreamingRef.current) return;
 
     const lastUserIndex = messages.map(m => m.role).lastIndexOf('user');
     if (lastUserIndex === -1) return;
@@ -445,6 +532,7 @@ export function useChatEngine(config: ChatEngineConfig) {
   }, [messages, isStreaming, toApiMessages, runAssistantRequest]);
 
   const resetChat = useCallback(() => {
+    abortControllerRef.current?.abort();
     setMessages([{ id: 'welcome', role: 'assistant', content: welcomeMessage, timestamp: new Date() }]);
     setActiveRecipe(initialActiveRecipe);
     setPendingRecipe(null);

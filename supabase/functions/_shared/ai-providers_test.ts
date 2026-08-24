@@ -54,6 +54,33 @@ Deno.test("callAIStreaming (gemini natif, streaming): la requête demande le flu
   assert(capturedUrl.includes("alt=sse"), `Le streaming doit demander le flux SSE : ${capturedUrl}`);
 });
 
+Deno.test("callAIStreaming (Anthropic): préserve le MIME d'image et propage l'annulation", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> = {};
+  let capturedSignal: AbortSignal | undefined;
+  const controller = new AbortController();
+
+  globalThis.fetch = ((_input: string | URL | Request, init?: RequestInit) => {
+    capturedBody = JSON.parse(String(init?.body));
+    capturedSignal = init?.signal ?? undefined;
+    return Promise.resolve(new Response(JSON.stringify({ content: [] }), { status: 200 }));
+  }) as typeof fetch;
+
+  const config: AIConfig = { provider: "anthropic", model: "claude-sonnet-5", apiKey: "K", endpoint: "https://anthropic.test/messages" };
+  try {
+    await callAIStreaming(config, [{
+      role: "user",
+      content: [{ type: "image_url", image_url: { url: "data:image/png;base64,aGVsbG8=" } }],
+    }], { stream: false, signal: controller.signal });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const messages = capturedBody.messages as Array<{ content: Array<{ source?: { media_type?: string } }> }>;
+  assertEquals(messages[0].content[0].source?.media_type, "image/png");
+  assertEquals(capturedSignal, controller.signal);
+});
+
 /** Construit une Response SSE imitant le flux natif de l'API Anthropic. */
 function anthropicSSE(events: object[]): Response {
   const body = events.map((e) => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`).join("");

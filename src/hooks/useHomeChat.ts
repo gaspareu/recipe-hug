@@ -13,6 +13,8 @@ import { generateRecipeImageInBackground } from '@/lib/recipe-image';
 import { applyPreferenceOperations } from '@/lib/preference-operations';
 import { buildPendingRecipeFromToolCall, parsePreferenceOperations } from '@/lib/chat-tool-payloads';
 
+const MAX_RECIPES_IN_ASSISTANT_CONTEXT = 100;
+
 // Re-export types
 export type { ChatMessage, MessageContent, PendingRecipe, ActiveRecipeData, RecipeCard } from './useChatEngine';
 
@@ -157,7 +159,13 @@ export function useHomeChat() {
   }, [recipes, navigate, preferences, updatePreferencesAsync]);
 
   const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
-    const recipeSummaries = recipes.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
+    // Favoris first gives the assistant the most useful compact context while
+    // bounding each request for large recipe books. Search still works over the
+    // complete locally loaded collection through the search_recipes tool.
+    const recipeSummaries = [...recipes]
+      .sort((left, right) => Number(Boolean(right.is_favorite)) - Number(Boolean(left.is_favorite)))
+      .slice(0, MAX_RECIPES_IN_ASSISTANT_CONTEXT)
+      .map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
     return {
       endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`,
       body: { messages: apiMessages, recipes: recipeSummaries, activeRecipe },
@@ -191,16 +199,16 @@ export function useHomeChat() {
       const toSave = { ...pending, servings: override.servings, ingredients: override.ingredients };
 
       let recipeId = toSave.originalRecipeId ?? '';
-      // Limitation connue (héritée de savePendingRecipe) : un update qui ne
-      // touche aucune ligne (id inexistant, RLS) ne renvoie pas d'erreur —
-      // la carte passerait en saved sans écriture réelle.
+      // RLS can make an UPDATE affect zero rows without returning an error.
+      // Selecting the updated id lets the UI confirm that persistence happened.
       if (toSave.isUpdate && toSave.originalRecipeId) {
-        const { error } = await supabase.from('recipes').update({
+        const { data: updatedRecipe, error } = await supabase.from('recipes').update({
           title: toSave.title, servings: toSave.servings,
           ingredients: toSave.ingredients as unknown as Json, steps: toSave.steps as unknown as Json,
           updated_at: new Date().toISOString(),
-        }).eq('id', toSave.originalRecipeId);
+        }).eq('id', toSave.originalRecipeId).select('id').maybeSingle();
         if (error) throw error;
+        if (!updatedRecipe) throw new Error("La recette n'a pas pu être mise à jour.");
       } else {
         const { data: newRecipe, error } = await supabase.from('recipes').insert({
           user_id: session.user.id, title: toSave.title, servings: toSave.servings,

@@ -10,11 +10,21 @@ import { TM7_MODES, TM7_ACCESSORY_LABELS, buildTm7ReferenceForPrompt } from "../
 // Input validation schema
 const ContentPartSchema = z.union([
   z.object({ type: z.literal("text"), text: z.string().max(10000) }),
-  z.object({ type: z.literal("image_url"), image_url: z.object({ url: z.string() }) }),
+  z.object({
+    type: z.literal("image_url"),
+    // The client currently sends data URLs. Bound and validate them here so an
+    // oversized or unsupported attachment cannot exhaust the Edge Function or
+    // be forwarded to an AI provider.
+    image_url: z.object({
+      url: z.string()
+        .max(7_000_000, "Image too large")
+        .regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=\s]+$/, "Unsupported image format"),
+    }),
+  }),
 ]);
 
 const MessageSchema = z.object({
-  role: z.enum(["user", "assistant", "system"]),
+  role: z.enum(["user", "assistant"]),
   content: z.union([
     z.string().max(10000, "Message content too long"),
     z.array(ContentPartSchema),
@@ -67,8 +77,8 @@ const ActiveRecipeSchema = z.object({
 }).optional().nullable();
 
 const RequestSchema = z.object({
-  messages: z.array(MessageSchema).max(50, "Too many messages"),
-  recipes: z.array(RecipeSchema).optional(),
+  messages: z.array(MessageSchema).max(30, "Too many messages"),
+  recipes: z.array(RecipeSchema).max(100, "Too many recipes").optional(),
   activeRecipe: ActiveRecipeSchema,
 });
 
@@ -556,39 +566,41 @@ serve(async (req) => {
     console.log("Home assistant (unified) - messages:", messages.length, "user:", userId);
     if (activeRecipe) console.log("Active recipe:", activeRecipe.title);
 
-    const aiConfig = await resolveAIConfig(supabaseClient, userId, {
+    // These reads are independent. Starting them together removes two network
+    // round trips from time-to-first-token.
+    const aiConfigPromise = resolveAIConfig(supabaseClient, userId, {
       agentType: "chat",
       defaultModel: "claude-sonnet-5",
       requiredCapabilities: ["tools"],
     });
-    console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
-
-    // Build unified system prompt (référentiel TM7 injecté pour la génération d'étapes)
-    let systemPrompt = UNIFIED_PROMPT + "\n\n" + TM7_REFERENCE_BLOCK + SUGGESTIONS_INSTRUCTION;
-
-    // Fetch and add user preferences
-    const { data: prefs } = await supabaseClient
+    const preferencesPromise = supabaseClient
       .from("user_culinary_preferences")
       .select("*")
       .eq("user_id", userId)
       .maybeSingle();
+    const favoritesPromise = supabaseClient
+      .from("recipes")
+      .select("id, title, ai_summary")
+      .eq("user_id", userId)
+      .eq("is_favorite", true);
 
+    const [aiConfig, { data: prefs }, { data: favorites }] = await Promise.all([
+      aiConfigPromise,
+      preferencesPromise,
+      favoritesPromise,
+    ]);
+    console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
+
+    // Build unified system prompt (référentiel TM7 injecté pour la génération d'étapes)
+    let systemPrompt = UNIFIED_PROMPT + "\n\n" + TM7_REFERENCE_BLOCK + SUGGESTIONS_INSTRUCTION;
     systemPrompt += formatPreferencesContext(prefs);
 
-    // Add recipes list
     if (recipes && recipes.length > 0) {
       systemPrompt += `\n\n## RECETTES DE L'UTILISATEUR (${recipes.length} recettes)\n`;
       systemPrompt += recipes.map((r) =>
         `- ID: ${r.id} | "${r.title}" | Statut: ${r.status}${r.is_favorite ? " ⭐" : ""}`
       ).join("\n");
     }
-
-    // Fetch favorite recipes (with AI summary) for a richer, rotating context sample
-    const { data: favorites } = await supabaseClient
-      .from("recipes")
-      .select("id, title, ai_summary")
-      .eq("user_id", userId)
-      .eq("is_favorite", true);
 
     systemPrompt += formatFavoritesContext(favorites);
 
@@ -600,6 +612,7 @@ serve(async (req) => {
     const response = await callAIStreaming(aiConfig, [{ role: "system", content: systemPrompt }, ...messages], {
       tools: TOOLS,
       stream: true,
+      signal: req.signal,
     });
 
     if (!response.ok) {

@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { memo, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { Plus, Mic, MicOff, ArrowUp, X, Camera, FileText, Image, ChevronRight, Copy, RotateCw, Square } from 'lucide-react';
+import { Plus, Mic, MicOff, ArrowUp, X, Camera, Image, Copy, RotateCw, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -20,6 +20,24 @@ import type { Ingredient } from '@/types/recipe';
 
 /** RegExp extraite au niveau module pour éviter une recréation à chaque rendu */
 const SUGGESTIONS_REGEX = /\[suggestions\]\s*(\[.*?\])\s*\[\/suggestions\]/s;
+const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+// Only the streaming message changes on each token. Memoizing Markdown prevents
+// the full history from being parsed again while a response is arriving.
+const AssistantMarkdown = memo(function AssistantMarkdown({ content, showCaret }: { content: string; showCaret: boolean }) {
+  return (
+    <div className="prose prose-base max-w-none break-words text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground prose-p:first:mt-0 prose-p:last:mb-0">
+      <ReactMarkdown>{content}</ReactMarkdown>
+      {showCaret && (
+        <motion.span
+          className="ml-0.5 inline-block h-[1.05em] w-[2px] -mb-[0.15em] rounded-full bg-foreground/70 align-middle"
+          animate={{ opacity: [1, 0, 1] }}
+          transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      )}
+    </div>
+  );
+});
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -69,6 +87,8 @@ export function ChatInterface({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMessageRef = useRef<string>('');
+  const shouldAutoScrollRef = useRef(true);
+  const hasConversation = messages.length > 1;
 
   // Voice mode
   const handleVoiceTranscript = useCallback((text: string) => {
@@ -92,22 +112,33 @@ export function ChatInterface({
   }, [autoListenOnMount, enableAndListen]);
 
   const scrollToBottom = useCallback(() => {
-    const el = scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    if (!shouldAutoScrollRef.current) return;
+    const el = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]');
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
-  // Auto-scroll
+  // Keep the user anchored only while they are already reading the latest
+  // exchange. Classic chat behavior must not pull someone away from history.
+  useEffect(() => {
+    const viewport = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]');
+    if (!viewport) return;
+    const handleScroll = () => {
+      shouldAutoScrollRef.current = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 80;
+    };
+    handleScroll();
+    viewport.addEventListener('scroll', handleScroll, { passive: true });
+    return () => viewport.removeEventListener('scroll', handleScroll);
+  }, [hasConversation]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Le clavier virtuel réduit la zone de conversation sans déplacer son scroll :
-  // le dernier message se retrouve masqué par la barre de saisie. On recolle en
-  // bas à chaque changement de hauteur visible (ouverture *et* fermeture).
+  // The virtual keyboard changes the visible viewport without scrolling the
+  // conversation. Re-anchor only if the reader was already at the latest turn.
   useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport) return;
-
     viewport.addEventListener('resize', scrollToBottom);
     return () => viewport.removeEventListener('resize', scrollToBottom);
   }, [scrollToBottom]);
@@ -132,28 +163,34 @@ export function ChatInterface({
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) { return; }
-    if (file.size > 5 * 1024 * 1024) { return; }
+    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+      toast('Choisis une image JPEG, PNG ou WebP');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast("L'image ne peut pas dépasser 5 Mo");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = event => setSelectedImage(event.target?.result as string);
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  const handleCopy = async (content: string) => {
+  const handleCopy = useCallback(async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
       toast('Message copié');
     } catch {
       toast('Impossible de copier le message');
     }
-  };
+  }, []);
+
+  const handleOpenRecipe = useCallback((recipeId: string) => navigate(`/recipes/${recipeId}`), [navigate]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
   };
-
-  const hasConversation = messages.length > 1;
 
   // Suggestions dynamiques extraites du dernier message assistant (SUGGESTIONS_REGEX = constante module-level)
   const activeSuggestions = useMemo(() => {
@@ -208,7 +245,7 @@ export function ChatInterface({
           {/* px-4 porté par le contenu, pas par la racine : une marge négative
               (rangée d'actions) sortirait à gauche de l'origine du scroller et
               serait clippée sans possibilité de défiler jusqu'à elle. */}
-          <div role="log" aria-label="Conversation" aria-live="polite" className="flex flex-col justify-end min-h-full px-4 py-4 space-y-6">
+          <div role="log" aria-label="Conversation" aria-live={isStreaming ? 'off' : 'polite'} aria-busy={isStreaming} className="flex flex-col justify-end min-h-full px-4 py-4 space-y-6">
             {displayMessages.map(message => {
               const displayContent = getDisplayContent(message);
               const isLast = message.id === messages[messages.length - 1]?.id;
@@ -226,16 +263,7 @@ export function ChatInterface({
                   <div className={`min-w-0 break-words ${message.role === 'user' ? 'max-w-[80%] bg-muted rounded-3xl px-4 py-3' : 'max-w-full sm:max-w-[85%]'}`}>
                     {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
                     {message.role === 'assistant' ? (
-                      <div className="prose prose-base max-w-none break-words text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground prose-p:first:mt-0 prose-p:last:mb-0">
-                        <ReactMarkdown>{displayContent}</ReactMarkdown>
-                        {showCaret && (
-                          <motion.span
-                            className="ml-0.5 inline-block h-[1.05em] w-[2px] -mb-[0.15em] rounded-full bg-foreground/70 align-middle"
-                            animate={{ opacity: [1, 0, 1] }}
-                            transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
-                          />
-                        )}
-                      </div>
+                      <AssistantMarkdown content={displayContent} showCaret={showCaret} />
                     ) : message.content && message.content !== '📷 Image envoyée' && (
                       <p className="text-base whitespace-pre-wrap text-foreground">{message.content}</p>
                     )}
@@ -273,7 +301,7 @@ export function ChatInterface({
                           // servings est transmis par la carte ; consommé par l'écran mode cuisine (plan séparé)
                           onStartCooking?.(recipeId, servings);
                         }}
-                        onOpenDetail={(recipeId) => navigate(`/recipes/${recipeId}`)}
+                        onOpenDetail={handleOpenRecipe}
                         className="mt-2"
                       />
                     )}
@@ -288,7 +316,7 @@ export function ChatInterface({
                               // servings transmis par la carte ; consommé par l'écran mode cuisine (plan séparé)
                               onStartCooking?.(recipeId, servings);
                             }}
-                            onOpenDetail={(recipeId) => navigate(`/recipes/${recipeId}`)}
+                            onOpenDetail={handleOpenRecipe}
                           />
                         ))}
                       </div>
@@ -378,9 +406,6 @@ export function ChatInterface({
                 </Tooltip>
                 <PopoverContent className="w-56 p-1" align="start" side="top">
                   <div className="flex flex-col">
-                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground">
-                      <FileText className="h-4 w-4" /><span>Ajouter des fichiers</span>
-                    </button>
                     <button onClick={() => {
                       if (fileInputRef.current) {
                         fileInputRef.current.setAttribute('capture', 'environment');
@@ -392,11 +417,6 @@ export function ChatInterface({
                     </button>
                     <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground">
                       <Image className="h-4 w-4" /><span>Ajouter une image</span>
-                    </button>
-                    <div className="h-px bg-border my-1" />
-                    <button className="flex items-center justify-between px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground">
-                      <span className="flex items-center gap-3"><Plus className="h-4 w-4" /><span>Plus</span></span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </button>
                   </div>
                 </PopoverContent>
@@ -423,7 +443,7 @@ export function ChatInterface({
               />
             </div>
 
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" aria-hidden="true" tabIndex={-1} />
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageSelect} className="hidden" aria-hidden="true" tabIndex={-1} />
 
             {/* Mic / Send button */}
             <div className="flex items-center gap-1">

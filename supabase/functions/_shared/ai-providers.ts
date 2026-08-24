@@ -34,6 +34,19 @@ interface AIResponse {
 interface StreamCallOptions {
   tools?: ToolDefinition[];
   stream?: boolean;
+  signal?: AbortSignal;
+}
+
+interface InlineImageData {
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  data: string;
+}
+
+/** The home assistant accepts validated data URLs and preserves their real MIME type. */
+function parseInlineImageData(url: string): InlineImageData {
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/.exec(url);
+  if (!match) throw new Error("Unsupported image data URL");
+  return { mimeType: match[1] as InlineImageData["mimeType"], data: match[2] };
 }
 
 // ============================================================
@@ -124,6 +137,7 @@ async function callOpenAICompatStreaming(config: AIConfig, messages: ChatMessage
     method: "POST",
     headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: options.signal,
   });
 }
 
@@ -147,11 +161,11 @@ async function callGeminiStreaming(config: AIConfig, messages: ChatMessage[], op
       role: msg.role === "assistant" ? "model" : "user",
       parts: typeof msg.content === "string"
         ? [{ text: msg.content }]
-        : msg.content.map((c) =>
-            c.type === "text"
-              ? { text: c.text }
-              : { inlineData: { mimeType: "image/jpeg", data: c.image_url.url.split(",")[1] } }
-          ),
+        : msg.content.map((c) => {
+            if (c.type === "text") return { text: c.text };
+            const image = parseInlineImageData(c.image_url.url);
+            return { inlineData: image };
+          }),
     };
   });
 
@@ -190,6 +204,7 @@ async function callGeminiStreaming(config: AIConfig, messages: ChatMessage[], op
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": config.apiKey },
     body: JSON.stringify(body),
+    signal: options.signal,
   });
 
   if (options.stream && response.ok) return transformGeminiStreamToOpenAI(response);
@@ -202,11 +217,11 @@ async function callAnthropicStreaming(config: AIConfig, messages: ChatMessage[],
     role: msg.role,
     content: typeof msg.content === "string"
       ? msg.content
-      : msg.content.map((c) =>
-          c.type === "text"
-            ? { type: "text", text: c.text }
-            : { type: "image", source: { type: "base64", media_type: "image/jpeg", data: c.image_url.url.split(",")[1] } }
-        ),
+      : msg.content.map((c) => {
+          if (c.type === "text") return { type: "text", text: c.text };
+          const image = parseInlineImageData(c.image_url.url);
+          return { type: "image", source: { type: "base64", media_type: image.mimeType, data: image.data } };
+        }),
   }));
 
   const body: Record<string, unknown> = { model: config.model, max_tokens: 8192, messages: chatMessages };
@@ -232,6 +247,7 @@ async function callAnthropicStreaming(config: AIConfig, messages: ChatMessage[],
     method: "POST",
     headers: { "x-api-key": config.apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: options.signal,
   });
 
   if (options.stream && response.ok) return transformAnthropicStreamToOpenAI(response);
