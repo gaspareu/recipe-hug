@@ -5,10 +5,10 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  // `.claude/worktrees` : copies de travail temporaires des agents Claude Code.
+  // `.codex/worktrees` : éventuelles copies de travail temporaires de Codex.
   // Les inclure ferait remonter du bruit (le même code lint plusieurs fois) et
   // fausserait le décompte d'erreurs servant de baseline de non-régression.
-  { ignores: ["dist", ".claude/worktrees/**"] },
+  { ignores: ["dist", ".codex/worktrees/**"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

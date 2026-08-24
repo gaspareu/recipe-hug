@@ -1,28 +1,33 @@
 import { defineConfig, devices } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { loadEnv } from 'vite';
 
-// Charge .env (VITE_SUPABASE_*) et .env.test (TEST_EMAIL/TEST_PASSWORD), tous deux
-// gitignored, dans process.env. dotenv n'est pas une dépendance : parsing manuel.
-function loadEnvFile(name: string) {
-  try {
-    const raw = readFileSync(new URL(name, import.meta.url), 'utf8');
-    for (const line of raw.split('\n')) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-    }
-  } catch {
-    // Fichier absent : les tests concernés échoueront avec un message explicite.
-  }
+const ROOT_DIR = fileURLToPath(new URL('.', import.meta.url));
+const DEV_SUPABASE_PROJECT_ID = 'dltaxjvwtxjpbzcwdqvu';
+
+// Aligne le client Node des tests sur le serveur Vite : .env.development.local
+// prévaut sur .env, tandis que les variables injectées par la CI restent prioritaires.
+Object.assign(process.env, loadEnv('development', ROOT_DIR, 'VITE_'));
+Object.assign(process.env, loadEnv('test', ROOT_DIR, ['TEST_', 'E2E_']));
+
+const supabaseProjectId = process.env.VITE_SUPABASE_PROJECT_ID;
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+if (
+  supabaseProjectId !== DEV_SUPABASE_PROJECT_ID ||
+  supabaseUrl !== `https://${DEV_SUPABASE_PROJECT_ID}.supabase.co`
+) {
+  throw new Error(
+    `E2E refusés hors du projet Supabase dev ${DEV_SUPABASE_PROJECT_ID}. ` +
+      'Vérifie les variables VITE_SUPABASE_* dans .env.development.local.',
+  );
 }
-loadEnvFile('.env');
-loadEnvFile('.env.test');
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
 
 /**
- * Config E2E Playwright — exécution LOCALE (pas encore câblée en CI : nécessite
- * .env.test avec un compte de test + le serveur de dev, et écrit des données
- * réelles sur ce compte). Voir e2e/README.md.
+ * Config E2E Playwright — exécution locale et post-merge sur main en CI. Nécessite
+ * un compte de test et écrit des données réelles sur ce compte avant nettoyage.
+ * Voir e2e/README.md.
  */
 export default defineConfig({
   testDir: './e2e',

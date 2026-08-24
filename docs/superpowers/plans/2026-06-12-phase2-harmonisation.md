@@ -878,7 +878,7 @@ Expected: tous les tests passent (y compris les nouveaux tests `RecipeNew.test.t
 - [ ] **Step 3: Lancer le lint et le build**
 
 Run: `npm run lint && npm run build`
-Expected: build réussit ; lint informatif (non-bloquant selon `CLAUDE.md`), corriger uniquement les nouvelles erreurs introduites par ce chantier.
+Expected: build réussit ; lint informatif (non-bloquant selon `AGENTS.md`), corriger uniquement les nouvelles erreurs introduites par ce chantier.
 
 - [ ] **Step 4: Test manuel en navigateur**
 

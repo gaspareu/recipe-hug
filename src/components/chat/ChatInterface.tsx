@@ -111,6 +111,12 @@ export function ChatInterface({
     }
   }, [autoListenOnMount, enableAndListen]);
 
+  const scrollToBottom = useCallback(() => {
+    if (!shouldAutoScrollRef.current) return;
+    const el = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]');
+    if (el) el.scrollTop = el.scrollHeight;
+  }, []);
+
   // Keep the user anchored only while they are already reading the latest
   // exchange. Classic chat behavior must not pull someone away from history.
   useEffect(() => {
@@ -125,13 +131,17 @@ export function ChatInterface({
   }, [hasConversation]);
 
   useEffect(() => {
-    if (shouldAutoScrollRef.current && scrollRef.current) {
-      const el = scrollRef.current.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]');
-      if (el) {
-        el.scrollTop = el.scrollHeight;
-      }
-    }
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  // The virtual keyboard changes the visible viewport without scrolling the
+  // conversation. Re-anchor only if the reader was already at the latest turn.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    viewport.addEventListener('resize', scrollToBottom);
+    return () => viewport.removeEventListener('resize', scrollToBottom);
+  }, [scrollToBottom]);
 
   // Auto-speak new assistant messages
   useEffect(() => {

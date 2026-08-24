@@ -1,12 +1,16 @@
 # Tests E2E (Playwright)
 
-Tests end-to-end **locaux** du parcours authentifié. Pas encore câblés en CI :
-ils nécessitent un compte de test et écrivent potentiellement des données réelles.
+Tests end-to-end du parcours authentifié, exécutables localement et en CI après merge
+sur `main`. Ils nécessitent un compte de test et écrivent des données réelles avant leur
+nettoyage.
 
 ## Prérequis
 
-1. `.env` (gitignored) avec les variables `VITE_SUPABASE_*` (l'app doit monter).
-2. `.env.test` (gitignored) avec le compte de test :
+1. `.env.development.local` (gitignored) avec les variables `VITE_SUPABASE_*`
+   du projet Supabase de développement. Playwright utilise la même priorité que
+   Vite et refuse de démarrer si ces variables pointent vers un autre projet.
+2. Copier `.env.test.example` en `.env.test` (gitignored), puis renseigner le
+   compte de test :
    ```
    TEST_EMAIL=...
    TEST_PASSWORD=...
