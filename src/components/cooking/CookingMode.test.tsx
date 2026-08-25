@@ -15,7 +15,6 @@ vi.mock('@/hooks/useCookingTimers', () => ({
     toggleTimer: vi.fn(),
     dismissTimer: vi.fn(),
   }),
-  findActiveStepTimer: () => null,
 }));
 
 vi.mock('@/hooks/useWakeLock', () => ({
@@ -74,16 +73,16 @@ describe('CookingMode — quantités', () => {
     render(<CookingMode recipe={recipe} initialServings={6} onClose={vi.fn()} />);
 
     expect(screen.getByText('6 portions')).toBeInTheDocument();
-    expect(screen.getByText('300 g')).toBeInTheDocument();
-    expect(screen.getByText('180 ml')).toBeInTheDocument();
+    expect(screen.getByText('(300 g)')).toBeInTheDocument();
+    expect(screen.getByText('(180 ml)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajuster les quantités pour 6 portions' }));
+    expect(screen.getByRole('dialog', { name: 'Tous les ingrédients' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Augmenter les portions' }));
-    expect(screen.getByText('7 portions')).toBeInTheDocument();
+    expect(screen.getAllByText('7 portions')).toHaveLength(2);
+    expect(screen.getByText('(350 g)')).toBeInTheDocument();
     expect(screen.getByText('350 g')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Voir tous les ingrédients (2)' }));
-    expect(screen.getByRole('dialog', { name: 'Tous les ingrédients' })).toBeInTheDocument();
-    expect(screen.getByText('Quantités pour 7 portions')).toBeInTheDocument();
   });
 
   it('transmet à Chef la recette avec les quantités sélectionnées', () => {
@@ -103,13 +102,13 @@ describe('CookingMode — quantités', () => {
     render(<CookingMode recipe={{ ...recipe, servings: 16 }} onClose={vi.fn()} />);
 
     expect(screen.getByText('16 portions')).toBeInTheDocument();
-    expect(screen.getByText('200 g')).toBeInTheDocument();
+    expect(screen.getByText('(200 g)')).toBeInTheDocument();
   });
 
   it('utilise la base commune de deux portions pour une recette historique', () => {
     render(<CookingMode recipe={{ ...recipe, servings: null }} initialServings={2} onClose={vi.fn()} />);
 
     expect(screen.getByText('2 portions')).toBeInTheDocument();
-    expect(screen.getByText('200 g')).toBeInTheDocument();
+    expect(screen.getByText('(200 g)')).toBeInTheDocument();
   });
 });
