@@ -1,6 +1,6 @@
 // ===== Shared AI Configuration Resolution =====
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import {
   AIConfig,
   AISettings,
@@ -55,6 +55,28 @@ export interface ResolveOptions {
 }
 
 /**
+ * Les réglages bruts contiennent les clés chiffrées et ne sont pas lisibles par
+ * le rôle authenticated. Les edge functions utilisent donc le service role,
+ * tandis que le client appelant reste utilisé comme repli fermé en test local.
+ */
+function optionalEnv(name: string): string | undefined {
+  try {
+    return Deno.env.get(name);
+  } catch {
+    return undefined;
+  }
+}
+
+function createSettingsClient(fallbackClient: SupabaseClient): SupabaseClient {
+  const supabaseUrl = optionalEnv("SUPABASE_URL");
+  const serviceRoleKey = optionalEnv("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) return fallbackClient;
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+/**
  * Resolve the AI configuration for a given agent type and user.
  * Priority: agent-specific config > global user settings > default (Anthropic).
  * Validates required capabilities and falls back to default if not met.
@@ -83,7 +105,7 @@ export async function resolveAIConfig(
 
   console.log(`[AI Config] Resolving for agent: ${options.agentType}, user: ${userId}`);
 
-  const settings = await getUserAISettings(supabaseClient, userId);
+  const settings = await getUserAISettings(createSettingsClient(supabaseClient), userId);
 
   console.log(`[AI Config] Global: ${settings.provider}/${settings.preferred_model}`);
   console.log(`[AI Config] Agent configs: ${Object.keys(settings.agent_configs || {}).join(", ") || "none"}`);

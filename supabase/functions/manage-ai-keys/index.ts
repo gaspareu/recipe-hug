@@ -37,9 +37,10 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const ENCRYPTION_SECRET = Deno.env.get("AI_KEYS_ENCRYPTION_SECRET");
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Missing required environment variables");
     }
 
@@ -66,12 +67,18 @@ serve(async (req) => {
       );
     }
 
+    // Les clés chiffrées ne sont jamais lisibles par le rôle authenticated.
+    // L'UUID provient exclusivement du JWT vérifié ci-dessus.
+    const settingsClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
     if (req.method === "POST") {
       const body = await req.json();
       const { provider, preferred_model, agent_configs, provider_api_keys, api_key } = body;
 
       // Read existing settings to preserve encrypted keys not being updated
-      const { data: existing } = await supabaseClient
+      const { data: existing } = await settingsClient
         .from("user_ai_settings")
         .select("provider_api_keys, api_key")
         .eq("user_id", user.id)
@@ -107,7 +114,7 @@ serve(async (req) => {
         api_key: finalApiKey,
       };
 
-      const { data, error } = await supabaseClient
+      const { data, error } = await settingsClient
         .from("user_ai_settings")
         .upsert(payload, { onConflict: "user_id" })
         .select()
@@ -136,7 +143,7 @@ serve(async (req) => {
 
     if (req.method === "GET") {
       // Return masked keys info
-      const { data, error } = await supabaseClient
+      const { data, error } = await settingsClient
         .from("user_ai_settings")
         .select("provider_api_keys")
         .eq("user_id", user.id)

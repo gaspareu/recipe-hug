@@ -129,6 +129,9 @@ Exemple :
 
 ## Supabase et edge functions
 
+- Le flux [Snapshot local de données utilisateur](./LOCAL_DATA.md) permet de tester
+  avec un sous-ensemble pseudonymisé du compte connecté, sans clé administrateur et sans
+  versionner le fichier produit.
 - La production est le projet `ifpqsyyvytfpossqycpc` ; son MCP versionné est limité à
   la lecture, aux logs et à la documentation.
 - Toute migration est un fichier horodaté committé. Les changements faits dans le
