@@ -21,11 +21,13 @@ nettoyage.
 
 ```bash
 npm run test:e2e            # tout
+npm run test:e2e:home-chat  # contrôle mobile du composeur et des retours du chat
 npm run test:e2e -- --ui    # mode UI
 ```
 
 Playwright démarre `npm run dev` automatiquement (ou réutilise un serveur déjà
-lancé sur `http://localhost:8080` ; surcharger via `E2E_BASE_URL`).
+lancé sur `http://localhost:8080` ; `E2E_BASE_URL` peut cibler une autre adresse
+locale uniquement : localhost, 127.0.0.1 ou ::1).
 
 ## Contenu
 
@@ -33,9 +35,12 @@ lancé sur `http://localhost:8080` ; surcharger via `E2E_BASE_URL`).
   (gitignored : contient un jeton de session).
 - `smoke.spec.ts` — protection des routes + rendu des pages clés (déterministe,
   sans IA ni écriture).
+- `home-chat.spec.ts` — contrôle mobile du composeur Home : suggestions masquées
+  pendant la saisie, puis réaffichées quand il est vide, et retour d'activité
+  contextualisé lors d'une création de recette simulée.
 - `recipe-creation.spec.ts` — **flux de création** de recette : l'échange avec
   `home-assistant` est **simulé une fois** (réponse SSE figée avec un tool call
-  `save_recipe`, zéro token, déterministe) ; on teste le clic « Créer » avec
+  `propose_recipe`, zéro token, déterministe) ; on teste le clic « Créer » avec
   **écriture réelle** en base, vérification de la persistance, puis nettoyage.
   Les endpoints de fond (`generate-recipe-image`, `analyze-recipe`) sont stubés.
 - `grocery-list.spec.ts` — **flux liste de courses** (sans IA) : une recette avec

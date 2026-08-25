@@ -56,26 +56,8 @@ export function RecipeChatCard({
     onCreate({ title: card.title, servings: portions, ingredients: scaled });
   };
 
-  const hasIntro = (card.intro && card.intro.length > 0) || card.introClosing;
-
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      {/* Bulle intro */}
-      {hasIntro && (
-        <div className="rounded-xl bg-card border border-border px-4 py-3 text-sm text-foreground">
-          {card.intro && card.intro.length > 0 && (
-            <ul className="list-disc list-inside space-y-1 mb-1">
-              {card.intro.map((line, i) => (
-                <li key={i}>{line}</li>
-              ))}
-            </ul>
-          )}
-          {card.introClosing && (
-            <p className="text-muted-foreground">{card.introClosing}</p>
-          )}
-        </div>
-      )}
-
       {/* Carte recette */}
       <div className="rounded-xl bg-card border border-border overflow-hidden">
         {/* En-tête */}
