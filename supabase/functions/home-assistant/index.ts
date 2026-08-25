@@ -61,6 +61,8 @@ const Tm7ParamsSchema = z.object({
 const StepSchema = z.object({
   order: z.number(),
   text: z.string(),
+  title: z.string().optional(),
+  ingredient_names: z.array(z.string()).optional(),
   completed: z.boolean().optional(),
   duration_minutes: z.number().nullable().optional(),
   tm7: Tm7ParamsSchema.nullable().optional(),
@@ -115,10 +117,11 @@ Format étapes — TOUTES les recettes sont destinées au Thermomix TM7. Rédige
 - Étapes manuelles (éplucher, réserver, dresser) : PAS d'objet "tm7" ; renseigne "duration_minutes" si un temps d'attente s'applique.
 - Respecte STRICTEMENT le RÉFÉRENTIEL THERMOMIX TM7 (fourni plus bas) : n'invente jamais une fonction, une vitesse ou une température absente du TM7. "Varoma" = cuisson vapeur (pas de °C) ; "sens inverse" pour mélanger sans hacher.
 - Donne à CHAQUE étape un "title" court (2-4 mots) résumant l'action, en plus du "text" détaillé.
+- Donne à CHAQUE étape "ingredient_names" : les noms EXACTS des ingrédients de la liste utilisés pendant cette étape. Omet uniquement si aucun ingrédient n'est ajouté ou manipulé.
 
 ### Skill : Guidage cuisine
 Quand l'utilisateur veut cuisiner une recette (qui est en contexte ou identifiée) :
-- Pour démarrer la préparation / "passer en mode cuisine" / être guidé pas à pas : appelle start_cooking (recipe_id) IMMÉDIATEMENT. Cela ouvre le mode cuisine plein écran (étapes en grand, minuteurs, écran maintenu allumé). Si aucune recette n'est encore identifiée, demande laquelle (ou propose search_recipes) avant.
+- Pour démarrer la préparation / "passer en mode cuisine" / être guidé pas à pas : appelle start_cooking (recipe_id, et servings si l'utilisateur a précisé un nombre de portions) IMMÉDIATEMENT. Cela ouvre le mode cuisine plein écran (étapes en grand, minuteurs, écran maintenu allumé). Si aucune recette n'est encore identifiée, demande laquelle (ou propose search_recipes) avant.
 - Une fois en cuisine, guide étape par étape
 - Adapte les quantités si changement de portions
 - Suggère des substitutions d'ingrédients
@@ -179,6 +182,12 @@ const STEP_ITEMS_SCHEMA = {
       type: "string",
       description:
         "Texte de l'étape. Pour une action machine : format Cookidoo, ex. « Mixer 8 min/100°C/vitesse 2 » ou « Cuire 15 min/Varoma/vitesse 1 ».",
+    },
+    ingredient_names: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Noms EXACTS, tels qu'ils apparaissent dans ingredients, des ingrédients utilisés pendant cette étape. Omettre si aucun ingrédient n'est concerné.",
     },
     duration_minutes: {
       type: "number",
@@ -270,6 +279,7 @@ const TOOLS = [
         properties: {
           recipe_id: { type: "string", description: "L'ID de la recette à cuisiner" },
           recipe_title: { type: "string", description: "Le titre de la recette (pour confirmation)" },
+          servings: { type: "number", description: "Nombre de portions demandé, si l'utilisateur l'a précisé" },
         },
         required: ["recipe_id", "recipe_title"],
       },

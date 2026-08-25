@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useRecipes } from './useRecipes';
 import { useUserPreferences } from './useUserPreferences';
@@ -23,10 +23,10 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
   const welcomeMessage = `Salut ! 👨‍🍳 Je suis prêt à t'accompagner pour "**${recipe.title}**".\n\nJe peux te guider en cuisine, modifier la recette ou répondre à tes questions. Que veux-tu faire ?`;
 
-  const initialActiveRecipe: ActiveRecipeData = {
+  const initialActiveRecipe = useMemo<ActiveRecipeData>(() => ({
     id: recipe.id, title: recipe.title, servings: recipe.servings,
     season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
-  };
+  }), [recipe.id, recipe.title, recipe.servings, recipe.season, recipe.ingredients, recipe.steps]);
 
   const handleToolCall = useCallback(async (action: ToolCallAction, activeRecipe: ActiveRecipeData | null): Promise<unknown> => {
     console.log('Recipe chat tool call:', action.type, action.data);
@@ -95,6 +95,14 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
     onToolCall: handleToolCall,
     buildRequest,
   });
+  const { setActiveRecipe } = engine;
+
+  // Le nombre de portions peut changer pendant que le chat reste monté. Le
+  // moteur initialise son contexte une seule fois : on le resynchronise pour
+  // que Chef reçoive toujours les quantités actuellement affichées.
+  useEffect(() => {
+    setActiveRecipe(initialActiveRecipe);
+  }, [setActiveRecipe, initialActiveRecipe]);
 
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
   const savePendingRecipe = useCallback(async () => {
