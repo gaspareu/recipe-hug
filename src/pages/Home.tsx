@@ -21,7 +21,7 @@ export default function Home() {
   const {
     messages, isStreaming, toolActivity, isSavingRecipe,
     sendMessage, resetChat, createProposedRecipe, regenerateResponse, stopGeneration,
-    cookingRecipeId, startCooking, stopCooking,
+    cookingRecipeId, cookingServings, startCooking, stopCooking,
   } = useHomeChat();
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -127,7 +127,7 @@ export default function Home() {
 
       {/* Mode cuisine plein écran (déclenché par l'assistant ou le bouton « Cuisiner ») */}
       {cookingRecipeId && (
-        <CookingModeContainer recipeId={cookingRecipeId} onClose={stopCooking} />
+        <CookingModeContainer recipeId={cookingRecipeId} initialServings={cookingServings} onClose={stopCooking} />
       )}
     </div>
   );
