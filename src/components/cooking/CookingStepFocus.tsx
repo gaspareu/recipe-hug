@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import { Timer, Pause, Play } from 'lucide-react';
-import type { Step } from '@/types/recipe';
+import { Timer, Pause, Play, ListChecks } from 'lucide-react';
+import type { Ingredient, Step } from '@/types/recipe';
 import { cn } from '@/lib/utils';
 import { parseStepTimers } from '@/lib/parseStepTimers';
 import { formatTimer, type CookingTimer } from '@/hooks/useCookingTimers';
 import { deriveStepTitle } from '@/lib/step-title';
+import { formatCookingQuantity } from '@/lib/cooking-ingredients';
 
 function Progress({ idx, total }: { idx: number; total: number }) {
   return (
@@ -38,7 +39,7 @@ function TimerChip({ minutes, label, stepIndex, onStart }: TimerChipProps) {
   return (
     <button
       onClick={() => onStart(label, minutes * 60, stepIndex)}
-      className="inline-flex items-center gap-2 rounded-full border-[1.5px] border-accent bg-accent/15 px-3 py-1.5 font-crimson text-sm font-bold text-secondary transition-colors hover:bg-accent hover:text-accent-foreground"
+      className="inline-flex min-h-11 touch-manipulation cursor-pointer items-center gap-2 rounded-full border-[1.5px] border-accent bg-accent/15 px-3 py-1.5 font-crimson text-sm font-bold text-secondary transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <Timer className="h-4 w-4" aria-hidden="true" />
       <span>Minuteur {formatTimer(minutes * 60)}</span>
@@ -58,7 +59,7 @@ function ActiveTimerDisplay({ timer, onToggle }: ActiveTimerDisplayProps) {
       <button
         onClick={() => onToggle(timer.id)}
         aria-label={timer.running ? `Mettre en pause ${timer.label}` : `Reprendre ${timer.label}`}
-        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"
+        className="flex h-12 w-12 shrink-0 touch-manipulation cursor-pointer items-center justify-center rounded-full bg-accent text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         {timer.running
           ? <Pause className="h-5 w-5" aria-hidden="true" />
@@ -72,13 +73,26 @@ interface CookingStepFocusProps {
   step: Step;
   idx: number;
   total: number;
+  ingredients: Ingredient[];
+  totalIngredientsCount: number;
+  onOpenIngredients: () => void;
   onStartTimer: (label: string, seconds: number, stepIndex: number) => void;
   /** Minuteur en cours lié à l'étape courante (null si aucun). */
   activeTimer: CookingTimer | null;
   onToggleTimer: (id: string) => void;
 }
 
-export function CookingStepFocus({ step, idx, total, onStartTimer, activeTimer, onToggleTimer }: CookingStepFocusProps) {
+export function CookingStepFocus({
+  step,
+  idx,
+  total,
+  ingredients,
+  totalIngredientsCount,
+  onOpenIngredients,
+  onStartTimer,
+  activeTimer,
+  onToggleTimer,
+}: CookingStepFocusProps) {
   const { segments, offeredMinutes } = useMemo(() => {
     const parsed = parseStepTimers(step.text);
     // Durées proposées : celles repérées dans le texte, complétées par la durée
@@ -114,6 +128,47 @@ export function CookingStepFocus({ step, idx, total, onStartTimer, activeTimer, 
             ),
           )}
         </p>
+
+        {ingredients.length > 0 && (
+          <section className="mt-5" aria-labelledby={`step-ingredients-${idx}`}>
+            <h3
+              id={`step-ingredients-${idx}`}
+              className="mb-2.5 flex items-center gap-2 font-crimson text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground"
+            >
+              <ListChecks className="h-4 w-4" aria-hidden="true" />
+              Pour cette étape
+            </h3>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {ingredients.map((ingredient, ingredientIndex) => {
+                const quantity = formatCookingQuantity(ingredient);
+                return (
+                  <li
+                    key={`${ingredient.name}-${ingredientIndex}`}
+                    className="flex min-h-[52px] items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2"
+                  >
+                    {quantity && <strong className="shrink-0 font-crimson text-base text-primary">{quantity}</strong>}
+                    <span className="font-crimson text-base leading-tight text-foreground">
+                      {ingredient.name}
+                      {ingredient.preparation && <span className="text-muted-foreground"> · {ingredient.preparation}</span>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        {totalIngredientsCount > 0 && (
+          <button
+            type="button"
+            onClick={onOpenIngredients}
+            className="mt-3 flex min-h-12 w-full touch-manipulation cursor-pointer items-center justify-center gap-2 rounded-2xl border border-primary bg-background px-4 font-crimson text-base font-bold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <ListChecks className="h-5 w-5" aria-hidden="true" />
+            Voir tous les ingrédients ({totalIngredientsCount})
+          </button>
+        )}
+
         {activeTimer ? (
           <ActiveTimerDisplay timer={activeTimer} onToggle={onToggleTimer} />
         ) : (

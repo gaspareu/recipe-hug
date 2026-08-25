@@ -279,4 +279,19 @@ describe('buildPendingRecipeFromToolCall — title d’étape', () => {
     }, null);
     expect(out?.steps[0].title).toBe('Cuire les œufs');
   });
+
+  it('conserve les ingrédients associés à chaque étape', () => {
+    const out = parseRecipePayload({
+      title: 'Curry',
+      servings: 4,
+      ingredients: [{ name: 'Pois chiches', quantity: 400, unit: 'g' }],
+      steps: [{
+        order: 1,
+        text: 'Ajouter les pois chiches.',
+        ingredient_names: ['Pois chiches'],
+      }],
+    });
+
+    expect(out?.steps[0].ingredient_names).toEqual(['Pois chiches']);
+  });
 });

@@ -18,7 +18,7 @@ Baseline vérifié au **2026-08-25** :
 
 | Commande | Baseline (dette préexistante) |
 |----------|-------------------------------|
-| `npm run test:run` | **0 échec** (529 tests) — doit rester à 0 |
+| `npm run test:run` | **0 échec** (546 tests) — doit rester à 0 |
 | `npm run typecheck` | **0 erreur** |
 | `npm run lint` | **0 problème** |
 

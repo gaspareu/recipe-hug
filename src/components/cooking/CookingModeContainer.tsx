@@ -9,13 +9,14 @@ import { CookingMode } from './CookingMode';
 interface CookingModeContainerProps {
   recipeId: string;
   onClose: () => void;
+  initialServings?: number;
 }
 
 /**
  * Charge la recette ciblée puis rend le mode cuisine plein écran. Câble les
  * modifications/créations issues du chat Chef sur les mutations existantes.
  */
-export function CookingModeContainer({ recipeId, onClose }: CookingModeContainerProps) {
+export function CookingModeContainer({ recipeId, onClose, initialServings }: CookingModeContainerProps) {
   const navigate = useNavigate();
   const { data: recipe, isLoading, refetch } = useRecipe(recipeId);
   const updateRecipe = useUpdateRecipe();
@@ -64,6 +65,7 @@ export function CookingModeContainer({ recipeId, onClose }: CookingModeContainer
     <CookingMode
       recipe={recipe}
       onClose={onClose}
+      initialServings={initialServings}
       onRecipeUpdate={handleRecipeUpdate}
       onRecipeCreate={handleRecipeCreate}
     />

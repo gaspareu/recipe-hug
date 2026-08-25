@@ -501,6 +501,32 @@ describe("useHomeChat — édition de recette", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Flow : démarrage du mode cuisine
+// ---------------------------------------------------------------------------
+describe("useHomeChat — mode cuisine", () => {
+  it("conserve le nombre de portions choisi sur la carte recette", () => {
+    const { result } = renderHook(() => useHomeChat());
+
+    act(() => result.current.startCooking("r1", 6));
+
+    expect(result.current.cookingRecipeId).toBe("r1");
+    expect(result.current.cookingServings).toBe(6);
+
+    act(() => result.current.stopCooking());
+    expect(result.current.cookingRecipeId).toBeNull();
+  });
+
+  it("accepte un nombre de portions demandé par l’assistant", async () => {
+    const { result } = renderHook(() => useHomeChat());
+
+    await sendToolCall(result, "start_cooking", { recipe_id: "r1", servings: 3 });
+
+    expect(result.current.cookingRecipeId).toBe("r1");
+    expect(result.current.cookingServings).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Flow : mise à jour du profil culinaire
 // ---------------------------------------------------------------------------
 describe("useHomeChat — préférences utilisateur", () => {

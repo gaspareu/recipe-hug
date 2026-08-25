@@ -120,6 +120,27 @@ describe("useRecipeChat — contexte initial", () => {
       { id: "r1", title: "Tarte aux pommes", status: "validated", is_favorite: true },
     ]);
   });
+
+  it("resynchronise le contexte de Chef quand les portions changent", async () => {
+    const scaledRecipe: Recipe = {
+      ...RECIPE,
+      servings: 6,
+      ingredients: [{ name: "Pomme", quantity: 4.5, unit: "pièce" }],
+    };
+    const { result, rerender } = renderHook(
+      ({ recipe }) => useRecipeChat({ recipe, completedSteps: new Set<number>() }),
+      { initialProps: { recipe: RECIPE } },
+    );
+
+    rerender({ recipe: scaledRecipe });
+    await act(() => result.current.sendMessage("Quelle quantité de pommes ?"));
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.activeRecipe).toMatchObject({
+      servings: 6,
+      ingredients: [{ name: "Pomme", quantity: 4.5, unit: "pièce" }],
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
