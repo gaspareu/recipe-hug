@@ -43,7 +43,7 @@ deno test --allow-env=ANTHROPIC_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,AI_KEYS_EN
 
 ⚠️ **`npm run build` ne vérifie pas les types.** `vite build` (SWC) transpile sans passer par `tsc` : un build vert ne prouve rien sur la validité des types. La vérification est `npm run typecheck` (`tsc -b --noEmit`), et c'est elle qu'il faut lancer avant de conclure qu'un changement compile.
 
-Baseline de non-régression vérifiée au **2026-08-25** : `typecheck` = **0 erreur**, `lint` = **0 problème**, `test:run` = **0 échec (531 tests)**. Le skill **`check`** automatise cette vérification ; tenir ces chiffres à jour dans les deux fichiers (`AGENTS.md` + `.agents/skills/check/SKILL.md`) quand la suite évolue.
+Baseline de non-régression vérifiée au **2026-08-25** : `typecheck` = **0 erreur**, `lint` = **0 problème**, `test:run` = **0 échec (546 tests)**. Le skill **`check`** automatise cette vérification ; tenir ces chiffres à jour dans les deux fichiers (`AGENTS.md` + `.agents/skills/check/SKILL.md`) quand la suite évolue.
 
 ## Architecture
 
