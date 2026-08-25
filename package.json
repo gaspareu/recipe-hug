@@ -23,7 +23,7 @@
     "check:all": "npm run check && npm run build && npm run test:edge"
   },
   "dependencies": {
-    "@elevenlabs/react": "^1.12.1",
+    "@elevenlabs/react": "^1.12.4",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-alert-dialog": "^1.1.23",
     "@radix-ui/react-aspect-ratio": "^1.1.15",
