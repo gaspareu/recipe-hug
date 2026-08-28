@@ -5,6 +5,7 @@ import {
   mapElevenLabsError,
   parseTtsRequest,
   parseVoiceQuotaDecision,
+  readJsonBodyWithLimit,
 } from "./elevenlabs.ts";
 
 Deno.test("parseTtsRequest nettoie et limite le texte sans accepter de voix cliente", () => {
@@ -28,6 +29,24 @@ Deno.test("parseTtsRequest refuse les corps invalides et les textes trop longs",
   assertEquals(parseTtsRequest({ text: "a".repeat(5_001) }), {
     ok: false,
     error: "Text too long (max 5000 characters)",
+  });
+});
+
+Deno.test("readJsonBodyWithLimit borne le corps avant le parsing JSON", async () => {
+  const valid = await readJsonBodyWithLimit(new Request("http://localhost", {
+    method: "POST",
+    body: JSON.stringify({ text: "Bonjour" }),
+  }), 128);
+  assertEquals(valid, { ok: true, value: { text: "Bonjour" } });
+
+  const oversized = await readJsonBodyWithLimit(new Request("http://localhost", {
+    method: "POST",
+    body: "x".repeat(129),
+  }), 128);
+  assertEquals(oversized, {
+    ok: false,
+    status: 413,
+    error: "Request body too large",
   });
 });
 

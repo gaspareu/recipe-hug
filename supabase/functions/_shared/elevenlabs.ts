@@ -1,6 +1,7 @@
 export const ELEVENLABS_TTS_VOICE_ID = "onwK4e9ZLuTAKqWW03F9";
 export const ELEVENLABS_REQUEST_TIMEOUT_MS = 20_000;
 export const MAX_TTS_TEXT_LENGTH = 5_000;
+export const MAX_TTS_BODY_BYTES = 64 * 1024;
 
 export type TtsRequestResult =
   | { ok: true; text: string }
@@ -10,6 +11,50 @@ export type VoiceQuotaDecision = {
   allowed: boolean;
   retryAfterSeconds: number;
 };
+
+export type JsonBodyResult =
+  | { ok: true; value: unknown }
+  | { ok: false; status: 400 | 413; error: string };
+
+export async function readJsonBodyWithLimit(
+  request: Request,
+  maxBytes = MAX_TTS_BODY_BYTES,
+): Promise<JsonBodyResult> {
+  const declaredLength = Number(request.headers.get("Content-Length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    return { ok: false, status: 413, error: "Request body too large" };
+  }
+  if (!request.body) return { ok: false, status: 400, error: "Invalid JSON body" };
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return { ok: false, status: 413, error: "Request body too large" };
+      }
+      chunks.push(value);
+    }
+
+    const bytes = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return { ok: true, value: JSON.parse(text) };
+  } catch {
+    return { ok: false, status: 400, error: "Invalid JSON body" };
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 export function parseTtsRequest(value: unknown): TtsRequestResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) {

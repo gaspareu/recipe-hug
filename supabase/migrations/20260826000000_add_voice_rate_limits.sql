@@ -24,7 +24,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_now timestamptz := clock_timestamp();
+  v_now timestamptz;
   v_user_key text;
   v_user_request_limit integer;
   v_user_cost_limit integer;
@@ -65,6 +65,9 @@ BEGIN
   -- Un verrou par service sérialise le contrôle des buckets utilisateur et
   -- global afin qu'aucune requête concurrente ne puisse dépasser les plafonds.
   PERFORM pg_advisory_xact_lock(hashtextextended('recipe-hug:voice:' || p_scope, 0));
+  -- L'heure de fenêtre doit être capturée après l'attente du verrou : sous
+  -- charge, une requête peut patienter jusqu'à la fenêtre suivante.
+  v_now := clock_timestamp();
 
   INSERT INTO public.voice_rate_limit_buckets (bucket_key, scope, window_started_at)
   VALUES

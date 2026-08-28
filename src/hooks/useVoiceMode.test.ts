@@ -409,6 +409,46 @@ describe('useVoiceMode', () => {
     expect(result.current.isSpeaking).toBe(false);
   });
 
+  it('libère la file audio quand le timeout TTS automatique expire', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (!String(url).includes('elevenlabs-tts')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: 't' }) });
+        }
+
+        return new Promise((_resolve, reject) => {
+          const signal = init?.signal;
+          const rejectAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+          if (signal?.aborted) {
+            rejectAbort();
+            return;
+          }
+          signal?.addEventListener('abort', rejectAbort, { once: true });
+        });
+      }),
+    );
+
+    const { result } = renderHook(() => useVoiceMode());
+    act(() => result.current.toggleVoice());
+
+    await act(async () => {
+      void result.current.speak('Une réponse trop lente');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(findTtsCall()).toBeTruthy();
+    expect(result.current.isSpeaking).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+
+    expect(result.current.isSpeaking).toBe(false);
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('lecture vocale'));
+  });
+
   it('reste résilient si le TTS échoue (isSpeaking revient à false, pas de crash)', async () => {
     vi.stubGlobal(
       'fetch',

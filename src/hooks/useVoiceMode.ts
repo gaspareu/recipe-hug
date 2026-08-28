@@ -169,7 +169,8 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Authentication required');
-      if (controller.signal.aborted || generation !== playbackGenerationRef.current) return;
+      if (generation !== playbackGenerationRef.current || !mountedRef.current) return;
+      if (controller.signal.aborted) throw new DOMException('TTS request timed out', 'AbortError');
 
       const response = await fetch(TTS_URL, {
         method: 'POST',
@@ -205,7 +206,7 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
 
       await audio.play();
     } catch (error) {
-      if (!controller.signal.aborted && generation === playbackGenerationRef.current && mountedRef.current) {
+      if (generation === playbackGenerationRef.current && mountedRef.current) {
         console.error('TTS error:', error);
         audio?.pause();
         if (audioRef.current === audio) audioRef.current = null;

@@ -7,6 +7,7 @@ import {
   mapElevenLabsError,
   parseTtsRequest,
   parseVoiceQuotaDecision,
+  readJsonBodyWithLimit,
 } from "../_shared/elevenlabs.ts";
 
 const jsonHeaders = {
@@ -59,14 +60,10 @@ export async function handleElevenLabsTts(req: Request): Promise<Response> {
     return jsonResponse({ error: "Invalid token" }, 401);
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return jsonResponse({ error: "Invalid JSON body" }, 400);
-  }
+  const bodyResult = await readJsonBodyWithLimit(req);
+  if (!bodyResult.ok) return jsonResponse({ error: bodyResult.error }, bodyResult.status);
 
-  const parsed = parseTtsRequest(body);
+  const parsed = parseTtsRequest(bodyResult.value);
   if (!parsed.ok) return jsonResponse({ error: parsed.error }, 400);
 
   const quotaClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
