@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X, ChevronLeft, ArrowRight, Check, Mic, ChefHat, ChevronUp, Minus, Plus, Users } from 'lucide-react';
+import { X, ChevronLeft, ArrowRight, Check, Mic, ChefHat, ChevronUp } from 'lucide-react';
 import type { Recipe, Step, Ingredient } from '@/types/recipe';
-import { useCookingTimers, findActiveStepTimer } from '@/hooks/useCookingTimers';
+import { useCookingTimers } from '@/hooks/useCookingTimers';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useRecipeChat } from '@/hooks/useRecipeChat';
 import { playChime } from '@/lib/playChime';
@@ -93,9 +93,7 @@ export function CookingMode({ recipe, onClose, initialServings, onRecipeUpdate, 
     });
   };
 
-  // Minuteur en cours lié à l'étape affichée, pour l'afficher en grand plutôt
-  // que dans la barre.
-  const currentTimer = findActiveStepTimer(timers, idx, done);
+  const hasActiveTimer = !done && timers.some(timer => timer.stepIndex === idx && !timer.done);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background pt-[env(safe-area-inset-top)]">
@@ -119,39 +117,14 @@ export function CookingMode({ recipe, onClose, initialServings, onRecipeUpdate, 
         <span className="h-11 w-11" aria-hidden="true" />
       </header>
 
-      {/* Portions et recalcul instantané des quantités. */}
-      <div className="mx-3.5 mb-1 flex shrink-0 items-center justify-between rounded-2xl border border-border bg-card py-1.5 pl-3 pr-1.5">
-        <span className="flex items-center gap-2 font-crimson text-sm font-bold text-foreground">
-          <Users className="h-4 w-4 text-primary" aria-hidden="true" />
-          Quantités pour
-        </span>
-        <div className="flex items-center gap-1" role="group" aria-label="Nombre de portions">
-          <button
-            type="button"
-            onClick={() => setServings(value => clampServings(value - 1))}
-            disabled={servings <= MIN_SERVINGS}
-            className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-xl bg-muted text-primary transition-colors hover:bg-primary/10 disabled:cursor-default disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label="Diminuer les portions"
-          >
-            <Minus className="h-4 w-4" aria-hidden="true" />
-          </button>
-          <span className="min-w-16 text-center font-crimson text-base font-bold text-foreground" aria-live="polite">
-            {servings} portion{servings > 1 ? 's' : ''}
-          </span>
-          <button
-            type="button"
-            onClick={() => setServings(value => clampServings(value + 1))}
-            className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-xl bg-muted text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label="Augmenter les portions"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-
-      {/* Barre de minuteurs actifs (le minuteur de l'étape courante est affiché
-          en grand ci-dessous, pas dans la barre — on évite le doublon). */}
-      <CookingTimerBar timers={timers.filter(t => t.id !== currentTimer?.id)} onToggle={toggleTimer} onDismiss={dismissTimer} />
+      {/* Bande compacte : tous les minuteurs actifs et accès aux portions. */}
+      <CookingTimerBar
+        timers={timers}
+        servings={servings}
+        onOpenIngredients={() => setIngredientsOpen(true)}
+        onToggle={toggleTimer}
+        onDismiss={dismissTimer}
+      />
 
       {/* Corps */}
       <div className="relative min-h-0 flex-1">
@@ -163,11 +136,8 @@ export function CookingMode({ recipe, onClose, initialServings, onRecipeUpdate, 
             idx={idx}
             total={total}
             ingredients={currentIngredients}
-            totalIngredientsCount={scaledIngredients.length}
-            onOpenIngredients={() => setIngredientsOpen(true)}
             onStartTimer={addTimer}
-            activeTimer={currentTimer}
-            onToggleTimer={toggleTimer}
+            hasActiveTimer={hasActiveTimer}
           />
         )}
       </div>
@@ -236,6 +206,9 @@ export function CookingMode({ recipe, onClose, initialServings, onRecipeUpdate, 
         onOpenChange={setIngredientsOpen}
         ingredients={scaledIngredients}
         servings={servings}
+        canDecreaseServings={servings > MIN_SERVINGS}
+        onDecreaseServings={() => setServings(value => clampServings(value - 1))}
+        onIncreaseServings={() => setServings(value => clampServings(value + 1))}
         checkedIndexes={checkedIngredientIndexes}
         onToggleIngredient={toggleIngredient}
       />
