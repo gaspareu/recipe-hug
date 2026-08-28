@@ -19,6 +19,7 @@
 | `recipe_shares` | id, recipe_id, token | Liens de partage recettes |
 | `user_preferences` | user_id | Préférences culinaires détaillées |
 | `cookidoo_exports` | id, user_id, recipe_id | Journal des exports Thermomix (statut, erreur, `diagnostics` qualité). RLS : lecture propriétaire, **aucune** écriture cliente |
+| `voice_rate_limit_buckets` | bucket_key, scope | Compteurs internes TTS/Scribe par minute ; aucune lecture/écriture cliente directe |
 
 ## Relations Clés
 ```
@@ -38,6 +39,7 @@ recipes
 | Fonction | Description |
 |----------|-------------|
 | `get_user_id_by_phone(phone)` | Résolution user_id par numéro de téléphone [NEW — migration 20260318] |
+| `consume_voice_quota(user_id, scope, cost)` | Consommation atomique des quotas ElevenLabs utilisateur + globaux ; exécutable uniquement par `service_role` |
 
 ## Sécurité
 - RLS activé sur toutes les tables

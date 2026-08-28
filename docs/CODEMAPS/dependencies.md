@@ -18,7 +18,7 @@
 | react-router-dom | 7.12.0 | Routing |
 | @tanstack/react-query | 5.83.0 | Server state |
 | @supabase/supabase-js | 2.89.0 | Supabase client |
-| @elevenlabs/react | 0.12.3 | Voice (TTS/STT) |
+| @elevenlabs/react | 1.12.1 | Voice (TTS/STT) |
 | framer-motion | latest | Animations |
 | react-hook-form + zod | latest | Forms + validation |
 | tailwindcss | 3.4.17 | Styling |

@@ -1,83 +1,113 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
-import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+import { corsHeaders } from "../_shared/cors.ts";
+import {
+  createTimeoutSignal,
+  ELEVENLABS_TTS_VOICE_ID,
+  mapElevenLabsError,
+  parseTtsRequest,
+  parseVoiceQuotaDecision,
+} from "../_shared/elevenlabs.ts";
+
+const jsonHeaders = {
+  ...corsHeaders,
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store",
+  "X-Content-Type-Options": "nosniff",
 };
 
-// Input validation schema
-const RequestSchema = z.object({
-  text: z.string()
-    .min(1, "Text is required")
-    .max(5000, "Text too long (max 5000 characters)"),
-  voiceId: z.string().optional().default("onwK4e9ZLuTAKqWW03F9"), // Daniel - French voice
-});
+function jsonResponse(payload: Record<string, unknown>, status: number, headers?: HeadersInit) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...jsonHeaders, ...headers },
+  });
+}
 
-serve(async (req) => {
+export async function handleElevenLabsTts(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" });
+  }
 
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return jsonResponse({ error: "Authentication required" }, 401);
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
+  const zeroRetentionEnabled = Deno.env.get("ELEVENLABS_ZERO_RETENTION_MODE") === "true";
+  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey || !elevenLabsApiKey) {
+    console.error("ElevenLabs TTS is missing required server configuration");
+    return jsonResponse({ error: "Voice service unavailable" }, 503);
+  }
+
+  const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const token = authHeader.slice("Bearer ".length);
+  const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+  if (claimsError || !claimsData?.claims) {
+    return jsonResponse({ error: "Invalid token" }, 401);
+  }
+  const userId = claimsData.claims.sub;
+  if (typeof userId !== "string" || !userId) {
+    return jsonResponse({ error: "Invalid token" }, 401);
+  }
+
+  let body: unknown;
   try {
-    // Verify authentication
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Authentication required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    body = await req.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
 
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-    const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
+  const parsed = parseTtsRequest(body);
+  if (!parsed.ok) return jsonResponse({ error: parsed.error }, 400);
 
-    if (!ELEVENLABS_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      throw new Error("Missing required environment variables");
-    }
+  const quotaClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: quotaData, error: quotaError } = await quotaClient.rpc(
+    "consume_voice_quota",
+    { p_user_id: userId, p_scope: "tts", p_cost: parsed.text.length },
+  );
+  const quota = parseVoiceQuotaDecision(quotaData);
+  if (quotaError || !quota) {
+    console.error("Voice quota check failed", { code: quotaError?.code });
+    return jsonResponse({ error: "Voice service unavailable" }, 503);
+  }
+  if (!quota.allowed) {
+    return jsonResponse(
+      { error: "Voice request limit reached" },
+      429,
+      { "Retry-After": String(quota.retryAfterSeconds) },
+    );
+  }
 
-    // Verify JWT
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } }
-    });
+  console.log("TTS request", { characterCount: parsed.text.length });
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
-    
-    if (claimsError || !claimsData?.claims) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Validate input
-    const body = await req.json();
-    const parseResult = RequestSchema.safeParse(body);
-    
-    if (!parseResult.success) {
-      return new Response(
-        JSON.stringify({ error: parseResult.error.errors[0]?.message || 'Invalid input' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { text, voiceId } = parseResult.data;
-
-    console.log('TTS request for user:', claimsData.claims.sub, 'text length:', text.length);
-
+  const timeout = createTimeoutSignal();
+  try {
+    const elevenLabsUrl = new URL(
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_TTS_VOICE_ID}/stream`,
+    );
+    elevenLabsUrl.searchParams.set("output_format", "mp3_44100_128");
+    elevenLabsUrl.searchParams.set("enable_logging", String(!zeroRetentionEnabled));
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+      elevenLabsUrl,
       {
         method: "POST",
         headers: {
-          "xi-api-key": ELEVENLABS_API_KEY,
+          "xi-api-key": elevenLabsApiKey,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          text,
+          text: parsed.text,
           model_id: "eleven_multilingual_v2",
           voice_settings: {
             stability: 0.5,
@@ -86,31 +116,66 @@ serve(async (req) => {
             use_speaker_boost: true,
           },
         }),
-      }
+        signal: timeout.signal,
+      },
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("ElevenLabs TTS error:", response.status, errorText);
-      throw new Error(`TTS API error: ${response.status}`);
+      timeout.clear();
+      const mapped = mapElevenLabsError(response.status);
+      const retryAfter = response.headers.get("Retry-After");
+      console.error("ElevenLabs TTS upstream failure", {
+        status: response.status,
+        requestId: response.headers.get("request-id"),
+      });
+      return jsonResponse(
+        { error: mapped.message },
+        mapped.status,
+        retryAfter ? { "Retry-After": retryAfter } : undefined,
+      );
     }
 
-    const audioBuffer = await response.arrayBuffer();
+    if (!response.body) {
+      timeout.clear();
+      return jsonResponse({ error: "Voice service returned no audio" }, 502);
+    }
 
-    return new Response(audioBuffer, {
+    // Après les en-têtes, le délai devient un timeout d'inactivité : une longue
+    // synthèse reste valide tant que le fournisseur continue d'envoyer des octets.
+    timeout.reset();
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        timeout.reset();
+        controller.enqueue(chunk);
+      },
+    });
+    void response.body
+      .pipeTo(writable, { signal: timeout.signal })
+      .catch((error) => {
+        if (!(error instanceof Error && error.name === "AbortError")) {
+          console.error("ElevenLabs TTS stream failed");
+        }
+      })
+      .finally(timeout.clear);
+
+    return new Response(readable, {
+      status: 200,
       headers: {
         ...corsHeaders,
-        "Content-Type": "audio/mpeg",
+        "Content-Type": response.headers.get("Content-Type") ?? "audio/mpeg",
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error) {
-    console.error("TTS error:", error);
-    return new Response(
-      JSON.stringify({ error: "TTS failed" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+    timeout.clear();
+    const timedOut = error instanceof Error && error.name === "AbortError";
+    console.error("ElevenLabs TTS request failed", { timedOut });
+    return jsonResponse(
+      { error: timedOut ? "Voice service timed out" : "TTS failed" },
+      timedOut ? 504 : 500,
     );
   }
-});
+}
+
+if (import.meta.main) Deno.serve(handleElevenLabsTts);

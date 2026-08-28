@@ -120,9 +120,13 @@ Règle : Anthropic ne génère pas d'images → `generate-recipe-image` utilise 
 
 ### `elevenlabs-tts`
 - **Rôle** : Convertit du texte en audio MP3 via l'API ElevenLabs (Text-to-Speech).
+- **Sécurité/résilience** : JWT obligatoire, méthode POST uniquement, voix française imposée côté serveur, texte limité à 5 000 caractères, quota atomique par utilisateur + global, délai amont de 20 s et propagation contrôlée des statuts 429/5xx. L'audio est relayé en streaming sans journaliser le texte côté application.
 
 ### `elevenlabs-scribe-token`
 - **Rôle** : Génère un token à usage unique pour le service ElevenLabs Scribe (transcription temps réel).
+- **Sécurité/résilience** : JWT et POST obligatoires, quota atomique par utilisateur + global, réponse non mise en cache, délai amont de 20 s et validation stricte du token retourné.
+
+Les deux fonctions lisent `ELEVENLABS_ZERO_RETENTION_MODE`. La valeur par défaut conserve la journalisation fournisseur ; `true` ne doit être activé que si le compte ElevenLabs est éligible au Zero Retention Mode.
 
 ### `share-recipe`
 - **Rôle** : Crée un partage de recette vers un destinataire (email ou identifiant).

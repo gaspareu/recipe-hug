@@ -3,61 +3,174 @@ import { useScribe, CommitStrategy } from '@elevenlabs/react';
 
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
+import { splitTextForSpeech } from '@/lib/assistant-content';
 
 const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
 const SCRIBE_TOKEN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-scribe-token`;
 
-const SCRIBE_TIMEOUT_MS = 10_000;
+const SCRIBE_TOKEN_TIMEOUT_MS = 10_000;
+const SCRIBE_CONNECTION_TIMEOUT_MS = 12_000;
+const SCRIBE_INACTIVITY_TIMEOUT_MS = 30_000;
+const TTS_TIMEOUT_MS = 20_000;
+const SCRIBE_KEYTERMS = ['Thermomix', 'Cookidoo', 'TM7', 'Varoma', 'mijotage', 'sens inverse'];
 
 export function useVoiceMode(onTranscript?: (text: string) => void) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
+
+  const mountedRef = useRef(true);
+  const onTranscriptRef = useRef(onTranscript);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioQueueRef = useRef<string[]>([]);
   const isPlayingRef = useRef(false);
+  const playbackGenerationRef = useRef(0);
+  const ttsAbortRef = useRef<AbortController | null>(null);
+  const scribeRef = useRef<ReturnType<typeof useScribe> | null>(null);
+  const scribeTokenAbortRef = useRef<AbortController | null>(null);
+  const scribeConnectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scribeInactivityTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listeningAttemptRef = useRef(false);
+  const acceptScribeEventsRef = useRef(false);
 
-  // Speech-to-text with ElevenLabs Scribe
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+  }, [onTranscript]);
+
+  const clearScribeConnectionTimeout = useCallback(() => {
+    if (scribeConnectionTimeoutRef.current) {
+      clearTimeout(scribeConnectionTimeoutRef.current);
+      scribeConnectionTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearScribeInactivityTimeout = useCallback(() => {
+    if (scribeInactivityTimeoutRef.current) {
+      clearTimeout(scribeInactivityTimeoutRef.current);
+      scribeInactivityTimeoutRef.current = null;
+    }
+  }, []);
+
+  const resetListeningState = useCallback(() => {
+    clearScribeConnectionTimeout();
+    clearScribeInactivityTimeout();
+    listeningAttemptRef.current = false;
+    if (mountedRef.current) {
+      setIsListening(false);
+      setIsConnecting(false);
+    }
+  }, [clearScribeConnectionTimeout, clearScribeInactivityTimeout]);
+
+  const stopListening = useCallback(() => {
+    acceptScribeEventsRef.current = false;
+    scribeTokenAbortRef.current?.abort();
+    scribeTokenAbortRef.current = null;
+    scribeRef.current?.disconnect();
+    scribeRef.current?.clearTranscripts();
+    resetListeningState();
+  }, [resetListeningState]);
+
+  const handleScribeError = useCallback((error: Error | Event) => {
+    if (!acceptScribeEventsRef.current) return;
+    console.error('Scribe error:', error);
+    acceptScribeEventsRef.current = false;
+    scribeRef.current?.disconnect();
+    resetListeningState();
+    toast("La transcription vocale s'est interrompue. Réessaie dans un instant.");
+  }, [resetListeningState]);
+
+  const handleScribeServiceError = useCallback((data: { error: string }) => {
+    handleScribeError(new Error(data.error));
+  }, [handleScribeError]);
+
+  const armScribeInactivityTimeout = useCallback(() => {
+    clearScribeInactivityTimeout();
+    scribeInactivityTimeoutRef.current = setTimeout(() => {
+      if (!acceptScribeEventsRef.current) return;
+      acceptScribeEventsRef.current = false;
+      scribeRef.current?.disconnect();
+      resetListeningState();
+      toast("Aucun son détecté. Vérifie le micro puis réessaie.");
+    }, SCRIBE_INACTIVITY_TIMEOUT_MS);
+  }, [clearScribeInactivityTimeout, resetListeningState]);
+
   const scribe = useScribe({
     modelId: 'scribe_v2_realtime',
+    languageCode: 'fr',
+    keyterms: SCRIBE_KEYTERMS,
+    noVerbatim: true,
     commitStrategy: CommitStrategy.VAD,
-    onPartialTranscript: () => {},
+    onSessionStarted: () => {
+      if (!acceptScribeEventsRef.current) return;
+      clearScribeConnectionTimeout();
+      listeningAttemptRef.current = false;
+      setIsConnecting(false);
+      setIsListening(true);
+      armScribeInactivityTimeout();
+    },
+    onPartialTranscript: armScribeInactivityTimeout,
     onCommittedTranscript: (data) => {
-      if (data.text && onTranscript) {
-        onTranscript(data.text);
-        stopListening();
-      }
+      if (!acceptScribeEventsRef.current) return;
+      if (data.text) onTranscriptRef.current?.(data.text);
+      stopListening();
+    },
+    onError: handleScribeError,
+    onAuthError: handleScribeServiceError,
+    onQuotaExceededError: handleScribeServiceError,
+    onCommitThrottledError: handleScribeServiceError,
+    onTranscriberError: handleScribeServiceError,
+    onUnacceptedTermsError: handleScribeServiceError,
+    onRateLimitedError: handleScribeServiceError,
+    onInputError: handleScribeServiceError,
+    onQueueOverflowError: handleScribeServiceError,
+    onResourceExhaustedError: handleScribeServiceError,
+    onSessionTimeLimitExceededError: handleScribeServiceError,
+    onChunkSizeExceededError: handleScribeServiceError,
+    onInsufficientAudioActivityError: handleScribeServiceError,
+    onDisconnect: () => {
+      acceptScribeEventsRef.current = false;
+      resetListeningState();
     },
   });
 
-  // Référence à jour de scribe : le cleanup de démontage (deps []) doit
-  // déconnecter le scribe courant, pas celui capturé au premier rendu.
-  // Mise à jour après le commit (la ref n'est lue que dans le cleanup).
-  const scribeRef = useRef(scribe);
   useEffect(() => {
     scribeRef.current = scribe;
   });
 
-  // Play next audio in queue
+  const finishPlayback = useCallback((generation: number) => {
+    if (!mountedRef.current || generation !== playbackGenerationRef.current) return;
+    if (audioQueueRef.current.length > 0) {
+      queueMicrotask(() => playNextInQueueRef.current?.());
+      return;
+    }
+    isPlayingRef.current = false;
+    setIsSpeaking(false);
+  }, []);
+
   const playNextInQueue = useCallback(async () => {
     if (audioQueueRef.current.length === 0) {
       isPlayingRef.current = false;
-      setIsSpeaking(false);
+      if (mountedRef.current) setIsSpeaking(false);
       return;
     }
 
+    const generation = playbackGenerationRef.current;
+    const text = audioQueueRef.current.shift()!;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TTS_TIMEOUT_MS);
+    ttsAbortRef.current = controller;
     isPlayingRef.current = true;
     setIsSpeaking(true);
-
-    const text = audioQueueRef.current.shift()!;
+    let audioUrl: string | null = null;
+    let audio: HTMLAudioElement | null = null;
+    let audioSettled = false;
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('Authentication required');
-      }
-      
+      if (!session?.access_token) throw new Error('Authentication required');
+      if (controller.signal.aborted || generation !== playbackGenerationRef.current) return;
+
       const response = await fetch(TTS_URL, {
         method: 'POST',
         headers: {
@@ -65,91 +178,66 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ text }),
+        signal: controller.signal,
       });
+      // Le serveur surveille ensuite l'inactivité du flux ; le navigateur ne
+      // doit pas interrompre une synthèse longue qui progresse normalement.
+      clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        console.warn('TTS error:', response.status);
-        throw new Error(`TTS failed: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`TTS failed: ${response.status}`);
 
       const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
+      if (controller.signal.aborted || generation !== playbackGenerationRef.current || !mountedRef.current) return;
 
-      if (audioRef.current) {
-        audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
-      }
-
-      const audio = new Audio(audioUrl);
+      audioUrl = URL.createObjectURL(audioBlob);
+      audio = new Audio(audioUrl);
       audioRef.current = audio;
 
-      audio.onended = () => {
+      const finishAudio = () => {
+        if (audioSettled) return;
+        audioSettled = true;
         URL.revokeObjectURL(audioUrl);
-        setTimeout(() => {
-          if (audioQueueRef.current.length > 0) {
-            playNextInQueueRef.current?.();
-          } else {
-            isPlayingRef.current = false;
-            setIsSpeaking(false);
-          }
-        }, 0);
+        if (audioRef.current === audio) audioRef.current = null;
+        finishPlayback(generation);
       };
-
-      audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl);
-        setTimeout(() => {
-          if (audioQueueRef.current.length > 0) {
-            playNextInQueueRef.current?.();
-          } else {
-            isPlayingRef.current = false;
-            setIsSpeaking(false);
-          }
-        }, 0);
-      };
+      audio.onended = finishAudio;
+      audio.onerror = finishAudio;
 
       await audio.play();
     } catch (error) {
-      console.error('TTS error:', error);
-      setTimeout(() => {
-        if (audioQueueRef.current.length > 0) {
-          playNextInQueueRef.current?.();
-        } else {
-          isPlayingRef.current = false;
-          setIsSpeaking(false);
-        }
-      }, 0);
+      if (!controller.signal.aborted && generation === playbackGenerationRef.current && mountedRef.current) {
+        console.error('TTS error:', error);
+        audio?.pause();
+        if (audioRef.current === audio) audioRef.current = null;
+        if (audioUrl && !audioSettled) URL.revokeObjectURL(audioUrl);
+        toast("La lecture vocale est momentanément indisponible.");
+        finishPlayback(generation);
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (ttsAbortRef.current === controller) ttsAbortRef.current = null;
     }
-  }, []);
+  }, [finishPlayback]);
 
-  // Ref « dernière valeur » lue uniquement dans les callbacks audio asynchrones :
-  // mise à jour après le commit pour ne pas muter une ref pendant le rendu.
   const playNextInQueueRef = useRef(playNextInQueue);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/immutability -- ref « dernière valeur » d'un callback récursif (la file s'auto-enchaîne) ; mise à jour après le commit.
+    // eslint-disable-next-line react-hooks/immutability -- référence du callback récursif de la file audio.
     playNextInQueueRef.current = playNextInQueue;
   });
 
-  // Text-to-speech
   const speak = useCallback(async (text: string) => {
     if (!voiceEnabled || !text.trim()) return;
+    const chunks = splitTextForSpeech(text);
+    if (chunks.length === 0) return;
 
-    const cleanText = text
-      .replace(/[#*_`~]/g, '')
-      .replace(/\n+/g, '. ')
-      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
-      .replace(/[\u{FE0F}\u{200D}]/gu, '')
-      .trim();
-
-    if (!cleanText) return;
-
-    audioQueueRef.current.push(cleanText);
-    
-    if (!isPlayingRef.current) {
-      playNextInQueue();
-    }
+    audioQueueRef.current.push(...chunks);
+    if (!isPlayingRef.current) void playNextInQueue();
   }, [voiceEnabled, playNextInQueue]);
 
   const stopSpeaking = useCallback(() => {
+    playbackGenerationRef.current += 1;
+    ttsAbortRef.current?.abort();
+    ttsAbortRef.current = null;
     audioQueueRef.current = [];
     if (audioRef.current) {
       audioRef.current.pause();
@@ -157,112 +245,117 @@ export function useVoiceMode(onTranscript?: (text: string) => void) {
       audioRef.current = null;
     }
     isPlayingRef.current = false;
-    setIsSpeaking(false);
+    if (mountedRef.current) setIsSpeaking(false);
   }, []);
 
-  // Core listening logic — getUserMedia MUST be the first async call
+  // getUserMedia reste le premier appel asynchrone pour préserver le geste utilisateur.
   const doStartListening = useCallback(async () => {
+    if (listeningAttemptRef.current || acceptScribeEventsRef.current) return;
+    listeningAttemptRef.current = true;
+    scribeRef.current?.clearTranscripts();
     setIsConnecting(true);
+
     try {
-      // 1. getUserMedia FIRST — must be in direct user gesture chain.
-      // On libère aussitôt les pistes : ce flux ne sert qu'à obtenir la
-      // permission micro ; Scribe ouvre ensuite le sien. Sans ce stop(), le
-      // micro resterait actif (captation orpheline).
       const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       permissionStream.getTracks().forEach((track) => track.stop());
+      if (!listeningAttemptRef.current) return;
 
-      // 2. Get session
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('Authentication required');
-      }
-      
-      // 3. Get scribe token with timeout
+      if (!session?.access_token) throw new Error('Authentication required');
+      if (!listeningAttemptRef.current) return;
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), SCRIBE_TIMEOUT_MS);
-
-      const response = await fetch(SCRIBE_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error('Failed to get scribe token');
+      scribeTokenAbortRef.current = controller;
+      const tokenTimeoutId = setTimeout(() => controller.abort(), SCRIBE_TOKEN_TIMEOUT_MS);
+      let response: Response;
+      try {
+        response = await fetch(SCRIBE_TOKEN_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(tokenTimeoutId);
+        if (scribeTokenAbortRef.current === controller) scribeTokenAbortRef.current = null;
       }
 
-      const data = await response.json();
-      
-      if (!data.token) {
-        throw new Error('No token received');
-      }
+      if (!response.ok) throw new Error('Failed to get scribe token');
+      const data: unknown = await response.json();
+      const tokenData = data && typeof data === 'object'
+        ? data as Record<string, unknown>
+        : null;
+      if (typeof tokenData?.token !== 'string' || !tokenData.token) throw new Error('No token received');
+      if (!listeningAttemptRef.current) return;
 
-      // 4. Connect scribe
+      acceptScribeEventsRef.current = true;
+      scribeConnectionTimeoutRef.current = setTimeout(() => {
+        if (!acceptScribeEventsRef.current) return;
+        acceptScribeEventsRef.current = false;
+        scribeRef.current?.disconnect();
+        resetListeningState();
+        toast("La connexion au micro a expiré. Vérifie l'autorisation puis réessaie.");
+      }, SCRIBE_CONNECTION_TIMEOUT_MS);
+
       await scribe.connect({
-        token: data.token,
+        token: tokenData.token,
+        enableLogging: tokenData.enableLogging !== false,
         microphone: {
           echoCancellation: true,
           noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
         },
       });
-
-      setIsListening(true);
     } catch (error) {
+      const wasCancelled = !listeningAttemptRef.current;
+      acceptScribeEventsRef.current = false;
+      resetListeningState();
+      if (wasCancelled) return;
+
       console.error('Failed to start listening:', error);
       if (error instanceof Error && error.name === 'NotAllowedError') {
         toast("Accès au micro refusé. Autorise le micro dans les réglages de ton navigateur pour utiliser le mode vocal.");
       } else {
         toast("Impossible de démarrer le mode vocal. Vérifie ta connexion et réessaie.");
       }
-    } finally {
-      setIsConnecting(false);
     }
-  }, [scribe]);
-
-  const stopListening = useCallback(() => {
-    scribe.disconnect();
-    setIsListening(false);
-  }, [scribe]);
+  }, [resetListeningState, scribe]);
 
   const toggleVoice = useCallback(() => {
     const newState = !voiceEnabled;
     setVoiceEnabled(newState);
-    
     if (!newState) {
       stopSpeaking();
       stopListening();
     }
-
-    
   }, [voiceEnabled, stopSpeaking, stopListening]);
 
-  // Enable voice AND start listening in one synchronous user gesture
   const enableAndListen = useCallback(() => {
     setVoiceEnabled(true);
-
-    // Call doStartListening directly — no setTimeout, preserves user gesture
-    doStartListening();
+    void doStartListening();
   }, [doStartListening]);
 
-  // Cleanup au démontage : sans cela, Scribe resterait connecté (captation
-  // micro orpheline, RGPD) et la file audio continuerait à jouer. Teardown
-  // impératif (pas de setState après démontage).
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      playbackGenerationRef.current += 1;
+      ttsAbortRef.current?.abort();
+      scribeTokenAbortRef.current?.abort();
+      clearScribeConnectionTimeout();
+      clearScribeInactivityTimeout();
       audioQueueRef.current = [];
-      if (audioRef.current) {
-        audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
-        audioRef.current = null;
-      }
+      audioRef.current?.pause();
+      if (audioRef.current) URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current = null;
       isPlayingRef.current = false;
-      scribeRef.current.disconnect();
+      acceptScribeEventsRef.current = false;
+      scribeRef.current?.disconnect();
     };
-  }, []);
+  }, [clearScribeConnectionTimeout, clearScribeInactivityTimeout]);
 
   return {
     voiceEnabled,

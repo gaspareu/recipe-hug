@@ -12,6 +12,7 @@ import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { RecipeChatCard } from './RecipeChatCard';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { shouldSpeakMessage } from './shouldSpeakMessage';
+import { stripAssistantMetadata } from '@/lib/assistant-content';
 import { messageVariants, messageTransition } from '@/lib/motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -227,12 +228,9 @@ export function ChatInterface({
   );
 
   const getDisplayContent = useCallback((message: ChatMessage): string => {
-    let content = message.content;
-    if (message.role === 'assistant' && content) {
-      content = content.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
-      content = content.replace(SUGGESTIONS_REGEX, '').trim();
-    }
-    return content;
+    return message.role === 'assistant' && message.content
+      ? stripAssistantMetadata(message.content)
+      : message.content;
   }, []);
 
   // Feedback "Réflexion en cours..." affiché tant que l'assistant n'a rien de

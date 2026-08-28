@@ -38,16 +38,19 @@ Les imports `../_shared/` fonctionnent normalement avec la CLI.
 
 ### Déploiement automatique (CI) — voie privilégiée
 
-`.github/workflows/deploy-edge-functions.yml` déploie **toutes** les fonctions
-à chaque merge sur `main` touchant `supabase/functions/**` (`supabase functions
-deploy`, qui respecte `config.toml`). C'est la voie normale : elle évite la
+`.github/workflows/deploy-edge-functions.yml` applique d'abord les migrations,
+puis déploie **toutes** les fonctions à chaque merge sur `main` touchant le
+backend Supabase (`supabase db push`, puis `supabase functions deploy`, qui
+respecte `config.toml`). C'est la voie normale : elle évite la
 dérive « repo ≠ prod » des déploiements manuels depuis des sessions parallèles.
 Le déploiement MCP/manuel reste utile pour un **hotfix immédiat** hors cycle de
 merge — mais penser alors à merger le code correspondant pour ne pas régresser
 au prochain déploiement CI.
 
-> Prérequis (une fois) : secret de dépôt `SUPABASE_ACCESS_TOKEN`
-> (Supabase Dashboard → Account → Access Tokens).
+> Prérequis (une fois) : secrets de dépôt `SUPABASE_ACCESS_TOKEN`
+> (Supabase Dashboard → Account → Access Tokens) et `SUPABASE_DB_PASSWORD`.
+> Le workflow applique les migrations avant les fonctions afin de préserver
+> leurs dépendances aux RPC.
 
 ---
 
@@ -60,8 +63,14 @@ au prochain déploiement CI.
 | `AI_KEYS_ENCRYPTION_SECRET` | Chiffrement AES-GCM des clés API utilisateur | Oui |
 | `APP_URL` | URL publique (`https://recipe-hug.vercel.app`) | Oui |
 | `ELEVENLABS_API_KEY` | TTS + transcription Scribe | Oui (vocal) |
+| `ELEVENLABS_ZERO_RETENTION_MODE` | Désactive la journalisation TTS/Scribe quand le compte ElevenLabs est éligible | Non (`false` par défaut) |
 
 Les secrets `SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` sont injectés automatiquement par Supabase.
+
+> Ne positionner `ELEVENLABS_ZERO_RETENTION_MODE=true` qu'après activation du
+> Zero Retention Mode sur le compte ElevenLabs ; sinon les appels peuvent être rejetés.
+> La clé ElevenLabs doit être limitée aux endpoints TTS/Scribe utilisés et porter
+> un plafond de crédits fournisseur, en complément des quotas applicatifs.
 
 ---
 

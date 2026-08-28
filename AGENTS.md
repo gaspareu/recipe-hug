@@ -88,7 +88,7 @@ Voir **`EDGE_FUNCTIONS.md`** pour la doc complète. Architecture clé :
 - **Agent unifié** : `home-assistant` gère tout le chat d'accueil (création de recette, préférences, planning, navigation, vision) via tool calling (`save_recipe`, `update_preferences`, `navigate`, `save_meal_plan`). L'ancien système multi-agents a été supprimé.
 - **Fonctions de traitement** (non-streaming) : `analyze-recipe`, `parse-recipe-image` (vision + protection SSRF), `generate-recipe-image`.
 - **Webhook externe** : `webhook-recipe` — authentifié par token (`profiles.webhook_token`), **pas** par JWT.
-- **Utilitaires (sans IA)** : `manage-ai-keys`, `validate-ai-key`, `elevenlabs-tts`, `elevenlabs-scribe-token`, `share-recipe`, `claim-shares`.
+- **Utilitaires (sans IA)** : `manage-ai-keys`, `validate-ai-key`, `elevenlabs-tts`, `elevenlabs-scribe-token`, `share-recipe`, `claim-shares`. Les appels ElevenLabs consomment des quotas atomiques utilisateur + globaux via `consume_voice_quota` avant tout appel fournisseur.
 - **Connecteur Cookidoo (export Thermomix TM7)** : `manage-cookidoo-credentials` (identifiants chiffrés AES-GCM) + `export-recipe-cookidoo` (envoi d'une recette vers Cookidoo, **scope TM7 uniquement**). L'export est **asynchrone** : la fonction répond `{ ok, export_id, status: "pending" }` puis poursuit en tâche de fond, et le front interroge le journal `cookidoo_exports` jusqu'au statut final (hook `useCookidooExport`). Source unique partagée dans `supabase/functions/_shared/cookidoo/` — réutilisée par le CLI `connector/cookidoo/cli.ts` (fallback IP résidentielle). Le **référentiel machine TM7** (`_shared/thermomix/reference.ts`, miroir front `src/lib/thermomix/reference.ts`) est la base de référence commune : il alimente le prompt IA, le mapper (annotations guided cooking `TTS` + `INGREDIENT`) et la validation du payload. Voir `supabase/functions/AGENTS.md`.
 - **Providers IA** : Anthropic (défaut, clé serveur `ANTHROPIC_API_KEY`), Gemini (clé serveur `GEMINI_API_KEY` pour la génération d'images, BYOK pour le chat), OpenAI (BYOK). Anthropic ne génère pas d'images — `generate-recipe-image` utilise `gemini-2.5-flash-image` via l'API native Gemini (`/v1beta/models/{model}:generateContent`, **pas** l'endpoint OpenAI-compat).
 - `verify_jwt = true` est configuré dans `supabase/config.toml` pour les fonctions appelées par le front. Seule `webhook-recipe` reste à `false`, car elle s'authentifie avec son propre token webhook.
@@ -100,7 +100,7 @@ Toute fonction IA suit : `resolveAIConfig(agentType, userId)` → sélectionne p
 
 ### Base de données (Supabase Postgres)
 
-Migrations horodatées dans `supabase/migrations/` (appliquées dans l'ordre). Tables principales : `recipes`, `recipe_versions`, `recipe_shares`, `meal_plans`, `profiles`, `user_ai_settings`, `user_culinary_preferences`, `ai_conversations`, `cookidoo_exports` (journal des exports Thermomix — lecture propriétaire uniquement, écriture réservée au service role). Vues « safe » : `profiles_safe`, `user_ai_settings_safe`. RPC : `generate_webhook_token`, `get_my_webhook_token`, `get_user_id_by_phone`. RLS activé — l'isolation par `user_id` est assurée côté DB.
+Migrations horodatées dans `supabase/migrations/` (appliquées dans l'ordre). Tables principales : `recipes`, `recipe_versions`, `recipe_shares`, `meal_plans`, `profiles`, `user_ai_settings`, `user_culinary_preferences`, `ai_conversations`, `cookidoo_exports` (journal des exports Thermomix — lecture propriétaire uniquement, écriture réservée au service role), `voice_rate_limit_buckets` (compteurs internes, aucun accès client). Vues « safe » : `profiles_safe`, `user_ai_settings_safe`. RPC : `generate_webhook_token`, `get_my_webhook_token`, `get_user_id_by_phone`, `consume_voice_quota` (service role uniquement). RLS activé — l'isolation par `user_id` est assurée côté DB.
 
 ## Conventions
 
@@ -131,6 +131,7 @@ Secrets edge functions (Supabase Dashboard → Edge Functions → Secrets, pas D
 | `AI_KEYS_ENCRYPTION_SECRET` | Chiffrement AES-GCM des clés API utilisateur |
 | `APP_URL` | URL de l'app (`https://recipe-hug.vercel.app`) |
 | `ELEVENLABS_API_KEY` | TTS + Scribe |
+| `ELEVENLABS_ZERO_RETENTION_MODE` | Optionnel : `true` uniquement si le compte ElevenLabs dispose du Zero Retention Mode |
 
 ## Documentation complémentaire
 
