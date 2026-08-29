@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  APP_SAFE_AREA_BOTTOM_VAR,
   APP_VIEWPORT_HEIGHT_VAR,
   APP_VIEWPORT_TOP_VAR,
   useViewportHeight,
@@ -59,6 +60,18 @@ describe('useViewportHeight', () => {
     flushFrames();
 
     expect(readVar(APP_VIEWPORT_HEIGHT_VAR)).toBe('516px');
+    expect(readVar(APP_SAFE_AREA_BOTTOM_VAR)).toBe('0px');
+  });
+
+  it('conserve la safe-area quand le clavier est fermé', () => {
+    renderHook(() => useViewportHeight());
+
+    expect(readVar(APP_SAFE_AREA_BOTTOM_VAR)).toBe('');
+
+    viewport.emitResize(700);
+    flushFrames();
+
+    expect(readVar(APP_SAFE_AREA_BOTTOM_VAR)).toBe('');
   });
 
   it('suit le décalage du viewport visuel quand iOS fait défiler la page', () => {
@@ -85,6 +98,7 @@ describe('useViewportHeight', () => {
     vi.advanceTimersByTime(500);
 
     expect(readVar(APP_VIEWPORT_HEIGHT_VAR)).toBe('852px');
+    expect(readVar(APP_SAFE_AREA_BOTTOM_VAR)).toBe('');
   });
 
   it('nettoie les variables et les écouteurs au démontage', () => {
@@ -95,6 +109,7 @@ describe('useViewportHeight', () => {
 
     expect(readVar(APP_VIEWPORT_HEIGHT_VAR)).toBe('');
     expect(readVar(APP_VIEWPORT_TOP_VAR)).toBe('');
+    expect(readVar(APP_SAFE_AREA_BOTTOM_VAR)).toBe('');
     expect(removeSpy).toHaveBeenCalledWith('resize', expect.any(Function));
     expect(removeSpy).toHaveBeenCalledWith('scroll', expect.any(Function));
   });
