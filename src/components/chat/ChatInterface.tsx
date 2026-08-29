@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { Plus, Mic, MicOff, ArrowUp, X, Camera, Image, Copy, RotateCw, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { RecipeChatCard } from './RecipeChatCard';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { shouldSpeakMessage } from './shouldSpeakMessage';
+import { stripAssistantMetadata } from '@/lib/assistant-content';
 import { messageVariants, messageTransition } from '@/lib/motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -99,6 +100,7 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const navigate = useNavigate();
   const [input, setInput] = useState('');
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -106,6 +108,7 @@ export function ChatInterface({
   const lastMessageRef = useRef<string>('');
   const shouldAutoScrollRef = useRef(true);
   const hasConversation = messages.length > 1;
+  const prefersReducedMotion = useReducedMotion();
 
   // Voice mode
   const handleVoiceTranscript = useCallback((text: string) => {
@@ -227,12 +230,9 @@ export function ChatInterface({
   );
 
   const getDisplayContent = useCallback((message: ChatMessage): string => {
-    let content = message.content;
-    if (message.role === 'assistant' && content) {
-      content = content.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
-      content = content.replace(SUGGESTIONS_REGEX, '').trim();
-    }
-    return content;
+    return message.role === 'assistant' && message.content
+      ? stripAssistantMetadata(message.content)
+      : message.content;
   }, []);
 
   // Feedback "Réflexion en cours..." affiché tant que l'assistant n'a rien de
@@ -257,7 +257,10 @@ export function ChatInterface({
       : 'Réflexion en cours...';
   const processingAriaLabel = processingLabel.replace(/\.\.\.$/, '');
   const showProcessingIndicator = isSavingRecipe || Boolean(toolActivity) || showThinkingIndicator;
-  const showSuggestions = activeSuggestions.length > 0 && input.length === 0 && !selectedImage;
+  const showSuggestions = activeSuggestions.length > 0
+    && input.length === 0
+    && !selectedImage
+    && !isComposerFocused;
 
   // Une activité déclenchée depuis une carte peut se situer sous le bord visible
   // de l'historique. On la rend immédiatement lisible si l'utilisateur suivait
@@ -392,27 +395,43 @@ export function ChatInterface({
       {/* Bottom area */}
       <div className="shrink-0 p-4 space-y-4 bg-background/80 backdrop-blur-sm border-t border-border relative z-10">
         {/* Quick suggestions */}
-        {showSuggestions && (
-          <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-no-swipe-nav data-testid="suggestions-scroll">
-            <div className="flex gap-2 w-max">
-              {activeSuggestions.map((suggestion, i) => (
-                <Button
-                  key={i}
-                  variant={hasConversation ? 'ghost' : 'outline'}
-                  size="sm"
-                  onClick={() => sendMessage(suggestion)}
-                  disabled={isStreaming}
-                  className="text-sm rounded-2xl px-4 py-2 h-auto whitespace-nowrap border-border/50 hover:bg-muted shrink-0"
-                >
-                  {suggestion}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
+        <AnimatePresence initial={false} mode="popLayout">
+          {showSuggestions && (
+            <motion.div
+              key="chat-suggestions"
+              initial={prefersReducedMotion ? false : { y: 8, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={prefersReducedMotion
+                ? { opacity: 0, transition: { duration: 0.1 } }
+                : {
+                    y: 64,
+                    opacity: [1, 1, 0],
+                    transition: { duration: 0.24, ease: 'easeIn', times: [0, 0.65, 1] },
+                  }}
+              className="relative z-0"
+            >
+              <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-no-swipe-nav data-testid="suggestions-scroll">
+                <div className="flex gap-2 w-max">
+                  {activeSuggestions.map((suggestion, i) => (
+                    <Button
+                      key={i}
+                      variant={hasConversation ? 'ghost' : 'outline'}
+                      size="sm"
+                      onClick={() => sendMessage(suggestion)}
+                      disabled={isStreaming}
+                      className="text-sm rounded-2xl px-4 py-2 h-auto whitespace-nowrap border-border/50 hover:bg-muted shrink-0"
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Input container */}
-        <div className="relative bg-muted rounded-[24px] border border-border/50 px-3 py-3 max-w-[800px] mx-auto w-full transition-shadow focus-within:ring-1 focus-within:ring-primary/30 focus-within:border-primary/30">
+        <div className="relative z-10 bg-muted rounded-[24px] border border-border/50 px-3 py-3 max-w-[800px] mx-auto w-full transition-shadow focus-within:ring-1 focus-within:ring-primary/30 focus-within:border-primary/30">
           {selectedImage && (
             <div className="pb-2">
               <div className="relative inline-block">
@@ -461,6 +480,8 @@ export function ChatInterface({
               <textarea
                 ref={inputRef}
                 value={input}
+                onFocus={() => setIsComposerFocused(true)}
+                onBlur={() => setIsComposerFocused(false)}
                 onChange={e => {
                   setInput(e.target.value);
                   const target = e.target;

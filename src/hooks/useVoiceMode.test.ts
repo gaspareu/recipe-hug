@@ -5,11 +5,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const scribeConnect = vi.fn().mockResolvedValue(undefined);
 const scribeDisconnect = vi.fn();
+const scribeClearTranscripts = vi.fn();
 
 // Options passées à useScribe au dernier rendu : permet de déclencher
 // manuellement onCommittedTranscript (Scribe est simulé, pas de vrai micro).
 let capturedScribeOptions: {
+  modelId?: string;
+  languageCode?: string;
+  keyterms?: string[];
+  noVerbatim?: boolean;
+  onSessionStarted?: () => void;
+  onPartialTranscript?: (data: { text: string }) => void;
   onCommittedTranscript?: (data: { text?: string }) => void;
+  onError?: (error: Error | Event) => void;
+  onRateLimitedError?: (data: { error: string }) => void;
+  onDisconnect?: () => void;
 } | null = null;
 
 vi.mock('@elevenlabs/react', () => ({
@@ -18,6 +28,7 @@ vi.mock('@elevenlabs/react', () => ({
     return {
       connect: scribeConnect,
       disconnect: scribeDisconnect,
+      clearTranscripts: scribeClearTranscripts,
       partialTranscript: '',
     };
   },
@@ -95,6 +106,7 @@ describe('useVoiceMode', () => {
   beforeEach(() => {
     scribeConnect.mockClear();
     scribeDisconnect.mockClear();
+    scribeClearTranscripts.mockClear();
     audioPlay.mockClear();
     (toast as unknown as ReturnType<typeof vi.fn>).mockClear();
     capturedScribeOptions = null;
@@ -106,6 +118,7 @@ describe('useVoiceMode', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -125,6 +138,106 @@ describe('useVoiceMode', () => {
     // Le flux de pré-vol (permission) ne doit pas rester "live" : Scribe ouvre le sien.
     expect(track.stop).toHaveBeenCalledTimes(1);
     expect(scribeConnect).toHaveBeenCalledTimes(1);
+    expect(scribeConnect).toHaveBeenCalledWith(expect.objectContaining({ enableLogging: true }));
+    expect(capturedScribeOptions).toMatchObject({
+      modelId: 'scribe_v2_realtime',
+      languageCode: 'fr',
+      noVerbatim: true,
+    });
+    expect(capturedScribeOptions?.keyterms).toEqual(
+      expect.arrayContaining(['Thermomix', 'Cookidoo', 'TM7', 'Varoma']),
+    );
+  });
+
+  it('passe en écoute uniquement quand ElevenLabs confirme le démarrage de la session', async () => {
+    installGetUserMedia([makeTrack()]);
+
+    const { result } = renderHook(() => useVoiceMode());
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+
+    expect(result.current.isListening).toBe(false);
+    expect(result.current.isConnecting).toBe(true);
+
+    act(() => {
+      capturedScribeOptions?.onSessionStarted?.();
+    });
+
+    expect(result.current.isListening).toBe(true);
+    expect(result.current.isConnecting).toBe(false);
+  });
+
+  it('réinitialise l’état vocal et prévient l’utilisateur si Scribe signale une erreur', async () => {
+    installGetUserMedia([makeTrack()]);
+
+    const { result } = renderHook(() => useVoiceMode());
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+    act(() => {
+      capturedScribeOptions?.onSessionStarted?.();
+      capturedScribeOptions?.onError?.(new Error('socket closed'));
+    });
+
+    expect(result.current.isListening).toBe(false);
+    expect(result.current.isConnecting).toBe(false);
+    expect(scribeDisconnect).toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('transcription'));
+  });
+
+  it('ferme aussi la session sur une erreur Scribe spécialisée', async () => {
+    installGetUserMedia([makeTrack()]);
+    const { result } = renderHook(() => useVoiceMode());
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+    act(() => {
+      capturedScribeOptions?.onSessionStarted?.();
+      capturedScribeOptions?.onRateLimitedError?.({ error: 'rate limited' });
+    });
+
+    expect(result.current.isListening).toBe(false);
+    expect(scribeDisconnect).toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('transcription'));
+  });
+
+  it('propage à Scribe le mode de rétention décidé côté serveur', async () => {
+    installGetUserMedia([makeTrack()]);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ token: 'scribe-token', enableLogging: false }),
+    }));
+    const { result } = renderHook(() => useVoiceMode());
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+
+    expect(scribeConnect).toHaveBeenCalledWith(expect.objectContaining({ enableLogging: false }));
+  });
+
+  it('ferme le micro après une période sans activité audio', async () => {
+    vi.useFakeTimers();
+    installGetUserMedia([makeTrack()]);
+    const { result, unmount } = renderHook(() => useVoiceMode());
+
+    await act(async () => {
+      await result.current.startListening();
+    });
+    act(() => capturedScribeOptions?.onSessionStarted?.());
+    expect(result.current.isListening).toBe(true);
+
+    act(() => vi.advanceTimersByTime(30_000));
+
+    expect(result.current.isListening).toBe(false);
+    expect(scribeDisconnect).toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('Aucun son'));
+    unmount();
+    vi.useRealTimers();
   });
 
   it('déconnecte Scribe au démontage (pas de captation micro orpheline)', async () => {
@@ -242,6 +355,100 @@ describe('useVoiceMode', () => {
     expect(result.current.isSpeaking).toBe(true);
   });
 
+  it('ne transmet pas au TTS les suggestions ni les actions internes de l’assistant', async () => {
+    const { result } = renderHook(() => useVoiceMode());
+
+    act(() => {
+      result.current.toggleVoice();
+    });
+
+    await act(async () => {
+      await result.current.speak([
+        'La recette est prête.',
+        '{"action":"save_recipe","parameters":{"recipe":{"title":"Soupe"}}}',
+        '[suggestions]["La cuisiner"][/suggestions]',
+      ].join('\n'));
+    });
+
+    await waitFor(() => expect(audioPlay).toHaveBeenCalledTimes(1));
+
+    const [, init] = findTtsCall() as [string, RequestInit];
+    expect(JSON.parse(init.body as string).text).toBe('La recette est prête.');
+  });
+
+  it('annule une requête TTS en vol et empêche toute lecture tardive', async () => {
+    let resolveTts: ((response: { ok: boolean; blob: () => Promise<Blob> }) => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (!String(url).includes('elevenlabs-tts')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: 't' }) });
+        }
+        return new Promise((resolve) => {
+          resolveTts = resolve;
+        });
+      }),
+    );
+
+    const { result } = renderHook(() => useVoiceMode());
+    act(() => result.current.toggleVoice());
+
+    await act(async () => {
+      await result.current.speak('Une réponse en retard');
+    });
+    await waitFor(() => expect(findTtsCall()).toBeTruthy());
+
+    act(() => result.current.stopSpeaking());
+    await act(async () => {
+      resolveTts?.({ ok: true, blob: () => Promise.resolve(new Blob(['audio'])) });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(audioPlay).not.toHaveBeenCalled();
+    expect(result.current.isSpeaking).toBe(false);
+  });
+
+  it('libère la file audio quand le timeout TTS automatique expire', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (!String(url).includes('elevenlabs-tts')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: 't' }) });
+        }
+
+        return new Promise((_resolve, reject) => {
+          const signal = init?.signal;
+          const rejectAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+          if (signal?.aborted) {
+            rejectAbort();
+            return;
+          }
+          signal?.addEventListener('abort', rejectAbort, { once: true });
+        });
+      }),
+    );
+
+    const { result } = renderHook(() => useVoiceMode());
+    act(() => result.current.toggleVoice());
+
+    await act(async () => {
+      void result.current.speak('Une réponse trop lente');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(findTtsCall()).toBeTruthy();
+    expect(result.current.isSpeaking).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+
+    expect(result.current.isSpeaking).toBe(false);
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('lecture vocale'));
+  });
+
   it('reste résilient si le TTS échoue (isSpeaking revient à false, pas de crash)', async () => {
     vi.stubGlobal(
       'fetch',
@@ -267,6 +474,7 @@ describe('useVoiceMode', () => {
     await waitFor(() => {
       expect(result.current.isSpeaking).toBe(false);
     });
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('lecture vocale'));
   });
 
   it('désactiver le mode vocal coupe la lecture et l\'écoute', async () => {
