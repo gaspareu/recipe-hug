@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCookingQuantity, getStepIngredients } from './cooking-ingredients';
+import { annotateCookingText, formatCookingQuantity, getStepIngredients } from './cooking-ingredients';
 import type { Ingredient, Step } from '@/types/recipe';
 
 const ingredients: Ingredient[] = [
@@ -71,5 +71,64 @@ describe('formatCookingQuantity', () => {
 
   it('masque le zéro mais conserve l’unité conventionnelle', () => {
     expect(formatCookingQuantity({ name: 'Sel', quantity: 0, unit: 'pincée' })).toBe('pincée');
+  });
+});
+
+describe('annotateCookingText', () => {
+  it('repère les ingrédients dans la phrase en conservant le texte original', () => {
+    const text = 'Mettre l’eau dans le bol et ajouter les pois chiches.';
+    const segments = annotateCookingText(text, [ingredients[3], { name: 'Eau', quantity: 500, unit: 'ml' }]);
+
+    expect(segments.map(segment => segment.text).join('')).toBe(text);
+    expect(segments.filter(segment => segment.ingredient).map(segment => segment.ingredient?.name)).toEqual([
+      'Eau',
+      'Pois chiches',
+    ]);
+  });
+
+  it('ne confond pas deux ingrédients qui partagent le même mot générique', () => {
+    const oils: Ingredient[] = [
+      { name: 'Huile de sésame', quantity: 1, unit: 'c. à soupe' },
+      { name: "Huile d'olive", quantity: 2, unit: 'c. à soupe' },
+    ];
+
+    const annotated = annotateCookingText("Ajouter l'huile de sésame.", oils);
+    expect(annotated.filter(segment => segment.ingredient).map(segment => segment.ingredient?.name)).toEqual([
+      'Huile de sésame',
+    ]);
+  });
+
+  it('repère une quantité existante afin de pouvoir la remplacer', () => {
+    const text = 'Ajouter 200 g de farine puis 10 cl de lait.';
+    const annotated = annotateCookingText(text, [
+      { name: 'Farine', quantity: 300, unit: 'g' },
+      { name: 'Lait', quantity: 15, unit: 'cl' },
+    ]);
+
+    expect(annotated.map(segment => segment.text).join('')).toBe(text);
+    expect(annotated.filter(segment => segment.ingredient).map(segment => segment.replacementSuffix)).toEqual([
+      ' de farine',
+      ' de lait',
+    ]);
+  });
+
+  it('repère un nombre nu pour une unité de comptage implicite', () => {
+    const annotated = annotateCookingText('Ajouter 2 œufs.', [
+      { name: 'Œufs', quantity: 3, unit: 'pièce' },
+    ]);
+    const ingredientSegment = annotated.find(segment => segment.ingredient);
+
+    expect(ingredientSegment?.replacementSuffix).toBe(' œufs');
+    expect(ingredientSegment?.quantityWithoutUnit).toBe(true);
+  });
+
+  it('conserve l’unité après une quantité écrite en toutes lettres', () => {
+    const annotated = annotateCookingText('Ajouter une gousse d’ail.', [
+      { name: 'Ail', quantity: 3, unit: 'gousse' },
+    ]);
+    const ingredientSegment = annotated.find(segment => segment.ingredient);
+
+    expect(ingredientSegment?.replacementUnit).toBe('gousse');
+    expect(ingredientSegment?.replacementSuffix).toBe(' d’ail');
   });
 });

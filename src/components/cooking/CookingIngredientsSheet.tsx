@@ -1,4 +1,4 @@
-import { Check, ListChecks, Users } from 'lucide-react';
+import { Check, ListChecks, Minus, Plus, Users } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { formatCookingQuantity } from '@/lib/cooking-ingredients';
@@ -9,6 +9,9 @@ interface CookingIngredientsSheetProps {
   onOpenChange: (open: boolean) => void;
   ingredients: Ingredient[];
   servings: number;
+  canDecreaseServings: boolean;
+  onDecreaseServings: () => void;
+  onIncreaseServings: () => void;
   checkedIndexes: ReadonlySet<number>;
   onToggleIngredient: (index: number) => void;
 }
@@ -18,6 +21,9 @@ export function CookingIngredientsSheet({
   onOpenChange,
   ingredients,
   servings,
+  canDecreaseServings,
+  onDecreaseServings,
+  onIncreaseServings,
   checkedIndexes,
   onToggleIngredient,
 }: CookingIngredientsSheetProps) {
@@ -29,10 +35,37 @@ export function CookingIngredientsSheet({
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
             Tous les ingrédients
           </SheetTitle>
-          <SheetDescription className="flex items-center gap-1.5 font-crimson text-sm">
-            <Users className="h-4 w-4" aria-hidden="true" />
-            Quantités pour {servings} portion{servings > 1 ? 's' : ''}
+          <SheetDescription className="font-crimson text-sm">
+            Ajustez les portions ou cochez les ingrédients déjà préparés.
           </SheetDescription>
+          <div className="mt-1 flex items-center justify-between rounded-2xl bg-muted/60 py-1.5 pl-3 pr-1.5" role="group" aria-label="Nombre de portions">
+            <span className="flex items-center gap-1.5 font-crimson text-sm font-bold text-foreground">
+              <Users className="h-4 w-4" aria-hidden="true" />
+              Quantités pour
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={onDecreaseServings}
+                disabled={!canDecreaseServings}
+                className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-xl bg-background text-primary transition-colors hover:bg-primary/10 disabled:cursor-default disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label="Diminuer les portions"
+              >
+                <Minus className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <span className="min-w-16 text-center font-crimson text-base font-bold text-foreground" aria-live="polite">
+                {servings} portion{servings > 1 ? 's' : ''}
+              </span>
+              <button
+                type="button"
+                onClick={onIncreaseServings}
+                className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-xl bg-background text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label="Augmenter les portions"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
         </SheetHeader>
 
         <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2">
