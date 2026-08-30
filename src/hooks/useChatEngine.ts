@@ -121,7 +121,7 @@ export function useChatEngine(config: ChatEngineConfig) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
   // Stocke les recettes en attente de confirmation, indexées par messageId.
-  // Permet à useHomeChat de les récupérer pour createProposedRecipe.
+  // Permet aux hooks de chat de les récupérer pour createProposedRecipe.
   const proposedPendingRef = useRef<Map<string, PendingRecipe>>(new Map());
 
   const getProposedPending = useCallback(
@@ -207,9 +207,7 @@ export function useChatEngine(config: ChatEngineConfig) {
         return currentContent;
       }
 
-      // Handle { card, pending } : carte de recette proposée (useHomeChat uniquement).
-      // useRecipeChat renvoie null pour ces mêmes outils (setPendingRecipe), donc ce
-      // bloc ne s'exécute que si le handler a renvoyé un objet avec 'card' et 'pending'.
+      // Handle { card, pending } : carte de recette proposée dans le fil.
       if (result && typeof result === 'object' && 'card' in result && 'pending' in result) {
         const { card, pending } = result as { card: RecipeCard; pending: PendingRecipe };
         proposedPendingRef.current.set(assistantMessageId, pending);
@@ -217,8 +215,8 @@ export function useChatEngine(config: ChatEngineConfig) {
         return currentContent;
       }
 
-      // Handle search results — accepte le nouveau format { summaries, cards }
-      // (useHomeChat) ou le format tableau legacy (useRecipeChat / tests directs).
+      // Handle search results — accepte le format { summaries, cards } ou le
+      // format tableau legacy conservé pour les consommateurs directs du moteur.
       if (name === 'search_recipes' && result) {
         const { summaries, cards } = Array.isArray(result)
           ? { summaries: result as SearchResult[], cards: [] as RecipeCard[] }

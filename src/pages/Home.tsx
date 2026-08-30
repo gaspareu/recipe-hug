@@ -127,7 +127,12 @@ export default function Home() {
 
       {/* Mode cuisine plein écran (déclenché par l'assistant ou le bouton « Cuisiner ») */}
       {cookingRecipeId && (
-        <CookingModeContainer recipeId={cookingRecipeId} initialServings={cookingServings} onClose={stopCooking} />
+        <CookingModeContainer
+          recipeId={cookingRecipeId}
+          initialServings={cookingServings}
+          onStartCooking={startCooking}
+          onClose={stopCooking}
+        />
       )}
     </div>
   );

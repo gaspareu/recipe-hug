@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Recipe } from '@/types/recipe';
 import { CookingMode } from './CookingMode';
 
-const { mockUseRecipeChat, mockRequestWakeLock } = vi.hoisted(() => ({
+const { mockUseRecipeChat, mockRequestWakeLock, mockCookingChatSheet } = vi.hoisted(() => ({
   mockUseRecipeChat: vi.fn(),
   mockRequestWakeLock: vi.fn(),
+  mockCookingChatSheet: vi.fn(),
 }));
 
 vi.mock('@/hooks/useCookingTimers', () => ({
@@ -23,7 +24,17 @@ vi.mock('@/hooks/useWakeLock', () => ({
 
 vi.mock('@/hooks/useRecipeChat', () => ({ useRecipeChat: mockUseRecipeChat }));
 vi.mock('@/lib/playChime', () => ({ playChime: vi.fn() }));
-vi.mock('./CookingChatSheet', () => ({ CookingChatSheet: () => null }));
+vi.mock('./CookingChatSheet', () => ({
+  CookingChatSheet: (props: { resetChat: () => void; onStartCooking?: (recipeId: string, servings: number) => void }) => {
+    mockCookingChatSheet(props);
+    return (
+      <div>
+        <button type="button" onClick={props.resetChat}>Réinitialiser Chef</button>
+        <button type="button" onClick={() => props.onStartCooking?.('r2', 3)}>Cuisiner une autre recette</button>
+      </div>
+    );
+  },
+}));
 
 const recipe: Recipe = {
   id: 'r1',
@@ -58,13 +69,14 @@ beforeEach(() => {
   mockUseRecipeChat.mockReturnValue({
     messages: [],
     isStreaming: false,
-    pendingRecipe: null,
+    toolActivity: null,
     isSavingRecipe: false,
     sendMessage: vi.fn(),
-    savePendingRecipe: vi.fn(),
-    cancelPendingRecipe: vi.fn(),
+    createProposedRecipe: vi.fn(),
+    resetChat: vi.fn(),
     regenerateResponse: vi.fn(),
     stopGeneration: vi.fn(),
+    syncContext: vi.fn(),
   });
 });
 
@@ -96,6 +108,33 @@ describe('CookingMode — quantités', () => {
         ]),
       }),
     }));
+  });
+
+  it('restaure immédiatement le contexte de cuisson après un reset', () => {
+    const resetChat = vi.fn();
+    const syncContext = vi.fn();
+    mockUseRecipeChat.mockReturnValue({
+      ...mockUseRecipeChat(),
+      resetChat,
+      syncContext,
+    });
+
+    render(<CookingMode recipe={recipe} initialServings={6} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Réinitialiser Chef' }));
+
+    expect(resetChat).toHaveBeenCalledTimes(1);
+    expect(syncContext).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'r1', servings: 6 }),
+      expect.any(Set),
+    );
+  });
+
+  it('transmet le démarrage d’une autre recette au conteneur', () => {
+    const onStartCooking = vi.fn();
+    render(<CookingMode recipe={recipe} onClose={vi.fn()} onStartCooking={onStartCooking} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cuisiner une autre recette' }));
+    expect(onStartCooking).toHaveBeenCalledWith('r2', 3);
   });
 
   it('préserve les recettes prévues pour plus de douze portions', () => {

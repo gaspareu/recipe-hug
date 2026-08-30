@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X, ChevronLeft, ArrowRight, Check, Mic, ChefHat, ChevronUp } from 'lucide-react';
-import type { Recipe, Step, Ingredient } from '@/types/recipe';
+import type { Recipe } from '@/types/recipe';
 import { useCookingTimers } from '@/hooks/useCookingTimers';
 import { useWakeLock } from '@/hooks/useWakeLock';
-import { useRecipeChat } from '@/hooks/useRecipeChat';
+import { useRecipeChat, type RecipeChatSession } from '@/hooks/useRecipeChat';
 import { playChime } from '@/lib/playChime';
 import { CookingTimerBar } from './CookingTimerBar';
 import { CookingStepFocus } from './CookingStepFocus';
@@ -12,6 +12,7 @@ import { CookingChatSheet } from './CookingChatSheet';
 import { CookingIngredientsSheet } from './CookingIngredientsSheet';
 import { scaleIngredients } from '@/lib/recipe-scaling';
 import { getStepIngredients } from '@/lib/cooking-ingredients';
+import type { PendingRecipe } from '@/hooks/useChatEngine';
 
 const MIN_SERVINGS = 1;
 const DEFAULT_SERVINGS = 2;
@@ -24,11 +25,13 @@ interface CookingModeProps {
   recipe: Recipe;
   onClose: () => void;
   initialServings?: number;
-  onRecipeUpdate?: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[] }) => Promise<void>;
-  onRecipeCreate?: (data: { title: string; servings: number; ingredients: Ingredient[]; steps: Step[]; relationToOriginal?: string }) => Promise<void>;
+  chatSession?: RecipeChatSession;
+  onRecipeUpdate?: (data: PendingRecipe) => Promise<void>;
+  onRecipeCreate?: (data: PendingRecipe) => Promise<string>;
+  onStartCooking?: (recipeId: string, servings?: number) => void;
 }
 
-export function CookingMode({ recipe, onClose, initialServings, onRecipeUpdate, onRecipeCreate }: CookingModeProps) {
+export function CookingMode({ recipe, onClose, initialServings, chatSession, onRecipeUpdate, onRecipeCreate, onStartCooking }: CookingModeProps) {
   const sortedSteps = useMemo(
     () => [...recipe.steps].sort((a, b) => a.order - b.order),
     [recipe.steps],
@@ -69,7 +72,31 @@ export function CookingMode({ recipe, onClose, initialServings, onRecipeUpdate, 
     [sortedSteps, idx],
   );
 
-  const chat = useRecipeChat({ recipe: cookingRecipe, completedSteps, onRecipeUpdate, onRecipeCreate });
+  // La fiche recette peut fournir sa session afin de conserver le même fil en
+  // passant au mode cuisine. La session locale reste le fallback des ouvertures
+  // lancées depuis la Home.
+  const localChat = useRecipeChat({ recipe: cookingRecipe, completedSteps, onRecipeUpdate, onRecipeCreate, onStartCooking });
+  const chat = chatSession ?? localChat;
+  const syncChatContext = chat.syncContext;
+
+  useEffect(() => {
+    syncChatContext(cookingRecipe, completedSteps);
+  }, [syncChatContext, cookingRecipe, completedSteps]);
+
+  const resetCookingChat = () => {
+    chat.resetChat();
+    syncChatContext(cookingRecipe, completedSteps);
+  };
+
+  const startCookingFromChat = (recipeId: string, requestedServings: number) => {
+    if (recipeId === recipe.id) {
+      setServings(clampServings(requestedServings));
+      setIdx(0);
+      setChatOpen(false);
+      return;
+    }
+    onStartCooking?.(recipeId, requestedServings);
+  };
 
   const next = () => setIdx(i => Math.min(i + 1, total));
   const prev = () => setIdx(i => Math.max(i - 1, 0));
@@ -190,13 +217,18 @@ export function CookingMode({ recipe, onClose, initialServings, onRecipeUpdate, 
         open={chatOpen}
         onOpenChange={handleChatOpenChange}
         autoListen={chatAutoListen}
+        recipeTitle={recipe.title}
+        recipeServings={servings}
+        completedStepsCount={completedSteps.size}
+        context="cooking"
         messages={chat.messages}
         isStreaming={chat.isStreaming}
-        pendingRecipe={chat.pendingRecipe}
+        toolActivity={chat.toolActivity}
         isSavingRecipe={chat.isSavingRecipe}
         sendMessage={chat.sendMessage}
-        savePendingRecipe={chat.savePendingRecipe}
-        cancelPendingRecipe={chat.cancelPendingRecipe}
+        onCreateRecipe={chat.createProposedRecipe}
+        onStartCooking={startCookingFromChat}
+        resetChat={resetCookingChat}
         regenerateResponse={chat.regenerateResponse}
         stopGeneration={chat.stopGeneration}
       />

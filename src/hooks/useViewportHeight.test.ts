@@ -114,6 +114,17 @@ describe('useViewportHeight', () => {
     expect(removeSpy).toHaveBeenCalledWith('scroll', expect.any(Function));
   });
 
+  it("conserve les variables tant qu'un autre écran les utilise", () => {
+    const first = renderHook(() => useViewportHeight());
+    const second = renderHook(() => useViewportHeight());
+
+    first.unmount();
+    expect(readVar(APP_VIEWPORT_HEIGHT_VAR)).toBe('852px');
+
+    second.unmount();
+    expect(readVar(APP_VIEWPORT_HEIGHT_VAR)).toBe('');
+  });
+
   it('ne casse pas sans visualViewport', () => {
     vi.stubGlobal('visualViewport', undefined);
 

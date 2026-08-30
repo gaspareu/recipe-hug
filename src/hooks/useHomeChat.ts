@@ -149,6 +149,11 @@ export function useHomeChat() {
       case 'create_new_recipe': {
         const pending = buildPendingRecipeFromToolCall(action, activeRecipe);
         if (!pending) return null;
+        if (
+          pending.isUpdate
+          && pending.originalRecipeId
+          && !recipes.some(candidate => candidate.id === pending.originalRecipeId)
+        ) return null;
         const card: RecipeCard = {
           status: 'proposed',
           title: pending.title,

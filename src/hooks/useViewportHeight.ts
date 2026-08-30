@@ -18,6 +18,11 @@ const KEYBOARD_HEIGHT_THRESHOLD_PX = 150;
 /** Relecture après l'animation du clavier iOS (~250 ms), marge comprise. */
 const SETTLE_DELAY_MS = 400;
 
+// Home et un assistant plein écran peuvent être montés simultanément
+// (portail Radix au-dessus de la page). Un compteur empêche le démontage de
+// l'un d'effacer les variables encore utilisées par l'autre.
+let viewportConsumers = 0;
+
 /**
  * Publie la géométrie du viewport visuel : hauteur réellement visible
  * (`--app-vh`, clavier virtuel déduit) et décalage vertical (`--app-vh-top`).
@@ -47,6 +52,7 @@ export function useViewportHeight(): void {
     if (!viewport) return;
 
     const root = document.documentElement;
+    viewportConsumers += 1;
     let frame: number | null = null;
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -89,9 +95,12 @@ export function useViewportHeight(): void {
       if (settleTimer !== null) clearTimeout(settleTimer);
       viewport.removeEventListener('resize', handleResize);
       viewport.removeEventListener('scroll', schedule);
-      root.style.removeProperty(APP_VIEWPORT_HEIGHT_VAR);
-      root.style.removeProperty(APP_VIEWPORT_TOP_VAR);
-      root.style.removeProperty(APP_SAFE_AREA_BOTTOM_VAR);
+      viewportConsumers = Math.max(0, viewportConsumers - 1);
+      if (viewportConsumers === 0) {
+        root.style.removeProperty(APP_VIEWPORT_HEIGHT_VAR);
+        root.style.removeProperty(APP_VIEWPORT_TOP_VAR);
+        root.style.removeProperty(APP_SAFE_AREA_BOTTOM_VAR);
+      }
     };
   }, []);
 }
