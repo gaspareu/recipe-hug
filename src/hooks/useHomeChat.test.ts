@@ -222,6 +222,17 @@ describe("propose_recipe — carte attachée au message", () => {
     });
   });
 
+  it("save_recipe ignore un identifiant de recette absent du livre", async () => {
+    const { result } = renderHook(() => useHomeChat());
+    await sendToolCall(result, "save_recipe", {
+      ...PENDING_RECIPE,
+      isUpdate: true,
+      originalRecipeId: "../../profile",
+    });
+
+    expect(lastMessage(result.current.messages).recipeCard).toBeUndefined();
+  });
+
   it("search_recipes attache des cartes saved construites depuis useRecipes", async () => {
     const { result } = renderHook(() => useHomeChat());
     await sendToolCall(result, "search_recipes", { query: "tarte" });

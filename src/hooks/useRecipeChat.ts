@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { useRecipes } from './useRecipes';
 import { useUserPreferences } from './useUserPreferences';
-import { useChatEngine, ActiveRecipeData, ChatEngineConfig, PendingRecipe, ToolCallAction } from './useChatEngine';
+import { useChatEngine, ActiveRecipeData, ChatEngineConfig, PendingRecipe, RecipeCard, ToolCallAction } from './useChatEngine';
 import type { Recipe } from '@/types/recipe';
 import { applyPreferenceOperations } from '@/lib/preference-operations';
 import { buildPendingRecipeFromToolCall, parsePreferenceOperations } from '@/lib/chat-tool-payloads';
@@ -14,19 +15,27 @@ interface UseRecipeChatOptions {
   recipe: Recipe;
   completedSteps: Set<number>;
   onRecipeUpdate?: (data: PendingRecipe) => Promise<void>;
-  onRecipeCreate?: (data: PendingRecipe) => Promise<void>;
+  onRecipeCreate?: (data: PendingRecipe) => Promise<string>;
+  onStartCooking?: (recipeId: string, servings?: number) => void;
 }
 
-export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipeCreate }: UseRecipeChatOptions) {
+export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipeCreate, onStartCooking }: UseRecipeChatOptions) {
+  const navigate = useNavigate();
   const { data: recipes = [] } = useRecipes();
   const { preferences, updatePreferencesAsync } = useUserPreferences();
+  const completedStepsKey = Array.from(completedSteps).sort((left, right) => left - right).join(',');
+  const completedStepsSnapshot = useMemo(
+    () => completedStepsKey ? completedStepsKey.split(',').map(Number) : [],
+    [completedStepsKey],
+  );
 
   const welcomeMessage = `Salut ! 👨‍🍳 Je suis prêt à t'accompagner pour "**${recipe.title}**".\n\nJe peux te guider en cuisine, modifier la recette ou répondre à tes questions. Que veux-tu faire ?`;
 
   const initialActiveRecipe = useMemo<ActiveRecipeData>(() => ({
     id: recipe.id, title: recipe.title, servings: recipe.servings,
     season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
-  }), [recipe.id, recipe.title, recipe.servings, recipe.season, recipe.ingredients, recipe.steps]);
+    completedSteps: completedStepsSnapshot,
+  }), [recipe.id, recipe.title, recipe.servings, recipe.season, recipe.ingredients, recipe.steps, completedStepsSnapshot]);
 
   const handleToolCall = useCallback(async (action: ToolCallAction, activeRecipe: ActiveRecipeData | null): Promise<unknown> => {
     console.log('Recipe chat tool call:', action.type, action.data);
@@ -37,12 +46,20 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
         const query = rawQuery === 'all' ? '' : rawQuery;
         const statusFilter = action.data.status_filter as string;
         const favoritesOnly = action.data.favorites_only as boolean;
-        return recipes.filter(r => {
+        const results = recipes.filter(r => {
           const matchesQuery = !query || r.title.toLowerCase().includes(query) || r.ingredients.some(i => i.name.toLowerCase().includes(query));
           const matchesStatus = !statusFilter || statusFilter === 'all' || r.status === statusFilter;
           const matchesFavorite = !favoritesOnly || r.is_favorite;
           return matchesQuery && matchesStatus && matchesFavorite;
-        }).slice(0, 10).map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite ?? false }));
+        }).slice(0, 10);
+        return {
+          summaries: results.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite ?? false })),
+          cards: results.map<RecipeCard>(r => ({
+            status: 'saved', id: r.id, title: r.title,
+            servings: r.servings ?? 2, ingredients: r.ingredients,
+            stepsCount: r.steps.length, isUpdate: false,
+          })),
+        };
       }
 
       case 'get_recipe_details': {
@@ -53,6 +70,36 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
           id: recipe.id, title: recipe.title, servings: recipe.servings,
           season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
         };
+      }
+
+      case 'open_recipe': {
+        const recipeId = action.data.recipe_id as string;
+        const isKnownRecipe = recipeId === recipe.id || recipes.some(candidate => candidate.id === recipeId);
+        if (isKnownRecipe) setTimeout(() => navigate(`/recipes/${recipeId}`), 500);
+        return null;
+      }
+
+      case 'start_cooking': {
+        const recipeId = action.data.recipe_id as string;
+        const requestedServings = action.data.servings;
+        const servings = typeof requestedServings === 'number' && requestedServings > 0
+          ? requestedServings
+          : undefined;
+        const isKnownRecipe = recipeId === recipe.id || recipes.some(candidate => candidate.id === recipeId);
+        if (isKnownRecipe) onStartCooking?.(recipeId, servings);
+        return null;
+      }
+
+      case 'navigate': {
+        const routes: Record<string, string> = {
+          dashboard: '/dashboard',
+          new_recipe: '/home',
+          profile: '/profile',
+          meal_planning: '/meal-planning',
+        };
+        const destination = action.data.destination as string;
+        if (routes[destination]) setTimeout(() => navigate(routes[destination]), 500);
+        return null;
       }
 
       case 'get_preferences': return preferences;
@@ -66,28 +113,43 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
         catch (error) { console.error('Error updating preferences:', error); return { error: 'Update failed' }; }
       }
 
+      case 'propose_recipe':
       case 'save_recipe':
       case 'extract_modified_recipe':
       case 'create_new_recipe': {
         const pending = buildPendingRecipeFromToolCall(action, activeRecipe);
-        // eslint-disable-next-line react-hooks/immutability -- `engine` n'existe pas encore ici (dépendance circulaire avec useChatEngine, cf. commentaire du dep array) ; son setter est stable.
-        if (pending) engine.setPendingRecipe(pending);
-        return null;
+        if (!pending) return null;
+        if (
+          pending.isUpdate
+          && pending.originalRecipeId
+          && pending.originalRecipeId !== recipe.id
+          && !recipes.some(candidate => candidate.id === pending.originalRecipeId)
+        ) return null;
+        const card: RecipeCard = {
+          status: 'proposed',
+          title: pending.title,
+          servings: pending.servings ?? 2,
+          ingredients: pending.ingredients,
+          stepsCount: pending.steps.length,
+          intro: pending.intro,
+          introClosing: pending.introClosing,
+          tip: pending.tip,
+          isUpdate: !!pending.isUpdate,
+        };
+        return { card, pending };
       }
 
       default: console.log('Unknown tool call:', action.type); return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine` n'existe pas encore à la déclaration (dépendance circulaire avec useChatEngine) ; ses setters sont stables. La recette active vient désormais du 2e argument.
-  }, [recipes, preferences, updatePreferencesAsync]);
+  }, [recipes, recipe.id, navigate, onStartCooking, preferences, updatePreferencesAsync]);
 
   const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
     const recipeSummaries = recipes.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
-    const activeWithSteps = activeRecipe ? { ...activeRecipe, completedSteps: Array.from(completedSteps) } : null;
     return {
       endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`,
-      body: { messages: apiMessages, recipes: recipeSummaries, activeRecipe: activeWithSteps },
+      body: { messages: apiMessages, recipes: recipeSummaries, activeRecipe },
     };
-  }, [recipes, completedSteps]);
+  }, [recipes]);
 
   const engine = useChatEngine({
     welcomeMessage,
@@ -95,7 +157,25 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
     onToolCall: handleToolCall,
     buildRequest,
   });
-  const { setActiveRecipe } = engine;
+  const {
+    setActiveRecipe,
+    getProposedPending,
+    updateMessageCard,
+    clearProposedPending,
+    setMessages,
+  } = engine;
+
+  const syncContext = useCallback((nextRecipe: Recipe, nextCompletedSteps: Set<number>) => {
+    setActiveRecipe({
+      id: nextRecipe.id,
+      title: nextRecipe.title,
+      servings: nextRecipe.servings,
+      season: nextRecipe.season,
+      ingredients: nextRecipe.ingredients,
+      steps: nextRecipe.steps,
+      completedSteps: Array.from(nextCompletedSteps),
+    });
+  }, [setActiveRecipe]);
 
   // Le nombre de portions peut changer pendant que le chat reste monté. Le
   // moteur initialise son contexte une seule fois : on le resynchronise pour
@@ -105,40 +185,54 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
   }, [setActiveRecipe, initialActiveRecipe]);
 
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
-  const savePendingRecipe = useCallback(async () => {
-    const pending = engine.pendingRecipe;
+  const isSavingRef = useRef(false);
+  const createProposedRecipe = useCallback(async (
+    messageId: string,
+    override: { servings: number; ingredients: PendingRecipe['ingredients'] },
+  ) => {
+    if (isSavingRef.current) return;
+    const pending = getProposedPending(messageId);
     if (!pending) return;
+    isSavingRef.current = true;
     setIsSavingRecipe(true);
     try {
-      if (pending.isUpdate && onRecipeUpdate) await onRecipeUpdate(pending);
-      else if (onRecipeCreate) await onRecipeCreate(pending);
-      engine.setPendingRecipe(null);
-      engine.setMessages(prev => [...prev, {
-        id: `assistant-${Date.now()}`, role: 'assistant',
-        content: pending.isUpdate ? `✅ Recette "${pending.title}" mise à jour !` : `✅ Nouvelle recette "${pending.title}" créée !`,
+      const toSave = { ...pending, servings: override.servings, ingredients: override.ingredients };
+      let recipeId = pending.originalRecipeId ?? '';
+      if (pending.isUpdate) {
+        if (!onRecipeUpdate) throw new Error('Mise à jour de recette indisponible');
+        await onRecipeUpdate(toSave);
+      } else {
+        if (!onRecipeCreate) throw new Error('Création de recette indisponible');
+        recipeId = await onRecipeCreate(toSave);
+      }
+
+      updateMessageCard(messageId, {
+        status: 'saved', id: recipeId,
+        servings: toSave.servings, ingredients: toSave.ingredients,
+      });
+      clearProposedPending(messageId);
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: "⚠️ Je n'ai pas pu enregistrer la recette. Vérifie ta connexion et réessaie.",
         timestamp: new Date(),
       }]);
-    } catch (error) { console.error('Error saving recipe:', error); }
-    finally { setIsSavingRecipe(false); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
-  }, [engine.pendingRecipe, onRecipeUpdate, onRecipeCreate]);
-
-  const cancelPendingRecipe = useCallback(() => {
-    engine.setPendingRecipe(null);
-    engine.setMessages(prev => [...prev, {
-      id: `assistant-${Date.now()}`, role: 'assistant',
-      content: "D'accord, on continue la discussion. Qu'est-ce que tu aimerais modifier ?",
-      timestamp: new Date(),
-    }]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.set*` sont des setters stables (useState), pas besoin de les lister
-  }, []);
+    } finally {
+      isSavingRef.current = false;
+      setIsSavingRecipe(false);
+    }
+  }, [getProposedPending, onRecipeUpdate, onRecipeCreate, updateMessageCard, clearProposedPending, setMessages]);
 
   return {
-    messages: engine.messages, isStreaming: engine.isStreaming,
-    activeRecipe: engine.activeRecipe, pendingRecipe: engine.pendingRecipe,
+    messages: engine.messages, isStreaming: engine.isStreaming, toolActivity: engine.toolActivity,
+    activeRecipe: engine.activeRecipe,
     searchResults: engine.searchResults,
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
     regenerateResponse: engine.regenerateResponse, stopGeneration: engine.stopGeneration,
-    savePendingRecipe, cancelPendingRecipe, isSavingRecipe,
+    syncContext, createProposedRecipe, isSavingRecipe,
   };
 }
+
+export type RecipeChatSession = ReturnType<typeof useRecipeChat>;

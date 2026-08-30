@@ -1,89 +1,103 @@
-import { Check, Loader2, X, ChefHat } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
+import { ChevronDown, Plus } from 'lucide-react';
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { ChatInterface } from '@/components/chat/ChatInterface';
-import type { ChatMessage, PendingRecipe } from '@/hooks/useChatEngine';
+import type { ChatMessage } from '@/hooks/useChatEngine';
+import type { Ingredient } from '@/types/recipe';
+import { useViewportHeight } from '@/hooks/useViewportHeight';
 
 interface CookingChatSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Démarre l'écoute vocale à l'ouverture (ouverture via le micro). */
   autoListen: boolean;
+  recipeTitle: string;
+  recipeServings?: number | null;
+  completedStepsCount?: number;
+  context: 'recipe' | 'cooking';
   messages: ChatMessage[];
   isStreaming: boolean;
-  pendingRecipe: PendingRecipe | null;
+  toolActivity?: string | null;
   isSavingRecipe?: boolean;
   sendMessage: (content: string, imageDataUrl?: string) => void;
-  savePendingRecipe: () => void;
-  cancelPendingRecipe: () => void;
+  onCreateRecipe: (messageId: string, data: { servings: number; ingredients: Ingredient[] }) => void;
+  onStartCooking?: (recipeId: string, servings: number) => void;
+  resetChat: () => void;
   regenerateResponse?: () => void;
   stopGeneration?: () => void;
 }
 
+const RECIPE_SUGGESTIONS = ['Adapter les quantités', 'Une alternative végétale ?', 'Comment améliorer cette recette ?'];
 const COOKING_SUGGESTIONS = ['Par quoi remplacer ?', "C'est cuit ?", 'Une astuce ?'];
 
 export function CookingChatSheet({
   open, onOpenChange, autoListen,
-  messages, isStreaming,
-  pendingRecipe, isSavingRecipe,
-  sendMessage, savePendingRecipe, cancelPendingRecipe,
+  recipeTitle, recipeServings, completedStepsCount = 0, context,
+  messages, isStreaming, toolActivity,
+  isSavingRecipe, sendMessage, onCreateRecipe, onStartCooking,
+  resetChat,
   regenerateResponse, stopGeneration,
 }: CookingChatSheetProps) {
+  useViewportHeight();
+
+  const contextDescription = [
+    recipeTitle,
+    recipeServings ? `${recipeServings} portion${recipeServings > 1 ? 's' : ''}` : null,
+    context === 'cooking' && completedStepsCount > 0
+      ? `${completedStepsCount} étape${completedStepsCount > 1 ? 's' : ''} terminée${completedStepsCount > 1 ? 's' : ''}`
+      : null,
+  ].filter(Boolean).join(' · ');
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex h-[85dvh] flex-col gap-0 rounded-t-[22px] p-0">
-        <SheetHeader className="flex-row items-center gap-2.5 space-y-0 border-b border-border p-4 pb-3 text-left">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-            <ChefHat className="h-[18px] w-[18px] text-primary" aria-hidden="true" />
-          </span>
-          <div className="flex-1">
-            <SheetTitle className="font-solitreo text-[19px] leading-none text-foreground">Chef</SheetTitle>
-            <SheetDescription className="font-crimson text-xs text-muted-foreground">Votre assistant cuisson</SheetDescription>
-          </div>
-        </SheetHeader>
-        {/* Remonté à chaque ouverture : la conversation vit dans le hook parent (useRecipeChat). */}
-        {open && (
-          <ChatInterface
-            messages={messages}
-            isStreaming={isStreaming}
-            sendMessage={sendMessage}
-            regenerateResponse={regenerateResponse}
-            stopGeneration={stopGeneration}
-            suggestions={COOKING_SUGGESTIONS}
-            placeholder="Poser une question…"
-            autoListenOnMount={autoListen}
-            className="min-h-0 flex-1"
-          />
-        )}
-
-        {/* Barre de confirmation de recette */}
-        <AnimatePresence>
-          {pendingRecipe && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+      <SheetContent
+        side="bottom"
+        className="inset-x-0 bottom-auto top-[var(--app-vh-top,0px)] flex h-[var(--app-vh,100dvh)] max-h-none w-full flex-col gap-0 rounded-none border-0 p-0 shadow-none [&>button:last-child]:hidden"
+      >
+        <SheetHeader className="min-h-16 shrink-0 flex-row items-center gap-2 space-y-0 border-b border-border bg-background/80 px-3 pt-[env(safe-area-inset-top)] text-left backdrop-blur-sm">
+          <SheetClose asChild>
+            <button
+              type="button"
+              className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label="Fermer l’assistant"
             >
-              <div className="flex flex-col gap-3 p-3 mx-4 mb-3 bg-primary/5 border border-primary/20 rounded-2xl">
-                <p className="text-sm text-foreground text-center break-words">
-                  {pendingRecipe.isUpdate
-                    ? `Mettre à jour "${pendingRecipe.title}" ?`
-                    : `Enregistrer "${pendingRecipe.title}" ?`}
-                </p>
-                <div className="flex justify-end items-center gap-2">
-                  <Button size="sm" onClick={savePendingRecipe} disabled={isSavingRecipe} className="gap-1">
-                    {isSavingRecipe ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    {pendingRecipe.isUpdate ? 'Mettre à jour' : 'Créer'}
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={cancelPendingRecipe} disabled={isSavingRecipe} className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Annuler">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
+              <ChevronDown className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </SheetClose>
+          <div className="min-w-0 flex-1 text-center">
+            <SheetTitle className="truncate font-solitreo text-[19px] font-normal leading-tight text-foreground">Chef</SheetTitle>
+            <SheetDescription className="truncate font-crimson text-xs text-muted-foreground">{contextDescription}</SheetDescription>
+          </div>
+          <button
+            type="button"
+            onClick={resetChat}
+            disabled={isStreaming || messages.length <= 1}
+            className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label="Nouvelle conversation"
+          >
+            <Plus className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </SheetHeader>
+
+        <div className="flex min-h-0 flex-1 flex-col pb-[var(--app-safe-area-bottom,env(safe-area-inset-bottom))]">
+          {/* Remonté à chaque ouverture : la conversation vit dans le hook parent (useRecipeChat). */}
+          {open && (
+            <ChatInterface
+              messages={messages}
+              isStreaming={isStreaming}
+              toolActivity={toolActivity}
+              isSavingRecipe={isSavingRecipe}
+              sendMessage={sendMessage}
+              onCreateRecipe={onCreateRecipe}
+              onStartCooking={onStartCooking}
+              regenerateResponse={regenerateResponse}
+              stopGeneration={stopGeneration}
+              suggestions={context === 'cooking' ? COOKING_SUGGESTIONS : RECIPE_SUGGESTIONS}
+              placeholder="Poser une question"
+              autoListenOnMount={autoListen}
+              className="min-h-0 flex-1"
+            />
           )}
-        </AnimatePresence>
+        </div>
       </SheetContent>
     </Sheet>
   );
