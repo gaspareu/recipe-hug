@@ -11,6 +11,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptValue } from "../_shared/decrypt-keys.ts";
+import { captureEdgeException, initializeEdgeErrorMonitoring } from "../_shared/error-monitoring.ts";
 import { login, countryToLang } from "../_shared/cookidoo/auth.ts";
 import {
   createRecipe,
@@ -29,6 +30,8 @@ import { validateCookidooPayload } from "../_shared/cookidoo/validate.ts";
 import { buildExportDiagnostics } from "../_shared/cookidoo/diagnostics.ts";
 import { PartialCreateError, runExport, type CookidooOps } from "../_shared/cookidoo/run-export.ts";
 import type { Recipe, ThermomixTool } from "../_shared/cookidoo/types.ts";
+
+initializeEdgeErrorMonitoring();
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -78,7 +81,6 @@ const realOps: CookidooOps = {
 // Le runtime prévient avant de recycler l'isolate. Sans cette trace, un export
 // interrompu en plein vol laisse une ligne `pending` sans la moindre indication
 // de la cause : on saurait qu'il a échoué, pas pourquoi.
-// @ts-expect-error — addEventListener("beforeunload") est propre au runtime Supabase.
 globalThis.addEventListener?.("beforeunload", (ev: unknown) => {
   const reason = (ev as { detail?: { reason?: string } })?.detail?.reason ?? "inconnu";
   console.error(`[export-recipe-cookidoo] isolate arrêté (${reason}) — export en cours possiblement interrompu`);
@@ -240,9 +242,13 @@ serve(async (req) => {
             finished_at: new Date().toISOString(),
           }).eq("id", job.id),
         ]);
-        if (mapErr) console.error("[export-recipe-cookidoo] mapping", mapErr.message);
+        if (mapErr) {
+          console.error("[export-recipe-cookidoo] mapping", mapErr.message);
+          await captureEdgeException("export-recipe-cookidoo", "recipe_mapping_write_failed");
+        }
         if (successErr) {
           console.error("[export-recipe-cookidoo] journal succès", successErr.message);
+          await captureEdgeException("export-recipe-cookidoo", "success_journal_write_failed");
         }
       } catch (err) {
         try {
@@ -250,6 +256,7 @@ serve(async (req) => {
             ? { error: "partial_created", message: err.message }
             : classifyError(err);
           console.error("[export-recipe-cookidoo]", classified.error, classified.message);
+          await captureEdgeException("export-recipe-cookidoo", classified.error);
 
           const { error: updateErr } = await admin.from("cookidoo_exports").update({
             status: "failed",
@@ -262,11 +269,15 @@ serve(async (req) => {
           }).eq("id", job.id);
           // Dernier recours : si même l'écriture de l'échec échoue, la ligne
           // restera pending. Au moins la cause apparaîtra dans les logs.
-          if (updateErr) console.error("[export-recipe-cookidoo] journal", updateErr.message);
+          if (updateErr) {
+            console.error("[export-recipe-cookidoo] journal", updateErr.message);
+            await captureEdgeException("export-recipe-cookidoo", "failure_journal_write_failed");
+          }
         } catch (reportErr) {
           // Rien ne doit s'échapper d'une tâche de fond : l'exception serait
           // perdue sans trace et la ligne resterait pending sans explication.
           console.error("[export-recipe-cookidoo] journal (exception)", reportErr);
+          await captureEdgeException("export-recipe-cookidoo", "failure_journal_exception");
         }
       }
     })();
@@ -277,6 +288,7 @@ serve(async (req) => {
     return json({ ok: true, export_id: job.id, status: "pending", tools });
   } catch (err) {
     console.error("[export-recipe-cookidoo] fatal", err);
+    await captureEdgeException("export-recipe-cookidoo", "fatal_error");
     return json({ error: "internal_error", message: String(err) }, 500);
   }
 });
