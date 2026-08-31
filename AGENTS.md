@@ -44,7 +44,7 @@ npm run test:edge    # tests Deno des modules Edge partagés
 - Ne jamais modifier `src/integrations/supabase/client.ts` ni `src/integrations/supabase/types.ts`.
 - Les accès données passent par TanStack Query, encapsulé dans un hook ; pas d'appel Supabase direct depuis un composant.
 - Composer l'UI depuis `src/components/ui/` et `cn()` ; interface et commentaires en français.
-- `package-lock.json` et `deno.lock` sont versionnés. Après une modification de `package.json`, régénérer `deno.lock` avant la CI Edge gelée.
+- `package-lock.json` et `supabase/functions/deno.lock` sont versionnés et indépendants. Une mise à jour frontend ne modifie pas le lockfile Edge ; régénérer ce dernier uniquement après un changement d'import des fonctions Deno.
 - Les tests Vitest sont colocalisés (`*.test.ts(x)`) ; les tests Edge Deno couvrent les modules partagés.
 
 ## Livraison
