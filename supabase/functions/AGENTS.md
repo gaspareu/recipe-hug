@@ -64,8 +64,13 @@ au prochain déploiement CI.
 | `APP_URL` | URL publique (`https://recipe-hug.vercel.app`) | Oui |
 | `ELEVENLABS_API_KEY` | TTS + transcription Scribe | Oui (vocal) |
 | `ELEVENLABS_ZERO_RETENTION_MODE` | Désactive la journalisation TTS/Scribe quand le compte ElevenLabs est éligible | Non (`false` par défaut) |
+| `SENTRY_DSN` | Remontée d'erreurs normalisées de `home-assistant` et Cookidoo | Non (observabilité) |
 
 Les secrets `SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` sont injectés automatiquement par Supabase.
+
+`SENTRY_DSN` ne doit jamais être placé dans le frontend ou dans un commit. Les
+erreurs envoyées sont volontairement normalisées : aucun message de chat,
+recette, e-mail, mot de passe Cookidoo, JWT ou réponse amont n'est attaché.
 
 > Ne positionner `ELEVENLABS_ZERO_RETENTION_MODE=true` qu'après activation du
 > Zero Retention Mode sur le compte ElevenLabs ; sinon les appels peuvent être rejetés.

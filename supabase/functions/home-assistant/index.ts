@@ -2,10 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { captureEdgeException, initializeEdgeErrorMonitoring } from "../_shared/error-monitoring.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAIStreaming } from "../_shared/ai-providers.ts";
 import { formatPreferencesContext, formatFavoritesContext, formatRecipeContext } from "../_shared/context-format.ts";
 import { TM7_MODES, TM7_ACCESSORY_LABELS, buildTm7ReferenceForPrompt } from "../_shared/thermomix/reference.ts";
+
+initializeEdgeErrorMonitoring();
 
 // Input validation schema
 const ContentPartSchema = z.union([
@@ -628,6 +631,7 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
       console.error("AI error:", response.status, errorText);
+      await captureEdgeException("home-assistant", `ai_upstream_${response.status}`);
       if (response.status === 429) return new Response(JSON.stringify({ error: "Trop de requêtes, réessaie dans un instant." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       // Anthropic signale un solde insuffisant par un 400 invalid_request_error « credit balance ».
       if (response.status === 402 || errorText.includes("credit balance")) {
@@ -641,6 +645,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("home-assistant error:", error);
+    await captureEdgeException("home-assistant", "unhandled_error");
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

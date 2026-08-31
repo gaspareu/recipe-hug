@@ -29,7 +29,7 @@ npm run build        # build Vite seulement : ne vérifie pas les types
 npm run test:edge    # tests Deno des modules Edge partagés
 ```
 
-`npm run build` ne remplace jamais `npm run typecheck`. Baseline au 2026-08-30 : typecheck 0 erreur, lint 0 problème, `test:run` 589 tests sans échec. Mettre ce baseline à jour ici et dans le skill `check` si la suite évolue.
+`npm run build` ne remplace jamais `npm run typecheck`. Baseline au 2026-08-30 : typecheck 0 erreur, lint 0 problème, `test:run` 592 tests sans échec. Mettre ce baseline à jour ici et dans le skill `check` si la suite évolue.
 
 ## Routage du contexte
 
