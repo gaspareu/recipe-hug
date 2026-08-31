@@ -44,7 +44,7 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center justify-between px-4">
         <Link to="/home" className="flex items-center gap-2">
-          <img src="/favicon.png" alt="Grimoire" className="h-8 w-8 rounded-lg mt-0.5" />
+          <img src="/brand/recipe-book-logo.png" alt="Grimoire" className="mt-0.5 h-8 w-8 object-contain" />
           <span className="text-lg font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
             Grimoire
           </span>
