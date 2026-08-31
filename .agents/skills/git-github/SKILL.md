@@ -39,7 +39,7 @@ npm run build        # bundle de production
 Si les edge functions sont touchées :
 
 ```bash
-deno test --allow-env=ANTHROPIC_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,AI_KEYS_ENCRYPTION_SECRET --node-modules-dir=none --frozen --min-dep-age=0 supabase/functions/_shared/
+deno test --config supabase/functions/deno.json --allow-env=ANTHROPIC_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,AI_KEYS_ENCRYPTION_SECRET --frozen supabase/functions/_shared/
 ```
 
 La CI (`.github/workflows/ci.yml`) rejoue tests, build, typecheck, lint et tests
