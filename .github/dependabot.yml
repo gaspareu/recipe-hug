@@ -25,6 +25,11 @@ updates:
         update-types:
           - minor
           - patch
+    # TypeScript 7 est incompatible avec typescript-eslint 8 (< 6.1.0).
+    # Retirer cette exception dès que l'outillage ESLint prend TypeScript 7 en charge.
+    ignore:
+      - dependency-name: "typescript"
+        versions: ["^7.0.0"]
 
   # Versions des GitHub Actions utilisées dans la CI
   - package-ecosystem: github-actions
