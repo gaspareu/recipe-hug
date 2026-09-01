@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { Plus, Mic, MicOff, ArrowUp, X, Camera, Image, Copy, RotateCw, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { RecipeChatCard } from './RecipeChatCard';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { shouldSpeakMessage } from './shouldSpeakMessage';
+import { stripAssistantMetadata } from '@/lib/assistant-content';
 import { messageVariants, messageTransition } from '@/lib/motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -99,6 +100,7 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const navigate = useNavigate();
   const [input, setInput] = useState('');
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -106,6 +108,7 @@ export function ChatInterface({
   const lastMessageRef = useRef<string>('');
   const shouldAutoScrollRef = useRef(true);
   const hasConversation = messages.length > 1;
+  const prefersReducedMotion = useReducedMotion();
 
   // Voice mode
   const handleVoiceTranscript = useCallback((text: string) => {
@@ -227,12 +230,9 @@ export function ChatInterface({
   );
 
   const getDisplayContent = useCallback((message: ChatMessage): string => {
-    let content = message.content;
-    if (message.role === 'assistant' && content) {
-      content = content.replace(/\{\s*"action"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g, '').trim();
-      content = content.replace(SUGGESTIONS_REGEX, '').trim();
-    }
-    return content;
+    return message.role === 'assistant' && message.content
+      ? stripAssistantMetadata(message.content)
+      : message.content;
   }, []);
 
   // Feedback "Réflexion en cours..." affiché tant que l'assistant n'a rien de
@@ -257,7 +257,10 @@ export function ChatInterface({
       : 'Réflexion en cours...';
   const processingAriaLabel = processingLabel.replace(/\.\.\.$/, '');
   const showProcessingIndicator = isSavingRecipe || Boolean(toolActivity) || showThinkingIndicator;
-  const showSuggestions = activeSuggestions.length > 0 && input.length === 0 && !selectedImage;
+  const showSuggestions = activeSuggestions.length > 0
+    && input.length === 0
+    && !selectedImage
+    && !isComposerFocused;
 
   // Une activité déclenchée depuis une carte peut se situer sous le bord visible
   // de l'historique. On la rend immédiatement lisible si l'utilisateur suivait
@@ -390,29 +393,52 @@ export function ChatInterface({
       )}
 
       {/* Bottom area */}
-      <div className="shrink-0 p-4 space-y-4 bg-background/80 backdrop-blur-sm border-t border-border relative z-10">
+      <div className="relative z-10 shrink-0 border-t border-border bg-background/80 p-4 backdrop-blur-sm">
         {/* Quick suggestions */}
-        {showSuggestions && (
-          <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-no-swipe-nav data-testid="suggestions-scroll">
-            <div className="flex gap-2 w-max">
-              {activeSuggestions.map((suggestion, i) => (
-                <Button
-                  key={i}
-                  variant={hasConversation ? 'ghost' : 'outline'}
-                  size="sm"
-                  onClick={() => sendMessage(suggestion)}
-                  disabled={isStreaming}
-                  className="text-sm rounded-2xl px-4 py-2 h-auto whitespace-nowrap border-border/50 hover:bg-muted shrink-0"
-                >
-                  {suggestion}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {showSuggestions && (
+            <motion.div
+              key="chat-suggestions"
+              initial={prefersReducedMotion ? false : { height: 0, y: 24, opacity: 0 }}
+              animate={{ height: 'auto', y: 0, opacity: 1 }}
+              exit={prefersReducedMotion
+                ? { height: 0, opacity: 0, transition: { duration: 0 } }
+                : {
+                    height: 0,
+                    y: 32,
+                    opacity: 0,
+                    transition: { duration: 0.24, ease: 'easeInOut' },
+                  }}
+              className="relative z-0 overflow-hidden"
+              data-testid="suggestions-collapse"
+            >
+              <div className="pb-3">
+                <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-no-swipe-nav data-testid="suggestions-scroll">
+                  <div className="flex w-max gap-2">
+                    {activeSuggestions.map((suggestion, i) => (
+                      <Button
+                        key={i}
+                        variant={hasConversation ? 'ghost' : 'outline'}
+                        size="sm"
+                        onClick={() => sendMessage(suggestion)}
+                        disabled={isStreaming}
+                        className="h-auto shrink-0 whitespace-nowrap rounded-2xl border-border/50 px-4 py-2 text-sm hover:bg-muted"
+                      >
+                        {suggestion}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Input container */}
-        <div className="relative bg-muted rounded-[24px] border border-border/50 px-3 py-3 max-w-[800px] mx-auto w-full transition-shadow focus-within:ring-1 focus-within:ring-primary/30 focus-within:border-primary/30">
+        <div
+          className="relative z-10 mx-auto w-full max-w-[800px] rounded-[24px] border border-border/50 bg-muted px-3 pb-2 pt-3 transition-shadow focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/30"
+          data-testid="chat-composer"
+        >
           {selectedImage && (
             <div className="pb-2">
               <div className="relative inline-block">
@@ -424,13 +450,36 @@ export function ChatInterface({
             </div>
           )}
 
-          <div className="flex items-end gap-2">
+          {/* Le texte utilise toute la largeur ; les actions restent accessibles
+              sur une rangée dédiée, comme dans les composeurs mobiles natifs. */}
+          <textarea
+            ref={inputRef}
+            value={input}
+            onFocus={() => setIsComposerFocused(true)}
+            onBlur={() => setIsComposerFocused(false)}
+            onChange={e => {
+              setInput(e.target.value);
+              const target = e.target;
+              target.style.height = 'auto';
+              target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder={isListening ? 'Parlez...' : placeholder}
+            aria-label={isListening ? 'Parlez...' : placeholder}
+            className="max-h-[120px] min-h-7 w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-0 text-base leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+            rows={1}
+            disabled={isStreaming || isListening}
+          />
+
+          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageSelect} className="hidden" aria-hidden="true" tabIndex={-1} />
+
+          <div className="mt-1 flex min-h-11 items-center justify-between gap-2" data-testid="composer-actions">
             <TooltipProvider>
               <Popover>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <PopoverTrigger asChild>
-                      <button aria-label="Ajouter une pièce jointe" aria-haspopup="true" className="flex-shrink-0 h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-accent transition-colors touch-manipulation" disabled={isStreaming || isListening}>
+                      <button aria-label="Ajouter une pièce jointe" aria-haspopup="true" className="flex h-11 w-11 flex-shrink-0 touch-manipulation items-center justify-center rounded-full border border-border transition-colors hover:bg-accent" disabled={isStreaming || isListening}>
                         <Plus className="h-5 w-5 text-foreground" aria-hidden="true" />
                       </button>
                     </PopoverTrigger>
@@ -456,30 +505,8 @@ export function ChatInterface({
               </Popover>
             </TooltipProvider>
 
-            {/* Textarea */}
-            <div className="flex-1 flex items-center min-h-[36px]">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={e => {
-                  setInput(e.target.value);
-                  const target = e.target;
-                  target.style.height = 'auto';
-                  target.style.height = Math.min(target.scrollHeight, 200) + 'px';
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder={isListening ? 'Parlez...' : placeholder}
-                aria-label={isListening ? 'Parlez...' : placeholder}
-                className={`w-full min-h-[24px] max-h-[200px] resize-none bg-transparent border-0 focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 py-0 px-0 text-base placeholder:text-muted-foreground self-center text-foreground ${input ? 'leading-6' : 'leading-9'}`}
-                rows={1}
-                disabled={isStreaming || isListening}
-              />
-            </div>
-
-              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageSelect} className="hidden" aria-hidden="true" tabIndex={-1} />
-
             {/* Mic / Send button */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <AnimatePresence mode="popLayout" initial={false}>
                 {isStreaming && stopGeneration ? (
                   <motion.button
@@ -489,7 +516,7 @@ export function ChatInterface({
                     exit={{ scale: 0.7, opacity: 0 }}
                     transition={{ duration: 0.15 }}
                     onClick={stopGeneration}
-                    className="flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors bg-foreground text-background hover:bg-foreground/90 touch-manipulation"
+                    className="flex h-11 w-11 flex-shrink-0 touch-manipulation items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/90"
                     title="Arrêter la génération"
                     aria-label="Arrêter la génération"
                   >
@@ -508,7 +535,7 @@ export function ChatInterface({
                       else startListening();
                     }}
                     disabled={isStreaming || isConnecting}
-                    className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors touch-manipulation ${isListening ? 'bg-primary text-primary-foreground' : isConnecting ? 'bg-muted animate-pulse' : 'hover:bg-accent text-foreground'}`}
+                    className={`flex h-11 w-11 flex-shrink-0 touch-manipulation items-center justify-center rounded-full transition-colors ${isListening ? 'bg-primary text-primary-foreground' : isConnecting ? 'bg-muted animate-pulse' : 'hover:bg-accent text-foreground'}`}
                     title={isConnecting ? 'Connexion...' : isListening ? "Arrêter l'écoute" : 'Dicter'}
                     aria-label={isConnecting ? 'Connexion en cours...' : isListening ? "Arrêter l'écoute" : 'Dicter un message'}
                     aria-pressed={isListening}
@@ -530,7 +557,7 @@ export function ChatInterface({
                     transition={{ duration: 0.15 }}
                     onClick={handleSubmit}
                     disabled={isStreaming}
-                    className="flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center transition-colors bg-foreground text-background hover:bg-foreground/90 touch-manipulation"
+                    className="flex h-11 w-11 flex-shrink-0 touch-manipulation items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/90"
                     title="Envoyer"
                     aria-label="Envoyer le message"
                   >
@@ -550,7 +577,7 @@ export function ChatInterface({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className="flex items-center justify-center gap-2"
+              className="mt-3 flex items-center justify-center gap-2"
             >
               <button onClick={stopSpeaking} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10">
                 <SoundWaveIndicator className="h-4" barCount={5} />
@@ -568,7 +595,7 @@ export function ChatInterface({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className="flex items-center justify-center"
+              className="mt-3 flex items-center justify-center"
             >
               <button onClick={toggleVoice} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted" title="Désactiver le mode vocal" aria-label="Désactiver le mode vocal" aria-pressed={true}>
                 <Mic className="h-3.5 w-3.5" />

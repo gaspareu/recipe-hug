@@ -129,6 +129,9 @@ Exemple :
 
 ## Supabase et edge functions
 
+- Le flux [Snapshot local de données utilisateur](./LOCAL_DATA.md) permet de tester
+  avec un sous-ensemble pseudonymisé du compte connecté, sans clé administrateur et sans
+  versionner le fichier produit.
 - La production est le projet `ifpqsyyvytfpossqycpc` ; son MCP versionné est limité à
   la lecture, aux logs et à la documentation.
 - Toute migration est un fichier horodaté committé. Les changements faits dans le
@@ -176,8 +179,10 @@ Politique retenue :
 - pas de Renovate en parallèle, afin d'éviter les PR et lockfiles concurrents.
 
 Pour une PR simple : inspecter le changelog officiel, le diff de lockfile et les scripts
-d'installation. Si `package.json` change, régénérer également `deno.lock` avec
-`deno install --lockfile-only --frozen=false --node-modules-dir=none --minimum-dependency-age=0`,
+d'installation. Une modification de `package.json` ne doit pas modifier
+`supabase/functions/deno.lock` : ce lockfile couvre exclusivement les imports Edge.
+Après un changement d'import Deno, régénérer ce fichier avec
+`deno test --config supabase/functions/deno.json --allow-env=ANTHROPIC_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,AI_KEYS_ENCRYPTION_SECRET --frozen=false supabase/functions/_shared/ supabase/functions/elevenlabs-tts/ supabase/functions/elevenlabs-scribe-token/`,
 puis lancer `check:all` et vérifier les zones à risque. Une mise à jour de Vite, React,
 Supabase, TypeScript, Vitest ou d'une GitHub Action mérite une revue dédiée, même si
 SemVer l'annonce comme mineure.

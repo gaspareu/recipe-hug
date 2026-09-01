@@ -15,6 +15,11 @@ import { buildPendingRecipeFromToolCall, parsePreferenceOperations } from '@/lib
 
 const MAX_RECIPES_IN_ASSISTANT_CONTEXT = 100;
 
+interface CookingSession {
+  recipeId: string;
+  servings?: number;
+}
+
 // Re-export types
 export type { ChatMessage, MessageContent, PendingRecipe, ActiveRecipeData, RecipeCard } from './useChatEngine';
 
@@ -26,8 +31,8 @@ export function useHomeChat() {
   const { data: recipes = [], refetch: refetchRecipes } = useRecipes();
   const { preferences, updatePreferencesAsync } = useUserPreferences();
 
-  // Mode cuisine : recette en cours de préparation en plein écran (null = fermé).
-  const [cookingRecipeId, setCookingRecipeId] = useState<string | null>(null);
+  // Mode cuisine : recette et éventuel nombre de portions choisi sur sa carte.
+  const [cookingSession, setCookingSession] = useState<CookingSession | null>(null);
 
   // La recette active est fournie par le moteur en 2e argument (il en tient un
   // ref synchronisé, y compris pendant l'auto-retry) : plus besoin d'un ref
@@ -75,7 +80,11 @@ export function useHomeChat() {
 
       case 'start_cooking': {
         const recipeId = action.data.recipe_id as string;
-        if (recipeId) setCookingRecipeId(recipeId);
+        const requestedServings = action.data.servings;
+        const servings = typeof requestedServings === 'number' && requestedServings > 0
+          ? requestedServings
+          : undefined;
+        if (recipeId) setCookingSession({ recipeId, servings });
         return null;
       }
 
@@ -140,6 +149,11 @@ export function useHomeChat() {
       case 'create_new_recipe': {
         const pending = buildPendingRecipeFromToolCall(action, activeRecipe);
         if (!pending) return null;
+        if (
+          pending.isUpdate
+          && pending.originalRecipeId
+          && !recipes.some(candidate => candidate.id === pending.originalRecipeId)
+        ) return null;
         const card: RecipeCard = {
           status: 'proposed',
           title: pending.title,
@@ -255,8 +269,10 @@ export function useHomeChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `engine.*` sont stables ; la garde anti double-clic lit isSavingRef (ref), pas le state
   }, [refetchRecipes, queryClient]);
 
-  const startCooking = useCallback((recipeId: string) => setCookingRecipeId(recipeId), []);
-  const stopCooking = useCallback(() => setCookingRecipeId(null), []);
+  const startCooking = useCallback((recipeId: string, servings?: number) => {
+    setCookingSession({ recipeId, servings: servings && servings > 0 ? servings : undefined });
+  }, []);
+  const stopCooking = useCallback(() => setCookingSession(null), []);
 
   return {
     messages: engine.messages, isStreaming: engine.isStreaming, toolActivity: engine.toolActivity,
@@ -265,6 +281,8 @@ export function useHomeChat() {
     sendMessage: engine.sendMessage, resetChat: engine.resetChat,
     regenerateResponse: engine.regenerateResponse, stopGeneration: engine.stopGeneration,
     createProposedRecipe, isSavingRecipe,
-    cookingRecipeId, startCooking, stopCooking,
+    cookingRecipeId: cookingSession?.recipeId ?? null,
+    cookingServings: cookingSession?.servings,
+    startCooking, stopCooking,
   };
 }

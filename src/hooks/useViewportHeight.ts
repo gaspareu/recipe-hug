@@ -9,8 +9,19 @@ export const APP_VIEWPORT_HEIGHT_VAR = '--app-vh';
  */
 export const APP_VIEWPORT_TOP_VAR = '--app-vh-top';
 
+/** Safe-area inférieure neutralisée quand le clavier couvre déjà cette zone. */
+export const APP_SAFE_AREA_BOTTOM_VAR = '--app-safe-area-bottom';
+
+/** Évite de confondre l'ouverture du clavier avec les barres du navigateur. */
+const KEYBOARD_HEIGHT_THRESHOLD_PX = 150;
+
 /** Relecture après l'animation du clavier iOS (~250 ms), marge comprise. */
 const SETTLE_DELAY_MS = 400;
+
+// Home et un assistant plein écran peuvent être montés simultanément
+// (portail Radix au-dessus de la page). Un compteur empêche le démontage de
+// l'un d'effacer les variables encore utilisées par l'autre.
+let viewportConsumers = 0;
 
 /**
  * Publie la géométrie du viewport visuel : hauteur réellement visible
@@ -41,6 +52,7 @@ export function useViewportHeight(): void {
     if (!viewport) return;
 
     const root = document.documentElement;
+    viewportConsumers += 1;
     let frame: number | null = null;
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -48,6 +60,12 @@ export function useViewportHeight(): void {
       frame = null;
       root.style.setProperty(APP_VIEWPORT_HEIGHT_VAR, `${viewport.height}px`);
       root.style.setProperty(APP_VIEWPORT_TOP_VAR, `${viewport.offsetTop}px`);
+      const keyboardHeight = Math.max(0, window.innerHeight - viewport.height);
+      if (keyboardHeight > KEYBOARD_HEIGHT_THRESHOLD_PX) {
+        root.style.setProperty(APP_SAFE_AREA_BOTTOM_VAR, '0px');
+      } else {
+        root.style.removeProperty(APP_SAFE_AREA_BOTTOM_VAR);
+      }
     };
 
     // Les événements arrivent en rafale pendant l'animation : une écriture par
@@ -77,8 +95,12 @@ export function useViewportHeight(): void {
       if (settleTimer !== null) clearTimeout(settleTimer);
       viewport.removeEventListener('resize', handleResize);
       viewport.removeEventListener('scroll', schedule);
-      root.style.removeProperty(APP_VIEWPORT_HEIGHT_VAR);
-      root.style.removeProperty(APP_VIEWPORT_TOP_VAR);
+      viewportConsumers = Math.max(0, viewportConsumers - 1);
+      if (viewportConsumers === 0) {
+        root.style.removeProperty(APP_VIEWPORT_HEIGHT_VAR);
+        root.style.removeProperty(APP_VIEWPORT_TOP_VAR);
+        root.style.removeProperty(APP_SAFE_AREA_BOTTOM_VAR);
+      }
     };
   }, []);
 }

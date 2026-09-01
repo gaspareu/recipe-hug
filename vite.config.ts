@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
@@ -19,12 +20,22 @@ function resolveCommit(): string {
 }
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
+const appCommit = resolveCommit();
+const sentryUploadOptions = process.env.SENTRY_ORG && process.env.SENTRY_PROJECT && process.env.SENTRY_AUTH_TOKEN
+  ? {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+    }
+  : undefined;
+const sourceMaps: false | "hidden" = sentryUploadOptions ? "hidden" : false;
 
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
+  build: { sourcemap: sourceMaps },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
-    __APP_COMMIT__: JSON.stringify(resolveCommit()),
+    __APP_COMMIT__: JSON.stringify(appCommit),
     __APP_BUILD_DATE__: JSON.stringify(new Date().toISOString()),
   },
   server: {
@@ -33,6 +44,13 @@ export default defineConfig(() => ({
   },
   plugins: [
     react(),
+    ...(sentryUploadOptions
+      ? [sentryVitePlugin({
+          ...sentryUploadOptions,
+          release: { name: `recipe-hug@${pkg.version}+${appCommit}` },
+          sourcemaps: { filesToDeleteAfterUpload: ["./dist/**/*.map"] },
+        })]
+      : []),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "icons/*.png", "placeholder.svg"],
@@ -79,7 +97,7 @@ export default defineConfig(() => ({
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
     css: true,
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    include: ["src/**/*.{test,spec}.{ts,tsx}", "scripts/**/*.test.mjs"],
     coverage: {
       provider: "v8" as const,
       reporter: ["text", "text-summary", "html", "json-summary"],

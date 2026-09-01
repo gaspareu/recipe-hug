@@ -24,10 +24,10 @@ PR sans demande explicite de l'utilisateur.
 
 ## Validation
 
-- Si `package.json` change, régénérer aussi `deno.lock` avec
-  `deno install --lockfile-only --frozen=false --node-modules-dir=none --minimum-dependency-age=0`.
-  Le job Edge Functions utilise `--frozen` et échoue si les dépendances npm du lockfile
-  Deno ne correspondent plus au manifeste racine.
+- Une mise à jour de `package.json` ne doit pas modifier `supabase/functions/deno.lock` :
+  le lockfile Edge est isolé du manifeste frontend. Le régénérer uniquement lorsqu'un
+  import Deno des fonctions change, avec
+  `deno test --config supabase/functions/deno.json --allow-env=ANTHROPIC_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,AI_KEYS_ENCRYPTION_SECRET --frozen=false supabase/functions/_shared/ supabase/functions/elevenlabs-tts/ supabase/functions/elevenlabs-scribe-token/`.
 - Lancer `npm ci`, puis `npm run check:all`.
 - Vérifier le parcours navigateur si une dépendance runtime ou UI change.
 - Comparer le résultat au baseline du skill `check` et lire les logs CI de la PR.

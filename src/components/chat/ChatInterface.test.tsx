@@ -142,15 +142,62 @@ describe("ChatInterface — responsive", () => {
       expect(screen.getByText("Suggestion 2")).toBeInTheDocument();
     });
 
-    it("masque les suggestions pendant la saisie et les réaffiche quand le composeur est vide", () => {
+    it("intègre l'espace sous les suggestions dans le conteneur animé", () => {
+      render(<ChatInterface {...defaultProps} />);
+
+      const collapse = screen.getByTestId("suggestions-collapse");
+      expect(collapse).toHaveClass("overflow-hidden");
+      expect(collapse.firstElementChild).toHaveClass("pb-3");
+      expect(collapse.parentElement).not.toHaveClass("space-y-3");
+    });
+
+    it("masque les suggestions dès le focus et les réaffiche au blur si le composeur est vide", () => {
       render(<ChatInterface {...defaultProps} />);
       const input = screen.getByRole("textbox", { name: "Poser une question" });
+
+      fireEvent.focus(input);
+      expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
 
       fireEvent.change(input, { target: { value: "Je veux une tarte" } });
       expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
 
       fireEvent.change(input, { target: { value: "" } });
+      expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
+
+      fireEvent.blur(input);
       expect(screen.getByTestId("suggestions-scroll")).toBeInTheDocument();
+    });
+
+    it("ne réaffiche pas les suggestions au blur quand le texte n'est pas vide", () => {
+      render(<ChatInterface {...defaultProps} />);
+      const input = screen.getByRole("textbox", { name: "Poser une question" });
+
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: "Une tarte" } });
+      fireEvent.blur(input);
+
+      expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("composeur mobile", () => {
+    it("place les actions sur une rangée dédiée avec des cibles tactiles de 44 px", () => {
+      render(<ChatInterface {...defaultProps} />);
+
+      expect(screen.getByTestId("composer-actions")).toHaveClass("min-h-11");
+      expect(screen.getByRole("button", { name: "Ajouter une pièce jointe" })).toHaveClass("h-11", "w-11");
+      expect(screen.getByRole("button", { name: "Dicter un message" })).toHaveClass("h-11", "w-11");
+    });
+
+    it("agrandit le champ multilignes jusqu'à 120 px", () => {
+      render(<ChatInterface {...defaultProps} />);
+      const input = screen.getByRole("textbox", { name: "Poser une question" });
+      Object.defineProperty(input, "scrollHeight", { configurable: true, value: 180 });
+
+      fireEvent.change(input, { target: { value: "Une longue demande\nsur plusieurs lignes" } });
+
+      expect(input).toHaveStyle({ height: "120px" });
+      expect(input).toHaveClass("max-h-[120px]", "w-full");
     });
   });
 

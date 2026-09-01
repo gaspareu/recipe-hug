@@ -1,73 +1,96 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CookingChatSheet } from './CookingChatSheet';
-import type { PendingRecipe } from '@/hooks/useChatEngine';
 
-// Mock framer-motion pour éviter les erreurs d'animation en jsdom
-vi.mock('framer-motion', () => ({
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  motion: {
-    div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+const { mockChatInterface } = vi.hoisted(() => ({
+  mockChatInterface: vi.fn(),
+}));
+
+vi.mock('@/components/chat/ChatInterface', () => ({
+  ChatInterface: (props: Record<string, unknown>) => {
+    mockChatInterface(props);
+    return <div data-testid="chat-interface" />;
   },
 }));
-
-// Mock ChatInterface — non pertinent pour ces tests
-vi.mock('@/components/chat/ChatInterface', () => ({
-  ChatInterface: () => <div data-testid="chat-interface" />,
-}));
-
-const basePendingRecipe: PendingRecipe = {
-  title: 'Ratatouille',
-  servings: 4,
-  ingredients: [],
-  steps: [],
-  isUpdate: true,
-};
 
 const defaultProps = {
   open: true,
   onOpenChange: vi.fn(),
   autoListen: false,
+  recipeTitle: 'Ratatouille',
+  recipeServings: 4,
+  context: 'recipe' as const,
   messages: [],
   isStreaming: false,
-  pendingRecipe: null,
   isSavingRecipe: false,
   sendMessage: vi.fn(),
-  savePendingRecipe: vi.fn(),
-  cancelPendingRecipe: vi.fn(),
+  onCreateRecipe: vi.fn(),
+  resetChat: vi.fn(),
 };
 
-describe('CookingChatSheet — barre de confirmation', () => {
-  it("n'affiche pas la barre si pendingRecipe est null", () => {
-    render(<CookingChatSheet {...defaultProps} pendingRecipe={null} />);
-    expect(screen.queryByText(/Mettre à jour/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Enregistrer/)).not.toBeInTheDocument();
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('CookingChatSheet — assistant recette partagé', () => {
+  it('reprend la coquille plein écran et contextualise son en-tête', () => {
+    render(<CookingChatSheet {...defaultProps} />);
+
+    expect(screen.getByRole('dialog')).toHaveClass('h-[var(--app-vh,100dvh)]', 'rounded-none');
+    expect(screen.getByText('Chef')).toBeInTheDocument();
+    expect(screen.getByText('Ratatouille · 4 portions')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fermer l’assistant' })).toHaveClass('h-11', 'w-11');
   });
 
-  it('affiche la barre avec le bouton « Mettre à jour » quand isUpdate est true', () => {
-    render(<CookingChatSheet {...defaultProps} pendingRecipe={basePendingRecipe} />);
-    expect(screen.getByText('Mettre à jour "Ratatouille" ?')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Mettre à jour/ })).toBeInTheDocument();
+  it('transmet au chat les cartes inline et les suggestions de la fiche recette', () => {
+    const onCreateRecipe = vi.fn();
+    const onStartCooking = vi.fn();
+
+    render(
+      <CookingChatSheet
+        {...defaultProps}
+        onCreateRecipe={onCreateRecipe}
+        onStartCooking={onStartCooking}
+      />,
+    );
+
+    expect(mockChatInterface).toHaveBeenLastCalledWith(expect.objectContaining({
+      onCreateRecipe,
+      onStartCooking,
+      suggestions: ['Adapter les quantités', 'Une alternative végétale ?', 'Comment améliorer cette recette ?'],
+      placeholder: 'Poser une question',
+    }));
   });
 
-  it('affiche le bouton « Créer » quand isUpdate est false', () => {
-    const pendingCreate: PendingRecipe = { ...basePendingRecipe, isUpdate: false };
-    render(<CookingChatSheet {...defaultProps} pendingRecipe={pendingCreate} />);
-    expect(screen.getByText('Enregistrer "Ratatouille" ?')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Créer/ })).toBeInTheDocument();
+  it('affiche la progression et les suggestions propres au mode cuisine', () => {
+    render(
+      <CookingChatSheet
+        {...defaultProps}
+        context="cooking"
+        completedStepsCount={2}
+      />,
+    );
+
+    expect(screen.getByText('Ratatouille · 4 portions · 2 étapes terminées')).toBeInTheDocument();
+    expect(mockChatInterface).toHaveBeenLastCalledWith(expect.objectContaining({
+      suggestions: ['Par quoi remplacer ?', "C'est cuit ?", 'Une astuce ?'],
+    }));
   });
 
-  it('appelle savePendingRecipe au clic sur le bouton de confirmation', () => {
-    const savePendingRecipe = vi.fn();
-    render(<CookingChatSheet {...defaultProps} pendingRecipe={basePendingRecipe} savePendingRecipe={savePendingRecipe} />);
-    fireEvent.click(screen.getByRole('button', { name: /Mettre à jour/ }));
-    expect(savePendingRecipe).toHaveBeenCalledTimes(1);
-  });
+  it('permet de recommencer une conversation depuis l’en-tête', () => {
+    const resetChat = vi.fn();
+    render(
+      <CookingChatSheet
+        {...defaultProps}
+        messages={[
+          { id: 'u1', role: 'user', content: 'Bonjour', timestamp: new Date() },
+          { id: 'a1', role: 'assistant', content: 'Bonjour', timestamp: new Date() },
+        ]}
+        resetChat={resetChat}
+      />,
+    );
 
-  it("appelle cancelPendingRecipe au clic sur le bouton d'annulation", () => {
-    const cancelPendingRecipe = vi.fn();
-    render(<CookingChatSheet {...defaultProps} pendingRecipe={basePendingRecipe} cancelPendingRecipe={cancelPendingRecipe} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
-    expect(cancelPendingRecipe).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Nouvelle conversation' }));
+    expect(resetChat).toHaveBeenCalledTimes(1);
   });
 });

@@ -21,7 +21,7 @@ export default function Home() {
   const {
     messages, isStreaming, toolActivity, isSavingRecipe,
     sendMessage, resetChat, createProposedRecipe, regenerateResponse, stopGeneration,
-    cookingRecipeId, startCooking, stopCooking,
+    cookingRecipeId, cookingServings, startCooking, stopCooking,
   } = useHomeChat();
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -101,7 +101,7 @@ export default function Home() {
           showWelcomeScreen={true}
           skipFirstMessage={true}
           welcomeContent={
-            <div className="flex-1 flex flex-col items-center justify-center px-4">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4">
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -121,13 +121,18 @@ export default function Home() {
         />
       </div>
       {/* Bannière d'installation PWA dans le flux (pas fixed) pour ne pas masquer l'input */}
-      <div className="shrink-0 pb-[env(safe-area-inset-bottom)]">
+      <div className="shrink-0 pb-[var(--app-safe-area-bottom,env(safe-area-inset-bottom))]">
         <InstallBanner />
       </div>
 
       {/* Mode cuisine plein écran (déclenché par l'assistant ou le bouton « Cuisiner ») */}
       {cookingRecipeId && (
-        <CookingModeContainer recipeId={cookingRecipeId} onClose={stopCooking} />
+        <CookingModeContainer
+          recipeId={cookingRecipeId}
+          initialServings={cookingServings}
+          onStartCooking={startCooking}
+          onClose={stopCooking}
+        />
       )}
     </div>
   );

@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import { Timer, Pause, Play } from 'lucide-react';
-import type { Step } from '@/types/recipe';
+import { Timer } from 'lucide-react';
+import type { Ingredient, Step } from '@/types/recipe';
 import { cn } from '@/lib/utils';
 import { parseStepTimers } from '@/lib/parseStepTimers';
-import { formatTimer, type CookingTimer } from '@/hooks/useCookingTimers';
+import { formatTimer } from '@/hooks/useCookingTimers';
 import { deriveStepTitle } from '@/lib/step-title';
+import { annotateCookingText, formatCookingQuantity } from '@/lib/cooking-ingredients';
 
 function Progress({ idx, total }: { idx: number; total: number }) {
   return (
@@ -38,7 +39,7 @@ function TimerChip({ minutes, label, stepIndex, onStart }: TimerChipProps) {
   return (
     <button
       onClick={() => onStart(label, minutes * 60, stepIndex)}
-      className="inline-flex items-center gap-2 rounded-full border-[1.5px] border-accent bg-accent/15 px-3 py-1.5 font-crimson text-sm font-bold text-secondary transition-colors hover:bg-accent hover:text-accent-foreground"
+      className="inline-flex min-h-11 touch-manipulation cursor-pointer items-center gap-2 rounded-full border-[1.5px] border-accent bg-accent/15 px-3 py-1.5 font-crimson text-sm font-bold text-secondary transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <Timer className="h-4 w-4" aria-hidden="true" />
       <span>Minuteur {formatTimer(minutes * 60)}</span>
@@ -46,39 +47,33 @@ function TimerChip({ minutes, label, stepIndex, onStart }: TimerChipProps) {
   );
 }
 
-interface ActiveTimerDisplayProps {
-  timer: CookingTimer;
-  onToggle: (id: string) => void;
-}
-
-function ActiveTimerDisplay({ timer, onToggle }: ActiveTimerDisplayProps) {
-  return (
-    <div className="mt-[18px] flex items-center gap-4">
-      <span className="font-solitreo text-5xl leading-none text-primary">{formatTimer(timer.remaining)}</span>
-      <button
-        onClick={() => onToggle(timer.id)}
-        aria-label={timer.running ? `Mettre en pause ${timer.label}` : `Reprendre ${timer.label}`}
-        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"
-      >
-        {timer.running
-          ? <Pause className="h-5 w-5" aria-hidden="true" />
-          : <Play className="h-5 w-5" aria-hidden="true" />}
-      </button>
-    </div>
-  );
-}
-
 interface CookingStepFocusProps {
   step: Step;
   idx: number;
   total: number;
+  ingredients: Ingredient[];
   onStartTimer: (label: string, seconds: number, stepIndex: number) => void;
-  /** Minuteur en cours lié à l'étape courante (null si aucun). */
-  activeTimer: CookingTimer | null;
-  onToggleTimer: (id: string) => void;
+  /** Un minuteur non terminé est déjà rattaché à l'étape courante. */
+  hasActiveTimer: boolean;
 }
 
-export function CookingStepFocus({ step, idx, total, onStartTimer, activeTimer, onToggleTimer }: CookingStepFocusProps) {
+function formatAnnotatedQuantity(
+  ingredient: Ingredient,
+  withoutUnit = false,
+  replacementUnit?: string,
+): string {
+  const unit = withoutUnit ? '' : replacementUnit ?? ingredient.unit;
+  return formatCookingQuantity({ ...ingredient, unit });
+}
+
+export function CookingStepFocus({
+  step,
+  idx,
+  total,
+  ingredients,
+  onStartTimer,
+  hasActiveTimer,
+}: CookingStepFocusProps) {
   const { segments, offeredMinutes } = useMemo(() => {
     const parsed = parseStepTimers(step.text);
     // Durées proposées : celles repérées dans le texte, complétées par la durée
@@ -91,7 +86,31 @@ export function CookingStepFocus({ step, idx, total, onStartTimer, activeTimer, 
   }, [step.text, step.duration_minutes]);
 
   const stepLabel = `Étape ${idx + 1}`;
-  const title = deriveStepTitle(step, idx);
+  const titleSegments = useMemo(
+    () => annotateCookingText(deriveStepTitle(step, idx), ingredients),
+    [step, idx, ingredients],
+  );
+  const title = useMemo(
+    () => titleSegments
+      .map(part => {
+        if (!part.ingredient || part.replacementSuffix === undefined) return part.text;
+        return `${formatAnnotatedQuantity(part.ingredient, part.quantityWithoutUnit, part.replacementUnit)}${part.replacementSuffix}`;
+      })
+      .join(''),
+    [titleSegments],
+  );
+  const annotatedSegments = useMemo(
+    () => segments.map(segment => segment.isDuration ? [] : annotateCookingText(segment.text, ingredients)),
+    [segments, ingredients],
+  );
+  const annotatedIngredients = useMemo(
+    () => new Set([
+      ...titleSegments.flatMap(part => part.ingredient && part.replacementSuffix !== undefined ? [part.ingredient] : []),
+      ...annotatedSegments.flatMap(parts => parts.flatMap(part => part.ingredient ? [part.ingredient] : [])),
+    ]),
+    [titleSegments, annotatedSegments],
+  );
+  const missingIngredients = ingredients.filter(ingredient => !annotatedIngredients.has(ingredient));
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-[22px] pb-4 pt-[22px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -110,20 +129,53 @@ export function CookingStepFocus({ step, idx, total, onStartTimer, activeTimer, 
                 {seg.text}
               </strong>
             ) : (
-              <span key={i}>{seg.text}</span>
+              annotatedSegments[i].map((part, partIndex) => {
+                const quantity = part.ingredient
+                  ? formatAnnotatedQuantity(part.ingredient, part.quantityWithoutUnit, part.replacementUnit)
+                  : '';
+                if (!part.ingredient || !quantity) return <span key={`${i}-${partIndex}`}>{part.text}</span>;
+                return part.replacementSuffix !== undefined ? (
+                  <span key={`${i}-${partIndex}`}>
+                    <strong className="whitespace-nowrap font-bold text-secondary underline decoration-accent/70 underline-offset-[3px]">
+                      {quantity}
+                    </strong>
+                    {part.replacementSuffix}
+                  </span>
+                ) : (
+                  <span key={`${i}-${partIndex}`}>
+                    {part.text}{' '}
+                    <strong className="whitespace-nowrap font-bold text-secondary underline decoration-accent/70 underline-offset-[3px]">
+                      ({quantity})
+                    </strong>
+                  </span>
+                );
+              })
             ),
           )}
         </p>
-        {activeTimer ? (
-          <ActiveTimerDisplay timer={activeTimer} onToggle={onToggleTimer} />
-        ) : (
-          offeredMinutes.length > 0 && (
-            <div className="mt-[18px] flex flex-wrap gap-2">
-              {offeredMinutes.map((min, i) => (
-                <TimerChip key={i} minutes={min} label={stepLabel} stepIndex={idx} onStart={onStartTimer} />
-              ))}
-            </div>
-          )
+
+        {missingIngredients.length > 0 && (
+          <p className="mt-4 font-crimson text-base leading-snug text-muted-foreground">
+            <strong className="font-bold text-foreground">À prévoir : </strong>
+            {missingIngredients.map((ingredient, ingredientIndex) => {
+              const quantity = formatCookingQuantity(ingredient);
+              return (
+                <span key={`${ingredient.name}-${ingredientIndex}`}>
+                  {ingredientIndex > 0 && ' · '}
+                  {quantity && <strong className="font-bold text-secondary">{quantity} </strong>}
+                  {ingredient.name}
+                </span>
+              );
+            })}
+          </p>
+        )}
+
+        {!hasActiveTimer && offeredMinutes.length > 0 && (
+          <div className="mt-[18px] flex flex-wrap gap-2">
+            {offeredMinutes.map((min, i) => (
+              <TimerChip key={i} minutes={min} label={stepLabel} stepIndex={idx} onStart={onStartTimer} />
+            ))}
+          </div>
         )}
       </div>
     </div>

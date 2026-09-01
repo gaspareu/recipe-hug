@@ -222,6 +222,17 @@ describe("propose_recipe — carte attachée au message", () => {
     });
   });
 
+  it("save_recipe ignore un identifiant de recette absent du livre", async () => {
+    const { result } = renderHook(() => useHomeChat());
+    await sendToolCall(result, "save_recipe", {
+      ...PENDING_RECIPE,
+      isUpdate: true,
+      originalRecipeId: "../../profile",
+    });
+
+    expect(lastMessage(result.current.messages).recipeCard).toBeUndefined();
+  });
+
   it("search_recipes attache des cartes saved construites depuis useRecipes", async () => {
     const { result } = renderHook(() => useHomeChat());
     await sendToolCall(result, "search_recipes", { query: "tarte" });
@@ -497,6 +508,32 @@ describe("useHomeChat — édition de recette", () => {
     // originalRecipeId doit être rattaché à r1 (via la recette chargée par get_recipe_details)
     // Le pending est stocké dans proposedPendingRef — on vérifie via la carte
     expect(lastMessage(result.current.messages).recipeCard?.status).toBe("proposed");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow : démarrage du mode cuisine
+// ---------------------------------------------------------------------------
+describe("useHomeChat — mode cuisine", () => {
+  it("conserve le nombre de portions choisi sur la carte recette", () => {
+    const { result } = renderHook(() => useHomeChat());
+
+    act(() => result.current.startCooking("r1", 6));
+
+    expect(result.current.cookingRecipeId).toBe("r1");
+    expect(result.current.cookingServings).toBe(6);
+
+    act(() => result.current.stopCooking());
+    expect(result.current.cookingRecipeId).toBeNull();
+  });
+
+  it("accepte un nombre de portions demandé par l’assistant", async () => {
+    const { result } = renderHook(() => useHomeChat());
+
+    await sendToolCall(result, "start_cooking", { recipe_id: "r1", servings: 3 });
+
+    expect(result.current.cookingRecipeId).toBe("r1");
+    expect(result.current.cookingServings).toBe(3);
   });
 });
 

@@ -14,6 +14,12 @@ export interface Step {
   text: string;
   /** Titre court de l'étape (« Cuire les œufs »). Généré par l'agent ; absent sur les recettes anciennes. */
   title?: string;
+  /**
+   * Noms des ingrédients utilisés pendant cette étape. Les noms reprennent
+   * ceux de `Recipe.ingredients` ; le mode cuisine utilise une détection
+   * textuelle de secours pour les recettes historiques.
+   */
+  ingredient_names?: string[];
   duration_minutes?: number;
   parallel_with?: number[];
   /**

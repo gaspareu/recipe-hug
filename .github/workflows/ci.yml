@@ -67,21 +67,19 @@ jobs:
         with:
           deno-version: v2.x
 
-      # --node-modules-dir=none : le job Deno n'exécute pas `npm ci`, donc pas de
-      #   node_modules local. Le repo porte un package.json -> Deno passe en mode
-      #   « byonm » et exige ce node_modules pour résoudre @types/node (référencé
-      #   par les types supabase-js). Ce flag force la résolution par le cache
-      #   Deno (comme le runtime edge en prod, sans node_modules).
+      # La configuration Deno des fonctions est isolée sous `supabase/functions/` :
+      # son lockfile ne résout que les imports Edge, indépendamment du package.json
+      # frontend modifié par Dependabot.
+      # `nodeModulesDir: none` force la résolution par le cache Deno (comme le
+      # runtime Edge en prod, sans node_modules).
       # --allow-env limité : les tests manipulent uniquement les clés IA factices
       #   et AI_KEYS_ENCRYPTION_SECRET via Deno.env.
-      # --frozen : garantit que la résolution Deno correspond au deno.lock versionné.
-      # --min-dep-age=0 : Deno résout aussi les dépendances npm du package.json
-      #   racine (frontend), qu'aucun module `_shared/` n'importe. Sa politique
-      #   d'âge minimal (24 h) faisait donc échouer le job sur chaque PR
-      #   Dependabot rebasée le jour d'une publication npm. Le garde-fou
-      #   supply-chain reste assuré côté frontend par `npm ci` (lockfile).
-      - name: Tests Deno (modules partagés)
-        run: deno test --allow-env=ANTHROPIC_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,AI_KEYS_ENCRYPTION_SECRET --node-modules-dir=none --frozen --min-dep-age=0 supabase/functions/_shared/
+      # --frozen : garantit que la résolution correspond au lockfile Edge versionné.
+      - name: Tests Deno (modules partagés et voix)
+        run: deno test --config supabase/functions/deno.json --allow-env=ANTHROPIC_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,AI_KEYS_ENCRYPTION_SECRET --frozen supabase/functions/_shared/ supabase/functions/elevenlabs-tts/ supabase/functions/elevenlabs-scribe-token/
+
+      - name: Typecheck des Edge Functions vocales
+        run: deno check --config supabase/functions/deno.json --frozen supabase/functions/elevenlabs-tts/index.ts supabase/functions/elevenlabs-scribe-token/index.ts
 
   e2e:
     name: E2E (Playwright)

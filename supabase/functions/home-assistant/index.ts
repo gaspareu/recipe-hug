@@ -2,10 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { captureEdgeException, initializeEdgeErrorMonitoring } from "../_shared/error-monitoring.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAIStreaming } from "../_shared/ai-providers.ts";
 import { formatPreferencesContext, formatFavoritesContext, formatRecipeContext } from "../_shared/context-format.ts";
 import { TM7_MODES, TM7_ACCESSORY_LABELS, buildTm7ReferenceForPrompt } from "../_shared/thermomix/reference.ts";
+
+initializeEdgeErrorMonitoring();
 
 // Input validation schema
 const ContentPartSchema = z.union([
@@ -61,6 +64,8 @@ const Tm7ParamsSchema = z.object({
 const StepSchema = z.object({
   order: z.number(),
   text: z.string(),
+  title: z.string().optional(),
+  ingredient_names: z.array(z.string()).optional(),
   completed: z.boolean().optional(),
   duration_minutes: z.number().nullable().optional(),
   tm7: Tm7ParamsSchema.nullable().optional(),
@@ -115,10 +120,11 @@ Format étapes — TOUTES les recettes sont destinées au Thermomix TM7. Rédige
 - Étapes manuelles (éplucher, réserver, dresser) : PAS d'objet "tm7" ; renseigne "duration_minutes" si un temps d'attente s'applique.
 - Respecte STRICTEMENT le RÉFÉRENTIEL THERMOMIX TM7 (fourni plus bas) : n'invente jamais une fonction, une vitesse ou une température absente du TM7. "Varoma" = cuisson vapeur (pas de °C) ; "sens inverse" pour mélanger sans hacher.
 - Donne à CHAQUE étape un "title" court (2-4 mots) résumant l'action, en plus du "text" détaillé.
+- Donne à CHAQUE étape "ingredient_names" : les noms EXACTS des ingrédients de la liste utilisés pendant cette étape. Omet uniquement si aucun ingrédient n'est ajouté ou manipulé.
 
 ### Skill : Guidage cuisine
 Quand l'utilisateur veut cuisiner une recette (qui est en contexte ou identifiée) :
-- Pour démarrer la préparation / "passer en mode cuisine" / être guidé pas à pas : appelle start_cooking (recipe_id) IMMÉDIATEMENT. Cela ouvre le mode cuisine plein écran (étapes en grand, minuteurs, écran maintenu allumé). Si aucune recette n'est encore identifiée, demande laquelle (ou propose search_recipes) avant.
+- Pour démarrer la préparation / "passer en mode cuisine" / être guidé pas à pas : appelle start_cooking (recipe_id, et servings si l'utilisateur a précisé un nombre de portions) IMMÉDIATEMENT. Cela ouvre le mode cuisine plein écran (étapes en grand, minuteurs, écran maintenu allumé). Si aucune recette n'est encore identifiée, demande laquelle (ou propose search_recipes) avant.
 - Une fois en cuisine, guide étape par étape
 - Adapte les quantités si changement de portions
 - Suggère des substitutions d'ingrédients
@@ -179,6 +185,12 @@ const STEP_ITEMS_SCHEMA = {
       type: "string",
       description:
         "Texte de l'étape. Pour une action machine : format Cookidoo, ex. « Mixer 8 min/100°C/vitesse 2 » ou « Cuire 15 min/Varoma/vitesse 1 ».",
+    },
+    ingredient_names: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Noms EXACTS, tels qu'ils apparaissent dans ingredients, des ingrédients utilisés pendant cette étape. Omettre si aucun ingrédient n'est concerné.",
     },
     duration_minutes: {
       type: "number",
@@ -270,6 +282,7 @@ const TOOLS = [
         properties: {
           recipe_id: { type: "string", description: "L'ID de la recette à cuisiner" },
           recipe_title: { type: "string", description: "Le titre de la recette (pour confirmation)" },
+          servings: { type: "number", description: "Nombre de portions demandé, si l'utilisateur l'a précisé" },
         },
         required: ["recipe_id", "recipe_title"],
       },
@@ -618,6 +631,7 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
       console.error("AI error:", response.status, errorText);
+      await captureEdgeException("home-assistant", `ai_upstream_${response.status}`);
       if (response.status === 429) return new Response(JSON.stringify({ error: "Trop de requêtes, réessaie dans un instant." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       // Anthropic signale un solde insuffisant par un 400 invalid_request_error « credit balance ».
       if (response.status === 402 || errorText.includes("credit balance")) {
@@ -631,6 +645,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("home-assistant error:", error);
+    await captureEdgeException("home-assistant", "unhandled_error");
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

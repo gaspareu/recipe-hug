@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { toast } from '@/components/ui/sonner';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Users, ListChecks, ChefHat, History } from 'lucide-react';
+import { ArrowLeft, Users, ListChecks, ChefHat, History, MessageCircle } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
 import { RecipeDetailHeader } from '@/components/recipes/RecipeDetailHeader';
@@ -17,13 +17,115 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { CookingModeContainer } from '@/components/cooking/CookingModeContainer';
-import { useRecipe, useToggleFavorite, useUpdateRecipe } from '@/hooks/useRecipes';
+import { CookingChatSheet } from '@/components/cooking/CookingChatSheet';
+import { useRecipe, useToggleFavorite, useUpdateRecipe, useCreateRecipe } from '@/hooks/useRecipes';
+import { useRecipeChat } from '@/hooks/useRecipeChat';
 import { useGenerateRecipeImage } from '@/hooks/useGenerateRecipeImage';
 import { useAsyncAction } from '@/hooks/useAsyncAction';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { buildRecipeImageObjectPath } from '@/lib/storage-paths';
-import type { Step } from '@/types/recipe';
+import type { PendingRecipe } from '@/hooks/useChatEngine';
+import type { Recipe, Step } from '@/types/recipe';
+
+const NO_COMPLETED_STEPS = new Set<number>();
+
+interface RecipeDetailAssistantProps {
+  recipe: Recipe;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  cookingRecipeId: string | null;
+  cookingServings?: number;
+  onCookingOpen: (recipeId: string, servings?: number) => void;
+  onCookingClose: () => void;
+}
+
+/** Session de chat conservée tant que la fiche recette reste montée. */
+function RecipeDetailAssistant({
+  recipe,
+  open,
+  onOpenChange,
+  cookingRecipeId,
+  cookingServings,
+  onCookingOpen,
+  onCookingClose,
+}: RecipeDetailAssistantProps) {
+  const updateRecipe = useUpdateRecipe();
+  const createRecipe = useCreateRecipe();
+
+  const handleRecipeUpdate = useCallback(async (data: PendingRecipe) => {
+    await updateRecipe.mutateAsync({
+      id: data.originalRecipeId ?? recipe.id,
+      title: data.title,
+      servings: data.servings,
+      ingredients: data.ingredients,
+      steps: data.steps,
+    });
+  }, [recipe.id, updateRecipe]);
+
+  const handleRecipeCreate = useCallback(async (data: PendingRecipe) => {
+    const created = await createRecipe.mutateAsync({
+      title: data.title,
+      servings: data.servings,
+      ingredients: data.ingredients,
+      steps: data.steps,
+      status: 'draft',
+      is_favorite: false,
+      source_type: 'ai',
+      ai_summary: data.relationToOriginal
+        ? `Inspiré de "${recipe.title}". ${data.relationToOriginal}`
+        : null,
+      season: null,
+      nutrition_tags: null,
+      calorie_score: null,
+      source_image_url: null,
+    });
+    return created.id;
+  }, [createRecipe, recipe.title]);
+
+  const chat = useRecipeChat({
+    recipe,
+    completedSteps: NO_COMPLETED_STEPS,
+    onRecipeUpdate: handleRecipeUpdate,
+    onRecipeCreate: handleRecipeCreate,
+    onStartCooking: onCookingOpen,
+  });
+
+  return (
+    <>
+      <CookingChatSheet
+        open={open}
+        onOpenChange={onOpenChange}
+        autoListen={false}
+        recipeTitle={recipe.title}
+        recipeServings={recipe.servings}
+        context="recipe"
+        messages={chat.messages}
+        isStreaming={chat.isStreaming}
+        toolActivity={chat.toolActivity}
+        isSavingRecipe={chat.isSavingRecipe}
+        sendMessage={chat.sendMessage}
+        onCreateRecipe={chat.createProposedRecipe}
+        onStartCooking={(recipeId, servings) => {
+          onOpenChange(false);
+          onCookingOpen(recipeId, servings);
+        }}
+        resetChat={chat.resetChat}
+        regenerateResponse={chat.regenerateResponse}
+        stopGeneration={chat.stopGeneration}
+      />
+      {cookingRecipeId && (
+        <CookingModeContainer
+          recipeId={cookingRecipeId}
+          initialServings={cookingServings}
+          chatSession={cookingRecipeId === recipe.id ? chat : undefined}
+          onStartCooking={onCookingOpen}
+          onClose={onCookingClose}
+        />
+      )}
+    </>
+  );
+}
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -34,13 +136,20 @@ export default function RecipeDetail() {
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
   const generateImage = useGenerateRecipeImage();
-  const [cooking, setCooking] = useState(false);
+  const [cookingTarget, setCookingTarget] = useState<{
+    sourceRecipeId: string;
+    recipeId: string;
+    servings?: number;
+  } | null>(null);
+  const [assistantState, setAssistantState] = useState({ recipeId: id ?? '', open: false });
   const [historyOpen, setHistoryOpen] = useState(false);
 
   // Valeurs dérivées calculées AVANT tout early return : les Hooks doivent être
   // appelés dans le même ordre à chaque rendu (sinon React #310 → page blanche).
   const steps = useMemo(() => (recipe?.steps || []) as Step[], [recipe?.steps]);
   const totalSteps = steps.length;
+  const assistantOpen = assistantState.recipeId === id && assistantState.open;
+  const activeCookingTarget = cookingTarget?.sourceRecipeId === id ? cookingTarget : null;
 
   const handleToggleFavorite = () => {
     if (!recipe) return;
@@ -105,7 +214,7 @@ export default function RecipeDetail() {
 
   return (
     <MainLayout>
-      <div className={`max-w-2xl mx-auto space-y-6 ${totalSteps > 0 ? 'pb-24' : ''}`}>
+      <div className="mx-auto max-w-2xl space-y-6 pb-24">
         {/* Image avec actions en surimpression */}
         <motion.div
           className="relative"
@@ -178,21 +287,50 @@ export default function RecipeDetail() {
           </SheetContent>
         </Sheet>
 
-        {/* CTA principal : ouvrir le mode cuisine */}
-        {totalSteps > 0 && (
-          <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-background/80 backdrop-blur-sm border-t border-border z-10">
-            <div className="max-w-2xl mx-auto">
-              <Button onClick={() => setCooking(true)} size="lg" className="w-full h-12 gap-2 text-base font-semibold">
-                <ChefHat className="h-5 w-5" aria-hidden="true" />
-                Commencer à cuisiner
+        {/* Accès persistants à Chef et au mode cuisine. */}
+        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-background/80 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
+          <div className="mx-auto flex max-w-2xl gap-2">
+            <Button
+              onClick={() => setAssistantState({ recipeId: recipe.id, open: true })}
+              variant="outline"
+              size="lg"
+              className="h-12 min-w-0 flex-1 gap-1.5 overflow-hidden px-2 text-sm font-semibold sm:gap-2 sm:px-8 sm:text-base"
+              aria-label="Demander à Chef"
+            >
+              <MessageCircle className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" aria-hidden="true" />
+              <span className="truncate">Demander à Chef</span>
+            </Button>
+            {totalSteps > 0 && (
+              <Button
+                onClick={() => setCookingTarget({
+                  sourceRecipeId: recipe.id,
+                  recipeId: recipe.id,
+                  servings: recipe.servings ?? undefined,
+                })}
+                size="lg"
+                className="h-12 min-w-0 flex-1 gap-1.5 px-2 text-sm font-semibold sm:gap-2 sm:px-8 sm:text-base"
+              >
+                <ChefHat className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" aria-hidden="true" />
+                Cuisiner
               </Button>
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Mode cuisine plein écran (overlay) */}
-      {cooking && <CookingModeContainer recipeId={recipe.id} onClose={() => setCooking(false)} />}
+      <RecipeDetailAssistant
+        recipe={recipe}
+        open={assistantOpen}
+        onOpenChange={(open) => setAssistantState({ recipeId: recipe.id, open })}
+        cookingRecipeId={activeCookingTarget?.recipeId ?? null}
+        cookingServings={activeCookingTarget?.servings}
+        onCookingOpen={(recipeId, servings) => setCookingTarget({
+          sourceRecipeId: recipe.id,
+          recipeId,
+          servings,
+        })}
+        onCookingClose={() => setCookingTarget(null)}
+      />
     </MainLayout>
   );
 }

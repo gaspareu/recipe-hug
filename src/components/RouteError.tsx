@@ -1,7 +1,9 @@
-import { useRouteError, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useRouteError, useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw, Home, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { isChunkLoadError } from '@/lib/chunk-error';
+import { reportRouteError } from '@/lib/error-monitoring';
 
 /**
  * Écran de récupération affiché par le data router (errorElement) lorsqu'une route
@@ -10,7 +12,12 @@ import { isChunkLoadError } from '@/lib/chunk-error';
 export function RouteError() {
   const error = useRouteError();
   const navigate = useNavigate();
+  const location = useLocation();
   const isChunk = isChunkLoadError(error);
+
+  useEffect(() => {
+    reportRouteError(error, location.pathname, isChunk);
+  }, [error, isChunk, location.pathname]);
 
   const title = isChunk ? 'Nouvelle version disponible' : 'Une erreur est survenue';
   const description = isChunk
