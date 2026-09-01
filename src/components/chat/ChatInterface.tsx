@@ -100,7 +100,6 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const navigate = useNavigate();
   const [input, setInput] = useState('');
-  const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -259,8 +258,7 @@ export function ChatInterface({
   const showProcessingIndicator = isSavingRecipe || Boolean(toolActivity) || showThinkingIndicator;
   const showSuggestions = activeSuggestions.length > 0
     && input.length === 0
-    && !selectedImage
-    && !isComposerFocused;
+    && !selectedImage;
 
   // Une activité déclenchée depuis une carte peut se situer sous le bord visible
   // de l'historique. On la rend immédiatement lisible si l'utilisateur suivait
@@ -455,8 +453,6 @@ export function ChatInterface({
           <textarea
             ref={inputRef}
             value={input}
-            onFocus={() => setIsComposerFocused(true)}
-            onBlur={() => setIsComposerFocused(false)}
             onChange={e => {
               setInput(e.target.value);
               const target = e.target;
