@@ -151,20 +151,17 @@ describe("ChatInterface — responsive", () => {
       expect(collapse.parentElement).not.toHaveClass("space-y-3");
     });
 
-    it("masque les suggestions dès le focus et les réaffiche au blur si le composeur est vide", () => {
+    it("masque les suggestions pendant la saisie et les réaffiche lorsque le composeur est vidé", () => {
       render(<ChatInterface {...defaultProps} />);
       const input = screen.getByRole("textbox", { name: "Poser une question" });
 
       fireEvent.focus(input);
-      expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
+      expect(screen.getByTestId("suggestions-scroll")).toBeInTheDocument();
 
       fireEvent.change(input, { target: { value: "Je veux une tarte" } });
       expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
 
       fireEvent.change(input, { target: { value: "" } });
-      expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
-
-      fireEvent.blur(input);
       expect(screen.getByTestId("suggestions-scroll")).toBeInTheDocument();
     });
 
