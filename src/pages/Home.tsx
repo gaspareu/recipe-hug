@@ -108,7 +108,7 @@ export default function Home() {
                 transition={{ duration: 0.5, ease: 'easeOut' }}
                 className="flex flex-col items-center"
               >
-                <img src="/icons/icon-192x192.png" alt="" className="w-[72px] h-[72px] rounded-[18px] mb-[18px] opacity-95" />
+                <img src="/brand/recipe-book-logo.png" alt="" className="mb-[18px] h-[72px] w-[72px] object-contain opacity-95" />
                 <h1 className="text-3xl md:text-4xl font-solitreo text-foreground text-center mb-2">
                   Toujours prêt à cuisiner.
                 </h1>
