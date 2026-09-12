@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, CalendarDays, X, Utensils, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, CalendarDays, X, Plus } from 'lucide-react';
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -15,6 +15,7 @@ import { useRecipes } from '@/hooks/useRecipes';
 import { useMealPlans, useAddMealPlan, useDeleteMealPlan, type MealPlansData } from '@/hooks/useMealPlans';
 import { GroceryListSheet } from '@/components/meal-planning/GroceryListSheet';
 import { toast } from '@/components/ui/sonner';
+import { AppBookmarkRail } from '@/components/layout/AppBookmarkRail';
 
 const MEAL_TYPES = [
   { key: 'breakfast', label: 'Petit-déj', icon: '☀️' },
@@ -166,10 +167,10 @@ export default function MealPlanning() {
   const canAdd = selectedRecipeId !== null || customMealText.trim().length > 0;
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col pt-[env(safe-area-inset-top)]">
+    <div className="min-h-[100dvh] bg-background flex flex-col pt-[env(safe-area-inset-top)] [--bookmark-rail-width:44px]">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border">
-        <div className="container max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="container max-w-4xl mx-auto px-4 pr-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right)+1rem)] py-3 flex items-center justify-between">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="h-9 w-9">
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -180,15 +181,12 @@ export default function MealPlanning() {
               customMeals={groceryData.customMeals}
               hasMeals={meals.length > 0}
             />
-            <Button variant="ghost" size="icon" onClick={() => navigate('/home')} title="Demander à Chef" className="h-9 w-9">
-              <Utensils className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       </header>
 
       {/* Week navigator */}
-      <div className="container max-w-4xl mx-auto px-4 py-3">
+      <div className="container max-w-4xl mx-auto px-4 pr-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right)+1rem)] py-3">
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="icon" onClick={() => setCurrentDate(d => subWeeks(d, 1))} className="h-8 w-8">
             <ChevronLeft className="h-4 w-4" />
@@ -206,7 +204,7 @@ export default function MealPlanning() {
       </div>
 
       {/* Planning grid */}
-      <div className="flex-1 container max-w-4xl mx-auto px-4 pb-6">
+      <div className="flex-1 container max-w-4xl mx-auto px-4 pr-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right)+1rem)] pb-6">
         {isLoading ? (
           <div className="space-y-4">
             {Array.from({ length: 7 }).map((_, i) => (
@@ -374,6 +372,7 @@ export default function MealPlanning() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AppBookmarkRail />
     </div>
   );
 }

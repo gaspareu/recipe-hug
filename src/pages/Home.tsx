@@ -1,42 +1,21 @@
-import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, User, CalendarDays, Menu } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import { Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { useHomeChat } from '@/hooks/useHomeChat';
-import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { useViewportHeight } from '@/hooks/useViewportHeight';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { CookingModeContainer } from '@/components/cooking/CookingModeContainer';
 import { InstallBanner } from '@/components/InstallBanner';
+import { AppBookmarkRail } from '@/components/layout/AppBookmarkRail';
 
 export default function Home() {
-  const navigate = useNavigate();
   const {
     messages, isStreaming, toolActivity, isSavingRecipe,
     sendMessage, resetChat, createProposedRecipe, regenerateResponse, stopGeneration,
     cookingRecipeId, cookingServings, startCooking, stopCooking,
   } = useHomeChat();
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  const { handlers: swipeHandlers, style: swipeStyle } = useSwipeNavigation({
-    targetRoute: '/dashboard', direction: 'left', threshold: 80,
-  });
   useViewportHeight();
-
-  useEffect(() => {
-    const isMobile = window.innerWidth < 768;
-    if (isMobile && inputRef.current) {
-      const timer = setTimeout(() => inputRef.current?.focus(), 300);
-      return () => clearTimeout(timer);
-    }
-  }, []);
 
   const defaultSuggestions = ['Planifier ma semaine', 'Chercher une recette de poulet', 'Créer une recette de tarte', 'Voir toutes mes recettes'];
 
@@ -49,43 +28,22 @@ export default function Home() {
   return (
     <div
       className="fixed inset-x-0 top-[var(--app-vh-top,0px)] h-[var(--app-vh,100dvh)] flex flex-col bg-background pt-[env(safe-area-inset-top)]"
-      {...swipeHandlers}
-      style={swipeStyle}
+      style={{ '--bookmark-rail-width': '44px' } as CSSProperties}
+      data-testid="home-shell"
     >
       {/* Minimal header */}
-      <header className="absolute top-0 left-0 right-0 z-10 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] bg-background/80 backdrop-blur-sm">
+      <header className="absolute top-0 left-0 right-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right))] z-10 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] bg-background/80 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={resetChat} disabled={isStreaming || !hasConversation} title="Nouvelle conversation" className="h-9 w-9">
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Menu" className="h-9 w-9">
-                <Menu className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate('/meal-planning')}>
-                <CalendarDays className="mr-2 h-4 w-4" />
-                Planning repas
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                <BookOpen className="mr-2 h-4 w-4" />
-                Livre de recettes
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/profile')}>
-                <User className="mr-2 h-4 w-4" />
-                Profil
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </header>
 
       {/* Chat area */}
-      <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full pt-16 min-h-0">
+      <div className="flex-1 flex min-h-0 w-full max-w-3xl mx-auto pt-16 pr-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right))]">
         <ChatInterface
           messages={messages}
           isStreaming={isStreaming}
@@ -99,6 +57,7 @@ export default function Home() {
           suggestions={defaultSuggestions}
           placeholder="Poser une question"
           showWelcomeScreen={true}
+          flushRightEdge
           skipFirstMessage={true}
           welcomeContent={
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4">
@@ -121,9 +80,11 @@ export default function Home() {
         />
       </div>
       {/* Bannière d'installation PWA dans le flux (pas fixed) pour ne pas masquer l'input */}
-      <div className="shrink-0 pb-[var(--app-safe-area-bottom,env(safe-area-inset-bottom))]">
+      <div className="shrink-0 pr-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right))] pb-[var(--app-safe-area-bottom,env(safe-area-inset-bottom))]">
         <InstallBanner />
       </div>
+
+      <AppBookmarkRail viewportHeight="app" />
 
       {/* Mode cuisine plein écran (déclenché par l'assistant ou le bouton « Cuisiner ») */}
       {cookingRecipeId && (

@@ -13,6 +13,7 @@ import { ExportToCookidooButton } from './ExportToCookidooButton';
 
 interface RecipeActionsMenuProps {
   recipeId: string;
+  bookSearch?: string;
   onAnalyzeAndGenerate: () => void;
   isAnalyzing: boolean;
   onOpenHistory: () => void;
@@ -23,7 +24,7 @@ interface RecipeActionsMenuProps {
  * pour désencombrer le haut de la page (cf. refonte #5). Le favori reste un
  * bouton direct ; le menu pilote les dialogs Partage / Cookidoo (contrôlés).
  */
-export function RecipeActionsMenu({ recipeId, onAnalyzeAndGenerate, isAnalyzing, onOpenHistory }: RecipeActionsMenuProps) {
+export function RecipeActionsMenu({ recipeId, bookSearch = '', onAnalyzeAndGenerate, isAnalyzing, onOpenHistory }: RecipeActionsMenuProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -42,7 +43,7 @@ export function RecipeActionsMenu({ recipeId, onAnalyzeAndGenerate, isAnalyzing,
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem asChild>
-            <Link to={`/recipes/${recipeId}/edit`}>
+            <Link to={`/recipes/${recipeId}/edit${bookSearch}`}>
               <Pencil className="mr-2 h-4 w-4" />Éditer
             </Link>
           </DropdownMenuItem>
