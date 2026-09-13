@@ -51,6 +51,7 @@ vi.mock('@/components/cooking/CookingChatSheet', () => ({
 }));
 vi.mock('@/hooks/useRecipeChat', () => ({ useRecipeChat: mockUseRecipeChat }));
 vi.mock('@/hooks/useRecipes', () => ({
+  useRecipes: () => ({ data: [] }),
   useRecipe: () => ({ data: hookState.recipe, isLoading: false }),
   useToggleFavorite: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateRecipe: () => ({ mutateAsync: mockUpdateRecipe }),

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { Link, useParams, useNavigate, useBlocker, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, X, Trash2 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,7 @@ import { useRecipe, useUpdateRecipe, useDeleteRecipe } from '@/hooks/useRecipes'
 import { motion, useReducedMotion } from 'framer-motion';
 import { CollapsibleSection } from '@/components/profile/CollapsibleSection';
 import { fadeInUpVariants, fadeInUpTransition } from '@/lib/motion';
+import { parseRecipeBookFilters, recipeBookSearch } from '@/lib/recipe-book-filters';
 
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
@@ -46,6 +47,8 @@ const SEASONS = ['printemps', 'été', 'automne', 'hiver', 'toutes saisons'];
 export default function RecipeEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const bookSearch = recipeBookSearch(parseRecipeBookFilters(searchParams));
 
   const { data: recipe, isLoading } = useRecipe(id || '');
   const updateRecipe = useUpdateRecipe();
@@ -112,7 +115,7 @@ export default function RecipeEdit() {
       });
 
       setIsDirty(false);
-      navigate(`/recipes/${id}`);
+      navigate(`/recipes/${id}${bookSearch}`);
     } catch (error) {
       console.error('Error updating recipe:', error);
       toast("Impossible d'enregistrer les modifications");
@@ -125,7 +128,7 @@ export default function RecipeEdit() {
     try {
       await deleteRecipe.mutateAsync(id);
       setIsDirty(false);
-      navigate('/dashboard');
+      navigate(`/dashboard${bookSearch}`);
     } catch (error) {
       console.error('Error deleting recipe:', error);
     }
@@ -157,9 +160,7 @@ export default function RecipeEdit() {
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
+            <Button variant="ghost" size="icon" asChild><Link to={`/recipes/${id}${bookSearch}`} aria-label="Retour à la recette"><ArrowLeft className="h-5 w-5" /></Link></Button>
             <h1 className="text-2xl font-bold text-foreground">Modifier la recette</h1>
           </div>
           <Button type="submit" form="recipe-edit-form" loading={updateRecipe.isPending}>

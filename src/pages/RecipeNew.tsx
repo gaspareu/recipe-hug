@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, X, Camera, PenLine } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import { fadeInUpVariants, fadeInUpTransition } from '@/lib/motion';
 import { useCreateRecipe } from '@/hooks/useRecipes';
 import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { parseRecipeBookFilters, recipeBookSearch } from '@/lib/recipe-book-filters';
 
 import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
 
@@ -77,6 +78,7 @@ async function parseImageWithAI(
 
 export default function RecipeNew() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const createRecipe = useCreateRecipe();
   const reduceMotion = useReducedMotion();
 
@@ -96,6 +98,8 @@ export default function RecipeNew() {
   const [steps, setSteps] = useState<Step[]>([]);
   const [nutritionTags, setNutritionTags] = useState<string[]>([]);
   const [season, setSeason] = useState<string>('');
+  const bookSearch = recipeBookSearch(parseRecipeBookFilters(searchParams));
+  const backToBook = `/dashboard${bookSearch}`;
 
   const handleImageSelected = useCallback(async (file: File) => {
     setAnalyzeError(null);
@@ -168,7 +172,7 @@ export default function RecipeNew() {
         skipImageGeneration: !!uploadedImageUrl,
         is_favorite: false,
       });
-      navigate(`/recipes/${newRecipe.id}`);
+      navigate(`/recipes/${newRecipe.id}${bookSearch}`);
     } catch (error) {
       console.error('Error creating recipe:', error);
     }
@@ -180,9 +184,7 @@ export default function RecipeNew() {
       <MainLayout>
         <div className="max-w-2xl mx-auto space-y-6">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
+            <Button variant="ghost" size="icon" asChild><Link to={backToBook} aria-label="Retour au livre"><ArrowLeft className="h-5 w-5" /></Link></Button>
             <h1 className="text-2xl font-bold text-foreground">Nouvelle recette</h1>
           </div>
 
@@ -235,9 +237,7 @@ export default function RecipeNew() {
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
+            <Button variant="ghost" size="icon" asChild><Link to={backToBook} aria-label="Retour au livre"><ArrowLeft className="h-5 w-5" /></Link></Button>
             <h1 className="text-2xl font-bold text-foreground">
               {mode === 'photo' ? 'Recette depuis photo' : 'Nouvelle recette'}
             </h1>

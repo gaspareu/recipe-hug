@@ -38,6 +38,7 @@ describe('useViewportHeight', () => {
     vi.useFakeTimers();
     viewport = new FakeVisualViewport();
     vi.stubGlobal('visualViewport', viewport);
+    vi.stubGlobal('innerHeight', 852);
   });
 
   afterEach(() => {
@@ -51,6 +52,38 @@ describe('useViewportHeight', () => {
 
     expect(readVar(APP_VIEWPORT_HEIGHT_VAR)).toBe('852px');
     expect(readVar(APP_VIEWPORT_TOP_VAR)).toBe('0px');
+  });
+
+  it('ne dépasse pas la hauteur de la fenêtre quand le viewport visuel est arrondi au-dessus', () => {
+    vi.stubGlobal('innerHeight', 667);
+    viewport.height = 673.8;
+
+    renderHook(() => useViewportHeight());
+
+    expect(readVar(APP_VIEWPORT_HEIGHT_VAR)).toBe('667px');
+  });
+
+  it('utilise toute la hauteur de la PWA standalone quand le clavier est fermé', () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }));
+    viewport.height = 759;
+
+    renderHook(() => useViewportHeight());
+
+    expect(readVar(APP_VIEWPORT_HEIGHT_VAR)).toBe('100vh');
+    expect(readVar(APP_VIEWPORT_TOP_VAR)).toBe('0px');
+  });
+
+  it('revient au viewport visuel quand le clavier est ouvert dans la PWA', () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }));
+    vi.stubGlobal('innerHeight', 759);
+    renderHook(() => useViewportHeight());
+
+    viewport.emitResize(420, 12);
+    flushFrames();
+
+    expect(readVar(APP_VIEWPORT_HEIGHT_VAR)).toBe('420px');
+    expect(readVar(APP_VIEWPORT_TOP_VAR)).toBe('12px');
+    expect(readVar(APP_SAFE_AREA_BOTTOM_VAR)).toBe('0px');
   });
 
   it('réduit la hauteur à l’ouverture du clavier', () => {
@@ -68,7 +101,7 @@ describe('useViewportHeight', () => {
 
     expect(readVar(APP_SAFE_AREA_BOTTOM_VAR)).toBe('');
 
-    viewport.emitResize(700);
+    viewport.emitResize(710);
     flushFrames();
 
     expect(readVar(APP_SAFE_AREA_BOTTOM_VAR)).toBe('');

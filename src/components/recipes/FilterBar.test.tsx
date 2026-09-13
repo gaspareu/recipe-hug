@@ -13,6 +13,8 @@ function setup(overrides: Partial<React.ComponentProps<typeof FilterBar>> = {}) 
     onFavoritesOnlyChange: vi.fn(),
     seasonFilter: "all",
     onSeasonFilterChange: vi.fn(),
+    onShowAll: vi.fn(),
+    onClearAll: vi.fn(),
     ...overrides,
   };
   render(<FilterBar {...props} />);
@@ -47,9 +49,12 @@ describe("FilterBar", () => {
     expect(clear).toBeInTheDocument();
 
     await user.click(clear);
-    expect(props.onStatusFilterChange).toHaveBeenCalledWith("all");
-    expect(props.onFavoritesOnlyChange).toHaveBeenCalledWith(false);
-    expect(props.onSeasonFilterChange).toHaveBeenCalledWith("all");
-    expect(props.onSearchChange).toHaveBeenCalledWith("");
+    expect(props.onClearAll).toHaveBeenCalledOnce();
+  });
+
+  it("conserve Toutes actif quand seul l'ordre change", () => {
+    setup({ sortBy: 'alpha' });
+
+    expect(screen.getByRole('button', { name: 'Toutes' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

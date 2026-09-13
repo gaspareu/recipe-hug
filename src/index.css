@@ -57,6 +57,17 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Surfaces éditoriales du livre : les tokens généraux restent inchangés. */
+    --book-surface: 36.5 100% 95.5%;
+    --book-ink: 26.7 10.3% 17.1%;
+    --book-bookmark: 15.2 53.8% 54.1%;
+    --book-bookmark-foreground: 25.7 13.2% 10.4%;
+    --book-organize: 116.2 13.7% 54.1%;
+    --book-accent: 40.5 75.5% 60%;
+    /* Signet actif : vert forêt/crème, plus doux que noir sur terre cuite. */
+    --book-rail-active: 128 20% 31%;
+    --book-rail-active-foreground: 36.5 100% 95.5%;
   }
 
   .dark {
@@ -96,7 +107,33 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 45 30% 92%;
     --sidebar-border: 120 8% 20%;
     --sidebar-ring: 96 35% 55%;
+
+    --book-surface: 25.7 13.2% 10.4%;
+    --book-ink: 38 55.6% 89.4%;
+    --book-bookmark: 15.9 63.5% 59.2%;
+    --book-bookmark-foreground: 25.7 13.2% 10.4%;
+    --book-organize: 106.5 13.2% 53.9%;
+    --book-accent: 38.5 54.8% 53.1%;
+    --book-rail-active: 128 22% 38%;
+    --book-rail-active-foreground: 36.5 100% 95.5%;
   }
+}
+
+/* Échelle : contenu < barres persistantes < rail < portails Radix < cuisine. */
+.bookmark-rail-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bookmark-rail-label {
+    animation: bookmark-label-in 180ms var(--ease-standard) both;
+  }
+}
+
+@keyframes bookmark-label-in {
+  from { opacity: 0; transform: rotate(180deg) translateY(-4px); }
+  to { opacity: 1; transform: rotate(180deg); }
 }
 
 @layer base {

@@ -1,16 +1,16 @@
 import { useCallback, useState, useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { toast } from '@/components/ui/sonner';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Users, ListChecks, ChefHat, History, MessageCircle } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { BookPageFrame } from '@/components/layout/BookPageFrame';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
 import { RecipeDetailHeader } from '@/components/recipes/RecipeDetailHeader';
 import { RecipeActionsMenu } from '@/components/recipes/RecipeActionsMenu';
 import { RecipeStepsList } from '@/components/recipes/RecipeStepsList';
 import { RecipeVersionHistory } from '@/components/recipes/RecipeVersionHistory';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -25,6 +25,9 @@ import { useAsyncAction } from '@/hooks/useAsyncAction';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { buildRecipeImageObjectPath } from '@/lib/storage-paths';
+import { parseRecipeBookFilters, recipeBookSearch } from '@/lib/recipe-book-filters';
+import { useRecipeBookNavigation } from '@/hooks/useRecipeBookNavigation';
+import { RecipePageNavigation } from '@/components/recipes/RecipePageNavigation';
 import type { PendingRecipe } from '@/hooks/useChatEngine';
 import type { Recipe, Step } from '@/types/recipe';
 
@@ -129,10 +132,11 @@ function RecipeDetailAssistant({
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const { data: recipe, isLoading } = useRecipe(id || '');
+  const bookNavigation = useRecipeBookNavigation(id || '');
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
   const generateImage = useGenerateRecipeImage();
@@ -150,6 +154,8 @@ export default function RecipeDetail() {
   const totalSteps = steps.length;
   const assistantOpen = assistantState.recipeId === id && assistantState.open;
   const activeCookingTarget = cookingTarget?.sourceRecipeId === id ? cookingTarget : null;
+  const bookSearch = useMemo(() => recipeBookSearch(parseRecipeBookFilters(searchParams)), [searchParams]);
+  const backToBook = `/dashboard${bookSearch}`;
 
   const handleToggleFavorite = () => {
     if (!recipe) return;
@@ -199,7 +205,7 @@ export default function RecipeDetail() {
     return <MainLayout><div className="max-w-2xl mx-auto space-y-6"><Skeleton className="h-10 w-48" /><Skeleton className="h-[200px]" /><Skeleton className="h-[200px]" /></div></MainLayout>;
   }
   if (!recipe) {
-    return <MainLayout><div className="text-center py-12"><p className="text-muted-foreground">Recette introuvable</p><Button asChild className="mt-4"><Link to="/dashboard">Retour au dashboard</Link></Button></div></MainLayout>;
+    return <MainLayout><div className="text-center py-12"><p className="text-muted-foreground">Recette introuvable</p><Button asChild className="mt-4"><Link to={backToBook}>Retour au livre</Link></Button></div></MainLayout>;
   }
 
   const handleAnalyzeAndGenerate = () => {
@@ -214,7 +220,7 @@ export default function RecipeDetail() {
 
   return (
     <MainLayout>
-      <div className="mx-auto max-w-2xl space-y-6 pb-24">
+      <BookPageFrame className="space-y-6 pb-28">
         {/* Image avec actions en surimpression */}
         <motion.div
           className="relative"
@@ -223,14 +229,16 @@ export default function RecipeDetail() {
           transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }}
         >
           <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={imageChange.run} onImageRemove={imageRemove.run} showTitleOverlay={false} />
-          <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/50 to-transparent pointer-events-none rounded-t-lg" />
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Retour" className="absolute top-3 left-3 bg-background/60 backdrop-blur-sm hover:bg-background/80">
+          <Button variant="secondary" size="sm" asChild className="absolute left-3 top-3 h-11">
+            <Link to={backToBook} aria-label="Retour au livre">
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+              <span className="ml-1">Retour au livre</span>
+            </Link>
           </Button>
           <div className="absolute top-3 right-3 flex items-center gap-1" data-testid="action-buttons">
             <TooltipProvider>
               <FavoriteToggle isFavorite={recipe.is_favorite} onToggle={handleToggleFavorite} disabled={toggleFavorite.isPending} tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} variant="overlay" />
-              <RecipeActionsMenu recipeId={recipe.id} onAnalyzeAndGenerate={handleAnalyzeAndGenerate} isAnalyzing={isAnalyzing} onOpenHistory={() => setHistoryOpen(true)} />
+              <RecipeActionsMenu recipeId={recipe.id} bookSearch={bookSearch} onAnalyzeAndGenerate={handleAnalyzeAndGenerate} isAnalyzing={isAnalyzing} onOpenHistory={() => setHistoryOpen(true)} />
             </TooltipProvider>
           </div>
         </motion.div>
@@ -238,44 +246,42 @@ export default function RecipeDetail() {
         <RecipeDetailHeader title={recipe.title} description={recipe.ai_summary} />
 
         {recipe.ingredients.length === 0 ? (
-          <Card className="rounded-2xl border-border bg-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-solitreo text-xl font-normal tracking-normal">
+          <section className="border-t border-[hsl(var(--book-ink)/0.18)] py-5">
+            <div className="flex items-center gap-2 font-solitreo text-xl font-normal tracking-normal">
                 <ListChecks className="h-5 w-5" />
                 Ingrédients
                 {recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />{recipe.servings} portions</span>}
-              </CardTitle>
-            </CardHeader>
-            <CardContent><p className="text-muted-foreground text-sm">Aucun ingrédient</p></CardContent>
-          </Card>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground">Aucun ingrédient</p>
+          </section>
         ) : (
-          <Card className="rounded-2xl border-border bg-card">
+          <section className="border-t border-[hsl(var(--book-ink)/0.18)] py-5">
             <IngredientChecklistWithHeader ingredients={recipe.ingredients} recipeId={id} renderHeader={toggleButton => (
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between font-solitreo text-xl font-normal tracking-normal">
+              <div className="pb-2">
+                <div className="flex items-center justify-between font-solitreo text-xl font-normal tracking-normal">
                   <span className="flex items-center gap-2">
                     <ListChecks className="h-5 w-5" />
                     Ingrédients
                     {recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1 ml-1"><Users className="h-3.5 w-3.5" />{recipe.servings} portions</span>}
                   </span>
                   {toggleButton}
-                </CardTitle>
-              </CardHeader>
+                </div>
+              </div>
             )} />
-          </Card>
+          </section>
         )}
 
-        <Card className="rounded-2xl border-border bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between font-solitreo text-xl font-normal tracking-normal">
+        <section className="border-t border-[hsl(var(--book-ink)/0.18)] py-5">
+          <div className="pb-4">
+            <div className="flex items-center justify-between font-solitreo text-xl font-normal tracking-normal">
               <span>Étapes</span>
               {totalSteps > 0 && <span className="text-sm font-normal text-muted-foreground">{totalSteps} étapes</span>}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RecipeStepsList steps={steps} />
-          </CardContent>
-        </Card>
+            </div>
+          </div>
+          <RecipeStepsList steps={steps} />
+        </section>
+
+        <RecipePageNavigation previous={bookNavigation.previous} next={bookNavigation.next} search={bookNavigation.search} />
 
         {/* Historique des versions (ouvert depuis le menu d'actions) */}
         <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
@@ -288,8 +294,8 @@ export default function RecipeDetail() {
         </Sheet>
 
         {/* Accès persistants à Chef et au mode cuisine. */}
-        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-background/80 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
-          <div className="mx-auto flex max-w-2xl gap-2">
+        <div className="fixed bottom-0 left-0 right-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right))] z-20 border-t border-border bg-background/90 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
+          <div className="mx-auto flex max-w-3xl gap-2">
             <Button
               onClick={() => setAssistantState({ recipeId: recipe.id, open: true })}
               variant="outline"
@@ -316,7 +322,7 @@ export default function RecipeDetail() {
             )}
           </div>
         </div>
-      </div>
+      </BookPageFrame>
 
       <RecipeDetailAssistant
         recipe={recipe}
