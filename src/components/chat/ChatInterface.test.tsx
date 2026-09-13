@@ -121,6 +121,12 @@ const defaultProps = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("ChatInterface — responsive", () => {
+  it("peut se contracter dans la largeur restante à côté des signets", () => {
+    const { container } = render(<ChatInterface {...defaultProps} />);
+
+    expect(container.firstElementChild).toHaveClass("min-w-0");
+  });
+
   describe("zone de suggestions", () => {
     it("affiche la zone de suggestions scrollable avec les classes responsive correctes", () => {
       render(<ChatInterface {...defaultProps} />);
@@ -178,6 +184,21 @@ describe("ChatInterface — responsive", () => {
   });
 
   describe("composeur mobile", () => {
+    it("peut rejoindre le bord droit de sa colonne sur l'accueil", () => {
+      render(<ChatInterface {...defaultProps} flushRightEdge />);
+
+      expect(screen.getByTestId("chat-composer").parentElement).toHaveClass("pl-4", "pr-0");
+    });
+
+    it("garde le champ de saisie focalisable au clavier", () => {
+      render(<ChatInterface {...defaultProps} />);
+      const input = screen.getByRole("textbox", { name: "Poser une question" });
+
+      input.focus();
+
+      expect(input).toHaveFocus();
+    });
+
     it("place les actions sur une rangée dédiée avec des cibles tactiles de 44 px", () => {
       render(<ChatInterface {...defaultProps} />);
 

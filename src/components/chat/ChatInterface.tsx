@@ -73,6 +73,8 @@ interface ChatInterfaceProps {
   welcomeContent?: React.ReactNode;
   headerContent?: React.ReactNode;
   className?: string;
+  /** Retire la gouttière droite du composeur quand un rail occupe déjà ce bord. */
+  flushRightEdge?: boolean;
   /** If true, skip the first (welcome) message in display */
   skipFirstMessage?: boolean;
   /** Si vrai, active et démarre l'écoute vocale dès le montage (mode cuisine). */
@@ -95,6 +97,7 @@ export function ChatInterface({
   welcomeContent,
   headerContent,
   className = '',
+  flushRightEdge = false,
   skipFirstMessage = false,
   autoListenOnMount = false,
 }: ChatInterfaceProps) {
@@ -268,7 +271,7 @@ export function ChatInterface({
   }, [showProcessingIndicator, scrollToBottom]);
 
   return (
-    <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
+    <div className={`flex min-w-0 flex-col flex-1 min-h-0 ${className}`}>
       {headerContent}
 
       {/* Main content */}
@@ -391,7 +394,7 @@ export function ChatInterface({
       )}
 
       {/* Bottom area */}
-      <div className="relative z-10 shrink-0 border-t border-border bg-background/80 p-4 backdrop-blur-sm">
+      <div className={`relative z-10 shrink-0 border-t border-border bg-background/80 py-4 pl-4 backdrop-blur-sm ${flushRightEdge ? 'pr-0' : 'pr-4'}`}>
         {/* Quick suggestions */}
         <AnimatePresence initial={false}>
           {showSuggestions && (

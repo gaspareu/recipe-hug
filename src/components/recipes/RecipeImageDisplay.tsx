@@ -25,7 +25,6 @@ export function RecipeImageDisplay({
   showTitleOverlay = true,
 }: RecipeImageDisplayProps) {
   const [isUploading, setIsUploading] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const displayUrl = imageUrl || getPlaceholderForRecipe(recipeId);
@@ -50,8 +49,7 @@ export function RecipeImageDisplay({
     }
   };
 
-  const handleRemove = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleRemove = async () => {
     setIsUploading(true);
     try {
       await onImageRemove();
@@ -60,7 +58,7 @@ export function RecipeImageDisplay({
     }
   };
 
-  const handleClick = () => {
+  const openFilePicker = () => {
     if (isEditable && !isUploading && !isGenerating && inputRef.current) {
       inputRef.current.click();
     }
@@ -71,24 +69,17 @@ export function RecipeImageDisplay({
   return (
     <div
       className={cn(
-        'relative w-full aspect-[16/9] rounded-lg overflow-hidden bg-muted group',
-        isEditable && !isBusy && 'cursor-pointer'
+        'relative w-full aspect-[16/9] overflow-hidden bg-muted group'
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={handleClick}
     >
       <img
         src={displayUrl}
         alt={title || "Photo de la recette"}
-        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        className="h-full w-full object-cover"
       />
 
-      {/* Dark overlay - always visible, darker on hover */}
-      <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300" />
-
       {/* Title centered on image */}
-      {title && showTitleOverlay && !isHovered && !isBusy && (
+      {title && showTitleOverlay && !isBusy && (
         <div className="absolute inset-0 flex items-center justify-center p-4">
           <h2 className="text-center font-solitreo text-2xl sm:text-3xl leading-tight line-clamp-3 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white font-bold">
             {title}
@@ -96,32 +87,22 @@ export function RecipeImageDisplay({
         </div>
       )}
 
-      {/* Overlay on hover for editable state */}
-      {isEditable && isHovered && !isBusy && (
-        <div className="absolute inset-0 bg-background/60 flex items-center justify-center transition-opacity">
-          <div className="flex flex-col items-center gap-2 text-foreground">
-            <Camera className="h-8 w-8" />
-            <span className="text-sm font-medium">
-              {hasCustomImage ? 'Changer l\'image' : 'Ajouter une image'}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Badge caméra - toujours visible sur mobile, indicateur d'édition */}
+      {/* Les actions sont des boutons nommés, jamais l'image entière cliquable. */}
       {isEditable && !isBusy && (
-        <div className="absolute bottom-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-sm pointer-events-none">
-          <Camera className="h-4 w-4 text-foreground/70" />
-        </div>
+        <Button type="button" variant="secondary" size="icon" className="absolute bottom-2 right-2 h-11 w-11 rounded-full" onClick={openFilePicker} aria-label={hasCustomImage ? 'Changer l’image' : 'Ajouter une image'} disabled={isBusy}>
+          <Camera className="h-5 w-5" aria-hidden="true" />
+        </Button>
       )}
 
       {/* Remove button for custom images */}
-      {isEditable && hasCustomImage && isHovered && !isBusy && (
+      {isEditable && hasCustomImage && !isBusy && (
         <Button
+          type="button"
           variant="destructive"
           size="icon"
-          className="absolute top-2 right-2 h-8 w-8"
+          className="absolute top-2 right-2 h-11 w-11"
           onClick={handleRemove}
+          aria-label="Supprimer l’image"
         >
           <X className="h-4 w-4" />
         </Button>

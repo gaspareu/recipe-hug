@@ -18,6 +18,17 @@ const KEYBOARD_HEIGHT_THRESHOLD_PX = 150;
 /** Relecture après l'animation du clavier iOS (~250 ms), marge comprise. */
 const SETTLE_DELAY_MS = 400;
 
+/**
+ * Safari iOS expose encore `navigator.standalone` pour les apps ajoutées à
+ * l'écran d'accueil ; `display-mode` couvre les autres navigateurs PWA.
+ */
+function isStandalonePwa(): boolean {
+  const standaloneNavigator = navigator as Navigator & { standalone?: boolean };
+  return (typeof window.matchMedia === 'function'
+    && window.matchMedia('(display-mode: standalone)').matches)
+    || standaloneNavigator.standalone === true;
+}
+
 // Home et un assistant plein écran peuvent être montés simultanément
 // (portail Radix au-dessus de la page). Un compteur empêche le démontage de
 // l'un d'effacer les variables encore utilisées par l'autre.
@@ -28,8 +39,13 @@ let viewportConsumers = 0;
  * (`--app-vh`, clavier virtuel déduit) et décalage vertical (`--app-vh-top`).
  *
  * `100dvh` ne se recalcule pas à l'ouverture du clavier sur iOS : la page garde
- * sa hauteur plein écran et la zone de saisie passe sous le clavier.
- * `visualViewport` est la seule source fiable.
+ * sa hauteur plein écran et la zone de saisie passe sous le clavier. Le
+ * `visualViewport` est donc utilisé quand le clavier est ouvert.
+ *
+ * À l'inverse, WebKit retranche parfois les safe areas de
+ * `visualViewport.height` dans une PWA standalone. Au repos, `100vh` fournit la
+ * hauteur plein écran attendue et évite de retrancher ces zones une deuxième
+ * fois ; les espacements `env(safe-area-inset-*)` restent appliqués au contenu.
  *
  * Le décalage est tout aussi nécessaire que la hauteur : pour dégager le champ
  * focalisé, iOS fait défiler le viewport visuel *à l'intérieur* du viewport de
@@ -58,10 +74,23 @@ export function useViewportHeight(): void {
 
     const publish = () => {
       frame = null;
-      root.style.setProperty(APP_VIEWPORT_HEIGHT_VAR, `${viewport.height}px`);
-      root.style.setProperty(APP_VIEWPORT_TOP_VAR, `${viewport.offsetTop}px`);
       const keyboardHeight = Math.max(0, window.innerHeight - viewport.height);
-      if (keyboardHeight > KEYBOARD_HEIGHT_THRESHOLD_PX) {
+      const keyboardVisible = keyboardHeight > KEYBOARD_HEIGHT_THRESHOLD_PX;
+      const useStandaloneViewport = isStandalonePwa() && !keyboardVisible;
+      // Certains moteurs renvoient une hauteur fractionnaire légèrement
+      // supérieure à `innerHeight` après application du device scale factor.
+      const visibleHeight = Math.min(viewport.height, window.innerHeight);
+
+      root.style.setProperty(
+        APP_VIEWPORT_HEIGHT_VAR,
+        useStandaloneViewport ? '100vh' : `${visibleHeight}px`,
+      );
+      root.style.setProperty(
+        APP_VIEWPORT_TOP_VAR,
+        useStandaloneViewport ? '0px' : `${viewport.offsetTop}px`,
+      );
+
+      if (keyboardVisible) {
         root.style.setProperty(APP_SAFE_AREA_BOTTOM_VAR, '0px');
       } else {
         root.style.removeProperty(APP_SAFE_AREA_BOTTOM_VAR);
