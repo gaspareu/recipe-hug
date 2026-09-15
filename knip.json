@@ -1,0 +1,14 @@
+{
+  "entry": [
+    "src/main.tsx!",
+    "vite.config.ts!",
+    "tailwind.config.ts!",
+    "postcss.config.js!"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}!",
+    "!src/**/*.test.{ts,tsx}!",
+    "!src/test/**!"
+  ],
+  "playwright": false
+}

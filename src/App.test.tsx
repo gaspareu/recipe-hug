@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 
+const APP_MOUNT_TIMEOUT_MS = 30_000;
+
 /**
  * Garde-fou : l'application doit monter un conteneur de toasts.
  *
@@ -47,8 +49,8 @@ describe('App — retour visuel global', () => {
   // qui atteste du montage, et l'affichage réel d'un toast qui fait foi.
 
   // Timeout élargi : ce test importe `App` à froid, donc tout l'arbre de routes
-  // lazy. Isolé il tient en ~0,5 s, mais en suite complète (55 fichiers en
-  // parallèle) il a déjà dépassé les 5 s par défaut.
+  // lazy. Isolé il tient en ~0,5 s, mais en suite complète (78 fichiers en
+  // parallèle) il peut dépasser les 20 s sur une machine saturée.
   it('monte la région de notifications, sans quoi tout retour utilisateur est perdu', async () => {
     const { default: App } = await import('./App');
     render(<App />);
@@ -56,7 +58,7 @@ describe('App — retour visuel global', () => {
     await waitFor(() => {
       expect(document.querySelector('section[aria-label*="Notifications"]')).not.toBeNull();
     });
-  }, 20000);
+  }, APP_MOUNT_TIMEOUT_MS);
 
   it('affiche effectivement un toast déclenché depuis un composant', async () => {
     const { default: App } = await import('./App');
@@ -69,5 +71,5 @@ describe('App — retour visuel global', () => {
     toast.success('Recette envoyée vers Cookidoo');
 
     expect(await screen.findByText('Recette envoyée vers Cookidoo')).toBeInTheDocument();
-  });
+  }, APP_MOUNT_TIMEOUT_MS);
 });
