@@ -56,6 +56,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Code mort en production
+        run: npm run lint:dead-code
+
   edge-functions:
     name: Edge functions (tests Deno)
     runs-on: ubuntu-latest

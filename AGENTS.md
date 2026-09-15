@@ -22,14 +22,15 @@ Consignes durables de **recipe-hug**, PWA de recettes avec assistant IA, planifi
 npm run dev          # Vite, http://localhost:8080
 npm run test:run     # Vitest en une exécution
 npm run typecheck    # tsc -b --noEmit
-npm run lint         # ESLint
-npm run check        # tests + typecheck + lint
+npm run lint           # ESLint
+npm run lint:dead-code # Knip : modules et dépendances de production inutilisés
+npm run check        # tests + typecheck + lint + détection de code mort
 npm run check:all    # check + build + tests Deno
 npm run build        # build Vite seulement : ne vérifie pas les types
 npm run test:edge    # tests Deno des modules Edge partagés
 ```
 
-`npm run build` ne remplace jamais `npm run typecheck`. Baseline au 2026-08-30 : typecheck 0 erreur, lint 0 problème, `test:run` 592 tests sans échec. Mettre ce baseline à jour ici et dans le skill `check` si la suite évolue.
+`npm run build` ne remplace jamais `npm run typecheck`. Baseline au 2026-09-15 : typecheck 0 erreur, lint 0 erreur (26 avertissements `react-refresh` attendus dans les primitives UI), `lint:dead-code` 0 résultat, `test:run` 589 tests sans échec. Mettre ce baseline à jour ici et dans le skill `check` si la suite évolue.
 
 ## Routage du contexte
 
