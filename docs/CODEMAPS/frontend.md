@@ -22,7 +22,7 @@ App
     └── MainLayout (Header + outlet)
         ├── InstallBanner (PWA install prompt) [NEW]
         ├── OfflineBanner (réseau hors-ligne) [NEW]
-        ├── Home → ChatInterface → VoiceControls, SoundWaveIndicator
+        ├── Home → ChatInterface → SoundWaveIndicator
         ├── Dashboard → RecipeCard[]
         ├── RecipeNew [NEW]
         ├── RecipeDetail → IngredientChecklist, RecipeVersionHistory
@@ -40,7 +40,7 @@ App
 - **Chat**: `useHomeChat` → `useChatEngine` (streaming SSE)
 - **Voice**: `useVoiceMode` (241L) — ElevenLabs STT/TTS
 - **PWA**: `useInstallPrompt` (install banner) + `useNetworkStatus` (offline banner) [NEW]
-- **UI**: `useTheme`, `useUserPreferences`, `useSwipeNavigation`
+- **UI**: `useTheme`, `useUserPreferences`
 
 ## Key Hooks (src/hooks/)
 | Hook | Lines | Rôle |
@@ -59,4 +59,4 @@ App
 | `useNetworkStatus.ts` | — | navigator.onLine + events [NEW] |
 
 ## UI Components
-31 composants shadcn/ui dans `src/components/ui/` (Button, Dialog, Form, Select, Sheet, Tabs…)
+24 composants shadcn/ui dans `src/components/ui/` (Button, Dialog, Select, Sheet, Tabs…)

@@ -14,20 +14,21 @@ une PR, utiliser plutôt le skill **pre-pr**.
 
 ## Baseline de non-régression
 
-Baseline vérifié au **2026-08-30** :
+Baseline vérifié au **2026-09-15** :
 
 | Commande | Baseline (dette préexistante) |
 |----------|-------------------------------|
-| `npm run test:run` | **0 échec** (592 tests) — doit rester à 0 |
+| `npm run test:run` | **0 échec** (589 tests) — doit rester à 0 |
 | `npm run typecheck` | **0 erreur** |
-| `npm run lint` | **0 problème** |
+| `npm run lint` | **0 erreur** (26 avertissements `react-refresh` attendus dans les primitives UI) |
+| `npm run lint:dead-code` | **0 résultat** |
 
 > Ces chiffres évoluent avec la dette. Si tu résorbes ou ajoutes de la dette
 > légitimement, **mets à jour ce tableau ET celui d'`AGENTS.md`** dans le même commit.
 
 ## Procédure
 
-La commande agrégée couvre les trois garde-fous :
+La commande agrégée couvre les quatre garde-fous :
 
 ```bash
 npm run check
@@ -50,7 +51,12 @@ Pour diagnostiquer ou comparer précisément au baseline, lancer séparément :
    npm run lint 2>&1 | grep -E "✖"
    ```
 
-4. **En cas de doute sur le baseline** (chiffre supérieur : est-ce ma faute ?),
+4. **Code mort en production** — les modules et dépendances doivent être atteignables :
+   ```bash
+   npm run lint:dead-code
+   ```
+
+5. **En cas de doute sur le baseline** (chiffre supérieur : est-ce ma faute ?),
    comparer à `origin/main` dans un worktree temporaire ou, avec accord explicite,
    via un stash sur un arbre propre. Ne jamais masquer les changements de l'utilisateur.
    ```bash
@@ -59,7 +65,7 @@ Pour diagnostiquer ou comparer précisément au baseline, lancer séparément :
    Les erreurs réellement ajoutées se trouvent dans les fichiers que tu as touchés :
    filtrer la sortie sur ces chemins pour les identifier.
 
-5. **Build** (optionnel, plus lent — à lancer si tu as touché des imports, la
+6. **Build** (optionnel, plus lent — à lancer si tu as touché des imports, la
    config Vite/PWA, ou avant un merge sensible) :
    ```bash
    npm run build

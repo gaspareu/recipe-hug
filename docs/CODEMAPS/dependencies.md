@@ -20,7 +20,7 @@
 | @supabase/supabase-js | 2.89.0 | Supabase client |
 | @elevenlabs/react | 1.12.1 | Voice (TTS/STT) |
 | framer-motion | latest | Animations |
-| react-hook-form + zod | latest | Forms + validation |
+| zod | latest | Validation des formulaires |
 | tailwindcss | 3.4.17 | Styling |
 | radix-ui/* | latest | UI primitives (15 packages) |
 | lucide-react | latest | Icons |
