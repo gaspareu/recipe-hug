@@ -23,7 +23,7 @@ export function RecipeIndexRow({ recipe, position, filters, onToggleFavorite, is
       <div className="h-12 w-16 shrink-0 overflow-hidden">
         {showThumbnail && <img className="h-full w-full object-cover" src={recipe.source_image_url!} alt={`Aperçu de ${recipe.title}`} />}
       </div>
-      <Link to={`/recipes/${recipe.id}${search}`} className="min-w-0 flex-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--book-accent))]">
+      <Link to={`/recipes/${recipe.id}${search}`} className="min-w-0 flex-1 rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-[hsl(var(--book-accent))]">
         <p className="truncate font-medium text-[hsl(var(--book-ink))]">{recipe.title}</p>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[hsl(var(--book-ink)/0.72)]">
           {recipe.season && <span className="capitalize">{recipe.season}</span>}

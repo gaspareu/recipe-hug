@@ -294,7 +294,7 @@ export default function RecipeDetail() {
         </Sheet>
 
         {/* Accès persistants à Chef et au mode cuisine. */}
-        <div className="fixed bottom-0 left-0 right-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right))] z-20 border-t border-border bg-background/90 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
+        <div className="fixed bottom-0 left-0 right-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right))] z-20 border-t border-border bg-background/90 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xs">
           <div className="mx-auto flex max-w-3xl gap-2">
             <Button
               onClick={() => setAssistantState({ recipeId: recipe.id, open: true })}

@@ -35,7 +35,7 @@ export function RecipeActionsMenu({ recipeId, bookSearch = '', onAnalyzeAndGener
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80"
+            className="h-9 w-9 bg-background/60 backdrop-blur-xs hover:bg-background/80"
             aria-label="Plus d'actions"
           >
             <MoreVertical className="h-4 w-4" />

@@ -69,7 +69,7 @@ export function RecipeImageDisplay({
   return (
     <div
       className={cn(
-        'relative w-full aspect-[16/9] overflow-hidden bg-muted group'
+        'relative w-full aspect-video overflow-hidden bg-muted group'
       )}
     >
       <img

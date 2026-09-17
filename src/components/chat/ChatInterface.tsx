@@ -41,11 +41,11 @@ const TOOL_ACTIVITY_LABELS: Record<string, string> = {
 // the full history from being parsed again while a response is arriving.
 const AssistantMarkdown = memo(function AssistantMarkdown({ content, showCaret }: { content: string; showCaret: boolean }) {
   return (
-    <div className="prose prose-base max-w-none break-words text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground prose-p:first:mt-0 prose-p:last:mb-0">
+    <div className="prose prose-base max-w-none wrap-break-word text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground first:prose-p:mt-0 last:prose-p:mb-0">
       <ReactMarkdown>{content}</ReactMarkdown>
       {showCaret && (
         <motion.span
-          className="ml-0.5 inline-block h-[1.05em] w-[2px] -mb-[0.15em] rounded-full bg-foreground/70 align-middle"
+          className="ml-0.5 inline-block h-[1.05em] w-[2px] mb-[-0.15em] rounded-full bg-foreground/70 align-middle"
           animate={{ opacity: [1, 0, 1] }}
           transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
         />
@@ -297,7 +297,7 @@ export function ChatInterface({
                   transition={messageTransition}
                   className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
-                  <div className={`min-w-0 break-words ${message.role === 'user' ? 'max-w-[80%] bg-muted rounded-3xl px-4 py-3' : 'max-w-full sm:max-w-[85%]'}`}>
+                  <div className={`min-w-0 wrap-break-word ${message.role === 'user' ? 'max-w-[80%] bg-muted rounded-3xl px-4 py-3' : 'max-w-full sm:max-w-[85%]'}`}>
                     {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
                     {message.role === 'assistant' ? (
                       <AssistantMarkdown content={displayContent} showCaret={showCaret} />
@@ -394,7 +394,7 @@ export function ChatInterface({
       )}
 
       {/* Bottom area */}
-      <div className={`relative z-10 shrink-0 border-t border-border bg-background/80 py-4 pl-4 backdrop-blur-sm ${flushRightEdge ? 'pr-0' : 'pr-4'}`}>
+      <div className={`relative z-10 shrink-0 border-t border-border bg-background/80 py-4 pl-4 backdrop-blur-xs ${flushRightEdge ? 'pr-0' : 'pr-4'}`}>
         {/* Quick suggestions */}
         <AnimatePresence initial={false}>
           {showSuggestions && (
@@ -465,7 +465,7 @@ export function ChatInterface({
             onKeyDown={handleKeyDown}
             placeholder={isListening ? 'Parlez...' : placeholder}
             aria-label={isListening ? 'Parlez...' : placeholder}
-            className="max-h-[120px] min-h-7 w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-0 text-base leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="max-h-[120px] min-h-7 w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-0 text-base leading-6 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
             rows={1}
             disabled={isStreaming || isListening}
           />
@@ -478,7 +478,7 @@ export function ChatInterface({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <PopoverTrigger asChild>
-                      <button aria-label="Ajouter une pièce jointe" aria-haspopup="true" className="flex h-11 w-11 flex-shrink-0 touch-manipulation items-center justify-center rounded-full border border-border transition-colors hover:bg-accent" disabled={isStreaming || isListening}>
+                      <button aria-label="Ajouter une pièce jointe" aria-haspopup="true" className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full border border-border transition-colors hover:bg-accent" disabled={isStreaming || isListening}>
                         <Plus className="h-5 w-5 text-foreground" aria-hidden="true" />
                       </button>
                     </PopoverTrigger>
@@ -515,7 +515,7 @@ export function ChatInterface({
                     exit={{ scale: 0.7, opacity: 0 }}
                     transition={{ duration: 0.15 }}
                     onClick={stopGeneration}
-                    className="flex h-11 w-11 flex-shrink-0 touch-manipulation items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/90"
+                    className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/90"
                     title="Arrêter la génération"
                     aria-label="Arrêter la génération"
                   >
@@ -534,7 +534,7 @@ export function ChatInterface({
                       else startListening();
                     }}
                     disabled={isStreaming || isConnecting}
-                    className={`flex h-11 w-11 flex-shrink-0 touch-manipulation items-center justify-center rounded-full transition-colors ${isListening ? 'bg-primary text-primary-foreground' : isConnecting ? 'bg-muted animate-pulse' : 'hover:bg-accent text-foreground'}`}
+                    className={`flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full transition-colors ${isListening ? 'bg-primary text-primary-foreground' : isConnecting ? 'bg-muted animate-pulse' : 'hover:bg-accent text-foreground'}`}
                     title={isConnecting ? 'Connexion...' : isListening ? "Arrêter l'écoute" : 'Dicter'}
                     aria-label={isConnecting ? 'Connexion en cours...' : isListening ? "Arrêter l'écoute" : 'Dicter un message'}
                     aria-pressed={isListening}
@@ -556,7 +556,7 @@ export function ChatInterface({
                     transition={{ duration: 0.15 }}
                     onClick={handleSubmit}
                     disabled={isStreaming}
-                    className="flex h-11 w-11 flex-shrink-0 touch-manipulation items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/90"
+                    className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/90"
                     title="Envoyer"
                     aria-label="Envoyer le message"
                   >

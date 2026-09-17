@@ -21,7 +21,7 @@ describe('AppBookmarkRail', () => {
     render(<MemoryRouter initialEntries={['/home']}><AppBookmarkRail viewportHeight="app" /></MemoryRouter>);
 
     expect(screen.getByRole('navigation', { name: 'Navigation principale' })).toHaveClass(
-      'top-[var(--app-vh-top,0px)]',
+      'top-(--app-vh-top,0px)',
     );
   });
 });

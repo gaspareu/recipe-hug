@@ -23,9 +23,9 @@ export function AppBookmarkRail({ viewportHeight = 'dynamic' }: AppBookmarkRailP
       <nav
         aria-label="Navigation principale"
         className={cn(
-          'fixed right-0 z-30 flex w-[var(--bookmark-rail-width)] flex-col items-end overflow-visible',
+          'fixed right-0 z-30 flex w-(--bookmark-rail-width) flex-col items-end overflow-visible',
           viewportHeight === 'app'
-            ? 'top-[var(--app-vh-top,0px)] h-[var(--app-vh,100dvh)]'
+            ? 'top-(--app-vh-top,0px) h-(--app-vh,100dvh)'
             : 'top-0',
         )}
       >
@@ -43,7 +43,7 @@ export function AppBookmarkRail({ viewportHeight = 'dynamic' }: AppBookmarkRailP
                     aria-current={active ? 'page' : undefined}
                     aria-label={label}
                     className={cn(
-                      'bookmark-rail-link group relative flex h-11 w-11 items-center justify-center border border-r-0 border-[hsl(var(--book-ink)/0.2)] bg-[hsl(var(--book-surface))] text-[hsl(var(--book-ink))] outline-none transition-[color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-[hsl(var(--book-accent))] focus-visible:ring-offset-2',
+                      'bookmark-rail-link group relative flex h-11 w-11 items-center justify-center border border-r-0 border-[hsl(var(--book-ink)/0.2)] bg-[hsl(var(--book-surface))] text-[hsl(var(--book-ink))] outline-hidden transition-[color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-[hsl(var(--book-accent))] focus-visible:ring-offset-2',
                       active
                         ? 'bookmark-rail-link-active h-[104px] flex-col gap-1 rounded-l-md bg-[hsl(var(--book-rail-active))] text-[hsl(var(--book-rail-active-foreground))]'
                         : 'rounded-l-md hover:bg-[hsl(var(--book-organize)/0.22)]',

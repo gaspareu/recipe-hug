@@ -24,7 +24,7 @@ export function PageTransition({ children }: PageTransitionProps) {
       animate="animate"
       exit="exit"
       transition={pageTransition}
-      className="min-h-[100dvh]"
+      className="min-h-dvh"
     >
       {children}
     </motion.div>

@@ -15,7 +15,7 @@ export function Header() {
   const { user, signOut } = useAuth();
 
   return (
-    <header className="sticky top-0 z-20 w-full border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-20 w-full border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm supports-backdrop-filter:bg-background/60">
       <div className="container flex h-14 items-center justify-between px-4 pr-[calc(var(--bookmark-rail-width,0px)+env(safe-area-inset-right)+1rem)]">
         <div className="flex items-center gap-2" aria-label="Grimoire">
           <img src="/brand/recipe-book-logo.png" alt="Grimoire" className="mt-0.5 h-8 w-8 object-contain" />

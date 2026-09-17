@@ -194,7 +194,7 @@ export default function RecipeNew() {
             <button
               type="button"
               onClick={() => setMode('manual')}
-              className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-sm transition-all hover:border-primary/50 hover:shadow-md cursor-pointer text-left"
+              className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-xs transition-all hover:border-primary/50 hover:shadow-md cursor-pointer text-left"
             >
               <div className="rounded-full bg-primary/10 p-4">
                 <PenLine className="h-8 w-8 text-primary" />
@@ -210,7 +210,7 @@ export default function RecipeNew() {
             <button
               type="button"
               onClick={() => setMode('photo')}
-              className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-sm transition-all hover:border-primary/50 hover:shadow-md cursor-pointer text-left"
+              className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-xs transition-all hover:border-primary/50 hover:shadow-md cursor-pointer text-left"
             >
               <div className="rounded-full bg-primary/10 p-4">
                 <Camera className="h-8 w-8 text-primary" />

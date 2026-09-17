@@ -40,7 +40,7 @@ export function FavoriteToggle({ isFavorite, onToggle, disabled, variant = 'defa
       aria-label={isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
       className={cn(
         'h-9 w-9 transition-all duration-200 overflow-hidden',
-        variant === 'overlay' && 'bg-background/80 backdrop-blur-sm hover:bg-background/90 rounded-full shadow-sm'
+        variant === 'overlay' && 'bg-background/80 backdrop-blur-xs hover:bg-background/90 rounded-full shadow-xs'
       )}
     >
       <Heart

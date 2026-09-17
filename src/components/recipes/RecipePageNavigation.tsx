@@ -15,7 +15,7 @@ function PageLink({ recipe, direction, search }: { recipe: Recipe | null; direct
   const content = <><span className="text-xs uppercase tracking-wide">{label}</span><span className="mt-1 flex items-center gap-1 font-medium">{previous ? <ArrowLeft className="h-4 w-4" aria-hidden="true" /> : null}<span className="truncate">{recipe?.title ?? 'Aucune recette'}</span>{!previous ? <ArrowRight className="h-4 w-4" aria-hidden="true" /> : null}</span></>;
 
   if (!recipe) return <span aria-disabled="true" className={cn('min-h-11 max-w-[48%] text-sm opacity-45', previous ? 'text-left' : 'text-right')}>{content}</span>;
-  return <Link aria-label={`${label} : ${recipe.title}`} to={`/recipes/${recipe.id}${search}`} className={cn('min-h-11 max-w-[48%] rounded-sm text-sm outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--book-accent))]', previous ? 'text-left' : 'text-right')}>{content}</Link>;
+  return <Link aria-label={`${label} : ${recipe.title}`} to={`/recipes/${recipe.id}${search}`} className={cn('min-h-11 max-w-[48%] rounded-sm text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-[hsl(var(--book-accent))]', previous ? 'text-left' : 'text-right')}>{content}</Link>;
 }
 
 export function RecipePageNavigation({ previous, next, search }: RecipePageNavigationProps) {

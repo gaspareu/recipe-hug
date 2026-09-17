@@ -30,6 +30,10 @@ describe("cn utility", () => {
     expect(cn("text-red-500", "text-blue-500")).toBe("text-blue-500");
   });
 
+  it("merges Tailwind 4 utility conflicts", () => {
+    expect(cn("backdrop-blur-xs", "backdrop-blur-sm")).toBe("backdrop-blur-sm");
+  });
+
   it("handles object inputs via clsx", () => {
     expect(cn({ "px-4": true, "py-2": false, "mt-2": true })).toBe(
       "px-4 mt-2"

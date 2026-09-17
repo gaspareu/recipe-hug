@@ -167,9 +167,9 @@ export default function MealPlanning() {
   const canAdd = selectedRecipeId !== null || customMealText.trim().length > 0;
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col pt-[env(safe-area-inset-top)] [--bookmark-rail-width:44px]">
+    <div className="min-h-dvh bg-background flex flex-col pt-[env(safe-area-inset-top)] [--bookmark-rail-width:44px]">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border">
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xs border-b border-border">
         <div className="container max-w-4xl mx-auto px-4 pr-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right)+1rem)] py-3 flex items-center justify-between">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="h-9 w-9">
             <ArrowLeft className="h-4 w-4" />

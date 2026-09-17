@@ -27,12 +27,12 @@ export default function Home() {
   // refermé (cf. useViewportHeight).
   return (
     <div
-      className="fixed inset-x-0 top-[var(--app-vh-top,0px)] h-[var(--app-vh,100dvh)] flex flex-col bg-background pt-[env(safe-area-inset-top)]"
+      className="fixed inset-x-0 top-(--app-vh-top,0px) h-(--app-vh,100dvh) flex flex-col bg-background pt-[env(safe-area-inset-top)]"
       style={{ '--bookmark-rail-width': '44px' } as CSSProperties}
       data-testid="home-shell"
     >
       {/* Minimal header */}
-      <header className="absolute top-0 left-0 right-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right))] z-10 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] bg-background/80 backdrop-blur-sm">
+      <header className="absolute top-0 left-0 right-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right))] z-10 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] bg-background/80 backdrop-blur-xs">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={resetChat} disabled={isStreaming || !hasConversation} title="Nouvelle conversation" className="h-9 w-9">
@@ -80,7 +80,7 @@ export default function Home() {
         />
       </div>
       {/* Bannière d'installation PWA dans le flux (pas fixed) pour ne pas masquer l'input */}
-      <div className="shrink-0 pr-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right))] pb-[var(--app-safe-area-bottom,env(safe-area-inset-bottom))]">
+      <div className="shrink-0 pr-[calc(var(--bookmark-rail-width)+env(safe-area-inset-right))] pb-(--app-safe-area-bottom,env(safe-area-inset-bottom))">
         <InstallBanner />
       </div>
 

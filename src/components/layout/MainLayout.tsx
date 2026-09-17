@@ -8,7 +8,7 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   return (
-    <div className="min-h-[100dvh] bg-background [--bookmark-rail-width:44px]">
+    <div className="min-h-dvh bg-background [--bookmark-rail-width:44px]">
       {/* Le safe-area-inset-top est porté par le <header> sticky lui-même
           (cf. Header.tsx) pour qu'il reste sous la barre de statut iOS une fois
           collé en haut. Ici on ne gère que le bas. */}
