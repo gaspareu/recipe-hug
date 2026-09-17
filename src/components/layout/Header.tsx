@@ -1,4 +1,5 @@
-import { LogOut } from 'lucide-react';
+import { LogOut, User } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,26 +10,25 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useProfile } from '@/hooks/useProfile';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 export function Header() {
   const { user, signOut } = useAuth();
+  const [profile, setProfile] = useState<{ display_name: string | null; avatar_url: string | null } | null>(null);
 
-  return (
-    <header className="sticky top-0 z-20 w-full border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center justify-between px-4 pr-[calc(var(--bookmark-rail-width,0px)+env(safe-area-inset-right)+1rem)]">
-        <div className="flex items-center gap-2" aria-label="Grimoire">
-          <img src="/brand/recipe-book-logo.png" alt="Grimoire" className="mt-0.5 h-8 w-8 object-contain" />
-          <span className="text-lg font-bold text-foreground">Grimoire</span>
-        </div>
-        {user && <ProfileMenu user={user} signOut={signOut} />}
-      </div>
-    </header>
-  );
-}
-
-function ProfileMenu({ user, signOut }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; signOut: () => Promise<void> }) {
-  const { data: profile } = useProfile(user.id);
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('profiles_safe')
+        .select('display_name, avatar_url')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setProfile(data);
+        });
+    }
+  }, [user]);
 
   const getInitials = () => {
     if (profile?.display_name) {
@@ -41,7 +41,17 @@ function ProfileMenu({ user, signOut }: { user: NonNullable<ReturnType<typeof us
   };
 
   return (
-    <DropdownMenu>
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-14 items-center justify-between px-4">
+        <Link to="/home" className="flex items-center gap-2">
+          <img src="/brand/recipe-book-logo.png" alt="Grimoire" className="mt-0.5 h-8 w-8 object-contain" />
+          <span className="text-lg font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            Grimoire
+          </span>
+        </Link>
+
+        {user && (
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
@@ -60,11 +70,21 @@ function ProfileMenu({ user, signOut }: { user: NonNullable<ReturnType<typeof us
                 </div>
               </div>
               <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to="/profile" className="cursor-pointer">
+                  <User className="mr-2 h-4 w-4" />
+                  Mon profil
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={signOut} className="cursor-pointer text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
                 Déconnexion
               </DropdownMenuItem>
             </DropdownMenuContent>
-    </DropdownMenu>
+          </DropdownMenu>
+        )}
+      </div>
+    </header>
   );
 }
