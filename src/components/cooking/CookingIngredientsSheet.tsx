@@ -48,7 +48,7 @@ export function CookingIngredientsSheet({
                 type="button"
                 onClick={onDecreaseServings}
                 disabled={!canDecreaseServings}
-                className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-xl bg-background text-primary transition-colors hover:bg-primary/10 disabled:cursor-default disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-xl bg-background text-primary transition-colors hover:bg-primary/10 disabled:cursor-default disabled:opacity-35 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 aria-label="Diminuer les portions"
               >
                 <Minus className="h-4 w-4" aria-hidden="true" />
@@ -59,7 +59,7 @@ export function CookingIngredientsSheet({
               <button
                 type="button"
                 onClick={onIncreaseServings}
-                className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-xl bg-background text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-xl bg-background text-primary transition-colors hover:bg-primary/10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 aria-label="Augmenter les portions"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
@@ -79,7 +79,7 @@ export function CookingIngredientsSheet({
                   aria-pressed={checked}
                   onClick={() => onToggleIngredient(index)}
                   className={cn(
-                    'flex min-h-12 w-full touch-manipulation cursor-pointer items-center gap-3 border-b border-border/70 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                    'flex min-h-12 w-full touch-manipulation cursor-pointer items-center gap-3 border-b border-border/70 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                     checked && 'text-muted-foreground',
                   )}
                 >
@@ -93,7 +93,7 @@ export function CookingIngredientsSheet({
                     {checked && <Check className="h-4 w-4" />}
                   </span>
                   {quantity && (
-                    <strong className="min-w-[5.5rem] shrink-0 font-crimson text-base text-primary">
+                    <strong className="min-w-22 shrink-0 font-crimson text-base text-primary">
                       {quantity}
                     </strong>
                   )}

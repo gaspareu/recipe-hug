@@ -24,7 +24,7 @@ function TimerPill({ timer, onToggle, onDismiss }: TimerPillProps) {
           ? `Mettre en pause ${timer.label}`
           : `Reprendre ${timer.label}`}
       className={cn(
-        'flex h-11 shrink-0 touch-manipulation cursor-pointer items-center gap-1.5 rounded-xl px-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'flex h-11 shrink-0 touch-manipulation cursor-pointer items-center gap-1.5 rounded-xl px-2 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         timer.done ? 'bg-accent/20 animate-cook-pulse' : 'hover:bg-muted',
       )}
     >
@@ -68,7 +68,7 @@ export function CookingTimerBar({ timers, servings, onOpenIngredients, onToggle,
         <button
           type="button"
           onClick={onOpenIngredients}
-          className="flex h-11 shrink-0 touch-manipulation cursor-pointer items-center gap-1.5 rounded-xl px-2.5 font-crimson text-sm font-bold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex h-11 shrink-0 touch-manipulation cursor-pointer items-center gap-1.5 rounded-xl px-2.5 font-crimson text-sm font-bold text-foreground transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           aria-label={`Ajuster les quantités pour ${servings} portion${servings > 1 ? 's' : ''}`}
         >
           <Users className="h-4 w-4 text-primary" aria-hidden="true" />

@@ -27,7 +27,7 @@ export function Header() {
         .then(({ data }) => {
           if (data) setProfile(data);
         });
-    }
+      }
   }, [user]);
 
   const getInitials = () => {
@@ -41,7 +41,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center justify-between px-4">
         <Link to="/home" className="flex items-center gap-2">
           <img src="/brand/recipe-book-logo.png" alt="Grimoire" className="mt-0.5 h-8 w-8 object-contain" />

@@ -51,13 +51,13 @@ export function CookingChatSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="inset-x-0 bottom-auto top-[var(--app-vh-top,0px)] flex h-[var(--app-vh,100dvh)] max-h-none w-full flex-col gap-0 rounded-none border-0 p-0 shadow-none [&>button:last-child]:hidden"
+        className="inset-x-0 bottom-auto top-(--app-vh-top,0px) flex h-(--app-vh,100dvh) max-h-none w-full flex-col gap-0 rounded-none border-0 p-0 shadow-none [&>button:last-child]:hidden"
       >
-        <SheetHeader className="min-h-16 shrink-0 flex-row items-center gap-2 space-y-0 border-b border-border bg-background/80 px-3 pt-[env(safe-area-inset-top)] text-left backdrop-blur-sm">
+        <SheetHeader className="min-h-16 shrink-0 flex-row items-center gap-2 space-y-0 border-b border-border bg-background/80 px-3 pt-[env(safe-area-inset-top)] text-left backdrop-blur-xs">
           <SheetClose asChild>
             <button
               type="button"
-              className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               aria-label="Fermer l’assistant"
             >
               <ChevronDown className="h-5 w-5" aria-hidden="true" />
@@ -71,14 +71,14 @@ export function CookingChatSheet({
             type="button"
             onClick={resetChat}
             disabled={isStreaming || messages.length <= 1}
-            className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-35 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Nouvelle conversation"
           >
             <Plus className="h-5 w-5" aria-hidden="true" />
           </button>
         </SheetHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col pb-[var(--app-safe-area-bottom,env(safe-area-inset-bottom))]">
+        <div className="flex min-h-0 flex-1 flex-col pb-(--app-safe-area-bottom,env(safe-area-inset-bottom))">
           {/* Remonté à chaque ouverture : la conversation vit dans le hook parent (useRecipeChat). */}
           {open && (
             <ChatInterface

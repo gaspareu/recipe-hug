@@ -1,14 +1,15 @@
 {
   "entry": [
     "src/main.tsx!",
-    "vite.config.ts!",
-    "tailwind.config.ts!",
-    "postcss.config.js!"
+    "vite.config.ts!"
   ],
   "project": [
     "src/**/*.{ts,tsx}!",
     "!src/**/*.test.{ts,tsx}!",
     "!src/test/**!"
   ],
-  "playwright": false
+  "playwright": false,
+  "ignoreDependencies": [
+    "tw-animate-css"
+  ]
 }

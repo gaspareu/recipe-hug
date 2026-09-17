@@ -36,7 +36,7 @@ describe('CookingChatSheet — assistant recette partagé', () => {
   it('reprend la coquille plein écran et contextualise son en-tête', () => {
     render(<CookingChatSheet {...defaultProps} />);
 
-    expect(screen.getByRole('dialog')).toHaveClass('h-[var(--app-vh,100dvh)]', 'rounded-none');
+    expect(screen.getByRole('dialog')).toHaveClass('h-(--app-vh,100dvh)', 'rounded-none');
     expect(screen.getByText('Chef')).toBeInTheDocument();
     expect(screen.getByText('Ratatouille · 4 portions')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Fermer l’assistant' })).toHaveClass('h-11', 'w-11');

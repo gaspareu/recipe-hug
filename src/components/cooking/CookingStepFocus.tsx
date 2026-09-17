@@ -39,7 +39,7 @@ function TimerChip({ minutes, label, stepIndex, onStart }: TimerChipProps) {
   return (
     <button
       onClick={() => onStart(label, minutes * 60, stepIndex)}
-      className="inline-flex min-h-11 touch-manipulation cursor-pointer items-center gap-2 rounded-full border-[1.5px] border-accent bg-accent/15 px-3 py-1.5 font-crimson text-sm font-bold text-secondary transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex min-h-11 touch-manipulation cursor-pointer items-center gap-2 rounded-full border-[1.5px] border-accent bg-accent/15 px-3 py-1.5 font-crimson text-sm font-bold text-secondary transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <Timer className="h-4 w-4" aria-hidden="true" />
       <span>Minuteur {formatTimer(minutes * 60)}</span>
@@ -116,10 +116,10 @@ export function CookingStepFocus({
     <div className="flex h-full flex-col overflow-y-auto px-[22px] pb-4 pt-[22px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Progress idx={idx} total={total} />
       <div key={idx} className="flex-1 animate-cook-fade-up">
-        <h2 className="mb-3 text-center font-solitreo text-4xl leading-tight text-primary [text-wrap:pretty]">
+        <h2 className="mb-3 text-center font-solitreo text-4xl leading-tight text-primary text-pretty">
           {title}
         </h2>
-        <p className="mt-1 font-crimson text-[25px] leading-relaxed text-foreground [text-wrap:pretty]">
+        <p className="mt-1 font-crimson text-[25px] leading-relaxed text-foreground text-pretty">
           {segments.map((seg, i) =>
             seg.isDuration ? (
               <strong
