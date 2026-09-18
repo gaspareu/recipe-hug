@@ -22,7 +22,7 @@ export function CollapsibleSection({
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+      <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-xs">
         <CollapsibleTrigger className="flex w-full items-center justify-between p-6 text-left hover:bg-muted/50 transition-colors rounded-lg">
           <div className="flex items-center gap-3">
             {icon && <span className="text-primary">{icon}</span>}

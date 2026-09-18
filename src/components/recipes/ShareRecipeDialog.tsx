@@ -71,7 +71,7 @@ export function ShareRecipeDialog({ recipeId, open: controlledOpen, onOpenChange
     <Dialog open={open} onOpenChange={setOpen}>
       {showTrigger && (
         <DialogTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80">
+          <Button variant="ghost" size="icon" className="h-9 w-9 bg-background/60 backdrop-blur-xs hover:bg-background/80">
             <Share2 className="h-4 w-4" />
           </Button>
         </DialogTrigger>

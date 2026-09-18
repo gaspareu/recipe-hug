@@ -128,7 +128,7 @@ export function CookingMode({ recipe, onClose, initialServings, chatSession, onR
       <header className="flex shrink-0 items-center justify-between px-3.5 pb-2.5 pt-3">
         <button
           onClick={onClose}
-          className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex h-11 w-11 touch-manipulation cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           aria-label="Quitter le mode cuisine"
         >
           <X className="h-[19px] w-[19px]" aria-hidden="true" />
@@ -175,14 +175,14 @@ export function CookingMode({ recipe, onClose, initialServings, chatSession, onR
           <button
             onClick={prev}
             disabled={idx === 0}
-            className="flex h-12 w-12 shrink-0 touch-manipulation cursor-pointer items-center justify-center rounded-full border border-border bg-card text-foreground disabled:cursor-default disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-12 w-12 shrink-0 touch-manipulation cursor-pointer items-center justify-center rounded-full border border-border bg-card text-foreground disabled:cursor-default disabled:opacity-35 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Étape précédente"
           >
             <ChevronLeft className="h-[22px] w-[22px]" aria-hidden="true" />
           </button>
           <button
             onClick={next}
-            className="flex h-[54px] flex-1 touch-manipulation cursor-pointer items-center justify-center gap-2 rounded-2xl bg-primary font-crimson text-lg font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-[54px] flex-1 touch-manipulation cursor-pointer items-center justify-center gap-2 rounded-2xl bg-primary font-crimson text-lg font-bold text-primary-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {idx === total - 1 ? 'Terminer' : 'Étape suivante'}
             {idx === total - 1
@@ -191,7 +191,7 @@ export function CookingMode({ recipe, onClose, initialServings, chatSession, onR
           </button>
           <button
             onClick={() => openChat(true)}
-            className="flex h-[54px] w-[54px] shrink-0 touch-manipulation cursor-pointer items-center justify-center rounded-full bg-accent text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-[54px] w-[54px] shrink-0 touch-manipulation cursor-pointer items-center justify-center rounded-full bg-accent text-accent-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Demander à Chef à la voix"
           >
             <Mic className="h-[23px] w-[23px]" aria-hidden="true" />
@@ -203,7 +203,7 @@ export function CookingMode({ recipe, onClose, initialServings, chatSession, onR
       {!chatOpen && (
         <button
           onClick={() => openChat(false)}
-          className="flex w-full shrink-0 touch-manipulation cursor-pointer items-center gap-2.5 border-t border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="flex w-full shrink-0 touch-manipulation cursor-pointer items-center gap-2.5 border-t border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary/10">
             <ChefHat className="h-[17px] w-[17px] text-primary" aria-hidden="true" />

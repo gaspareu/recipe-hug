@@ -182,7 +182,7 @@ function IngredientItem({
     >
       <div
         className={cn(
-          "relative flex-shrink-0 h-5 w-5 min-h-5 min-w-5 max-h-5 max-w-5 border-2 rounded-sm transition-all mt-0.5",
+          "relative shrink-0 h-5 w-5 min-h-5 min-w-5 max-h-5 max-w-5 border-2 rounded-sm transition-all mt-0.5",
           checked
             ? "border-primary bg-primary/10"
             : "border-muted-foreground/40 group-hover:border-primary/60"

@@ -39,7 +39,7 @@ export function FavoriteToggle({ isFavorite, onToggle, disabled, variant = 'defa
       disabled={disabled}
       className={cn(
         'h-9 w-9 transition-all duration-200 overflow-hidden',
-        variant === 'overlay' && 'bg-background/80 backdrop-blur-sm hover:bg-background/90 rounded-full shadow-sm'
+        variant === 'overlay' && 'bg-background/80 backdrop-blur-xs hover:bg-background/90 rounded-full shadow-xs'
       )}
     >
       <Heart

@@ -6,7 +6,7 @@ export function AppErrorFallback() {
   return (
     <div
       role="alert"
-      className="min-h-[100dvh] flex flex-col items-center justify-center gap-6 p-6 text-center bg-background"
+      className="min-h-dvh flex flex-col items-center justify-center gap-6 p-6 text-center bg-background"
     >
       <div className="flex flex-col items-center gap-3">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">

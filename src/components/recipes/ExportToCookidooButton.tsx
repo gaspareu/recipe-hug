@@ -133,7 +133,7 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 bg-background/60 backdrop-blur-sm hover:bg-background/80"
+                className="h-9 w-9 bg-background/60 backdrop-blur-xs hover:bg-background/80"
               >
                 <UtensilsCrossed className="h-4 w-4" />
               </Button>

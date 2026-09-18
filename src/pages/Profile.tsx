@@ -97,7 +97,7 @@ export default function Profile() {
         </div>
 
         {/* Personal Information */}
-        <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm p-6">
+        <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-xs p-6">
           <div className="flex items-center gap-3 mb-6">
             <span className="text-primary"><User className="h-5 w-5" /></span>
             <div>
@@ -170,7 +170,7 @@ export default function Profile() {
         </div>
 
         {/* Theme Selector */}
-        <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm p-6">
+        <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-xs p-6">
           <div className="flex items-center gap-3 mb-4">
             <span className="text-primary"><Sun className="h-5 w-5" /></span>
             <div>

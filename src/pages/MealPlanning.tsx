@@ -168,7 +168,7 @@ export default function MealPlanning() {
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col pt-[env(safe-area-inset-top)]">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border">
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xs border-b border-border">
         <div className="container max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="h-9 w-9">
             <ArrowLeft className="h-4 w-4" />
