@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useId, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, BookOpen } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -27,6 +27,7 @@ const SEASON_LABELS: Record<string, string> = {
 };
 
 export default function Dashboard() {
+  const sortValueId = useId();
   // Swipe right to navigate back to chat
   const { handlers: swipeHandlers, style: swipeStyle } = useSwipeNavigation({
     targetRoute: '/',
@@ -101,8 +102,8 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-2">
             <Select value={sortBy} onValueChange={v => setSortBy(v as 'recent' | 'alpha' | 'favorites')}>
-              <SelectTrigger className="w-auto text-sm h-9">
-                <SelectValue />
+              <SelectTrigger aria-label="Trier les recettes" aria-describedby={sortValueId} className="w-auto text-sm h-11">
+                <SelectValue id={sortValueId} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="recent">Plus récentes</SelectItem>
@@ -110,7 +111,7 @@ export default function Dashboard() {
                 <SelectItem value="favorites">Favoris en tête</SelectItem>
               </SelectContent>
             </Select>
-            <Button asChild>
+            <Button asChild className="h-11">
               <Link to="/home">
                 <Plus className="mr-2 h-4 w-4" />
                 Nouvelle

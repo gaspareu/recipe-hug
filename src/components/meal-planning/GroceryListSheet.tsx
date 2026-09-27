@@ -55,7 +55,8 @@ export function GroceryListSheet({ ingredients, customMeals, hasMeals }: Grocery
         <Button
           variant="outline"
           size="sm"
-          className="gap-2"
+          className="gap-2 h-11 min-w-11"
+          aria-label="Ouvrir la liste de courses"
           disabled={!hasMeals}
         >
           <ShoppingCart className="h-4 w-4" />
@@ -65,7 +66,7 @@ export function GroceryListSheet({ ingredients, customMeals, hasMeals }: Grocery
       <SheetContent side="bottom" className="h-[85dvh] flex flex-col">
         <SheetHeader className="flex-row items-center justify-between pr-8">
           <SheetTitle className="text-base">Liste de courses</SheetTitle>
-          <Button variant="ghost" size="sm" onClick={copyToClipboard} className="gap-1.5 h-8">
+          <Button variant="ghost" size="sm" onClick={copyToClipboard} className="gap-1.5 h-11">
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
             <span className="text-xs">{copied ? 'Copié' : 'Copier'}</span>
           </Button>

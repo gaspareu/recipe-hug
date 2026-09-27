@@ -27,7 +27,8 @@ export function InstallBanner() {
 
   return (
     <div
-      role="banner"
+      role="region"
+      aria-label="Installer l'application"
       className="w-full bg-primary text-primary-foreground px-4 py-3 shadow-lg"
     >
       {isIosSafari ? (
@@ -40,7 +41,7 @@ export function InstallBanner() {
           </p>
           <button
             onClick={handleDismiss}
-            className="mt-1 self-end text-xs underline opacity-80"
+            className="mt-1 self-end min-h-11 px-2 text-xs underline opacity-80"
             aria-label="Fermer la bannière d'installation"
           >
             Plus tard
@@ -52,13 +53,13 @@ export function InstallBanner() {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={triggerInstall}
-              className="rounded bg-primary-foreground text-primary px-3 py-1 font-semibold text-xs"
+              className="min-h-11 rounded bg-primary-foreground text-primary px-3 font-semibold text-xs"
             >
               Installer
             </button>
             <button
               onClick={handleDismiss}
-              className="text-xs underline opacity-80"
+              className="min-h-11 px-2 text-xs underline opacity-80"
               aria-label="Fermer la bannière d'installation"
             >
               Plus tard
