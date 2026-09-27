@@ -276,7 +276,7 @@ All colors MUST be HSL.
     --popover-foreground: 45 30% 92%;
 
     --primary: 96 35% 50%; /* Vert sauge plus lumineux pour dark */
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 0 0% 0%; /* Texte lisible sur le vert primaire en mode sombre */
 
     --secondary: 86 40% 40%; /* Vert olive adapté */
     --secondary-foreground: 45 30% 95%;

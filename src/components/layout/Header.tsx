@@ -53,7 +53,7 @@ export function Header() {
         {user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+              <Button variant="ghost" aria-label="Ouvrir le menu du profil" className="relative h-11 w-11 rounded-full p-0">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={profile?.avatar_url || undefined} alt="Avatar" />
                   <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>

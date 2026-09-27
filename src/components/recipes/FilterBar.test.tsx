@@ -23,8 +23,20 @@ describe("FilterBar", () => {
   it("propage la saisie de recherche", async () => {
     const user = userEvent.setup();
     const props = setup();
-    await user.type(screen.getByPlaceholderText(/rechercher une recette/i), "a");
+    await user.type(screen.getByRole("textbox", { name: "Rechercher une recette" }), "a");
     expect(props.onSearchChange).toHaveBeenCalledWith("a");
+  });
+
+  it("nomme les filtres indépendamment de leur valeur", () => {
+    setup();
+    expect(screen.getByRole("combobox", { name: "Filtrer par statut" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Filtrer par saison" })).toBeInTheDocument();
+  });
+
+  it("annonce les valeurs sélectionnées des filtres", () => {
+    setup({ statusFilter: "draft", seasonFilter: "hiver" });
+    expect(screen.getByRole("combobox", { name: "Filtrer par statut" })).toHaveAccessibleDescription("Brouillon");
+    expect(screen.getByRole("combobox", { name: "Filtrer par saison" })).toHaveAccessibleDescription("Hiver");
   });
 
   it("bascule le filtre favoris", async () => {
@@ -36,17 +48,17 @@ describe("FilterBar", () => {
 
   it("n'affiche pas le bouton d'effacement sans filtre actif", () => {
     setup();
-    expect(screen.queryByText("✕")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Effacer tous les filtres" })).not.toBeInTheDocument();
   });
 
   it("affiche et applique l'effacement de tous les filtres", async () => {
     const user = userEvent.setup();
     const props = setup({ search: "tomate" });
 
-    const clear = screen.getByText("✕");
-    expect(clear).toBeInTheDocument();
+    const clear = screen.getByRole("button", { name: "Effacer tous les filtres" });
 
-    await user.click(clear);
+    clear.focus();
+    await user.keyboard("{Enter}");
     expect(props.onStatusFilterChange).toHaveBeenCalledWith("all");
     expect(props.onFavoritesOnlyChange).toHaveBeenCalledWith(false);
     expect(props.onSeasonFilterChange).toHaveBeenCalledWith("all");

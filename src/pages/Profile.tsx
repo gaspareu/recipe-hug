@@ -90,7 +90,7 @@ export default function Profile() {
     <MainLayout>
       <div className="max-w-md mx-auto space-y-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Retour" className="h-11 w-11">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-2xl font-bold text-foreground">Mon Profil</h1>
@@ -101,7 +101,7 @@ export default function Profile() {
           <div className="flex items-center gap-3 mb-6">
             <span className="text-primary"><User className="h-5 w-5" /></span>
             <div>
-              <h3 className="font-semibold leading-none tracking-tight">Informations personnelles</h3>
+              <h2 className="font-semibold leading-none tracking-tight">Informations personnelles</h2>
               <p className="text-sm text-muted-foreground mt-1">Personnalisez votre profil</p>
             </div>
           </div>
@@ -119,7 +119,8 @@ export default function Profile() {
                   type="button"
                   variant="secondary"
                   size="icon"
-                  className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full"
+                  className="absolute -bottom-1 -right-1 h-11 w-11 rounded-full"
+                  aria-label="Changer la photo de profil"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading}
                 >
@@ -174,7 +175,7 @@ export default function Profile() {
           <div className="flex items-center gap-3 mb-4">
             <span className="text-primary"><Sun className="h-5 w-5" /></span>
             <div>
-              <h3 className="font-semibold leading-none tracking-tight">Apparence</h3>
+              <h2 className="font-semibold leading-none tracking-tight">Apparence</h2>
               <p className="text-sm text-muted-foreground mt-1">Choisissez le thème de l'application</p>
             </div>
           </div>

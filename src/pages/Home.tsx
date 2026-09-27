@@ -56,13 +56,13 @@ export default function Home() {
       <header className="absolute top-0 left-0 right-0 z-10 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] bg-background/80 backdrop-blur-xs">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={resetChat} disabled={isStreaming || !hasConversation} title="Nouvelle conversation" className="h-9 w-9">
+            <Button variant="ghost" size="icon" onClick={resetChat} disabled={isStreaming || !hasConversation} aria-label="Nouvelle conversation" className="h-11 w-11">
               <Plus className="h-4 w-4" />
             </Button>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Menu" className="h-9 w-9">
+              <Button variant="ghost" size="icon" aria-label="Menu" className="h-11 w-11">
                 <Menu className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -85,7 +85,7 @@ export default function Home() {
       </header>
 
       {/* Chat area */}
-      <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full pt-16 min-h-0">
+      <main className="flex-1 flex flex-col max-w-3xl mx-auto w-full pt-16 min-h-0">
         <ChatInterface
           messages={messages}
           isStreaming={isStreaming}
@@ -119,7 +119,7 @@ export default function Home() {
             </div>
           }
         />
-      </div>
+      </main>
       {/* Bannière d'installation PWA dans le flux (pas fixed) pour ne pas masquer l'input */}
       <div className="shrink-0 pb-[var(--app-safe-area-bottom,env(safe-area-inset-bottom))]">
         <InstallBanner />

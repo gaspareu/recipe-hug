@@ -14,11 +14,11 @@ une PR, utiliser plutôt le skill **pre-pr**.
 
 ## Baseline de non-régression
 
-Baseline vérifié au **2026-09-15** :
+Baseline vérifié au **2026-09-27** :
 
 | Commande | Baseline (dette préexistante) |
 |----------|-------------------------------|
-| `npm run test:run` | **0 échec** (589 tests) — doit rester à 0 |
+| `npm run test:run` | **0 échec** (567 tests) — doit rester à 0 |
 | `npm run typecheck` | **0 erreur** |
 | `npm run lint` | **0 erreur** (26 avertissements `react-refresh` attendus dans les primitives UI) |
 | `npm run lint:dead-code` | **0 résultat** |

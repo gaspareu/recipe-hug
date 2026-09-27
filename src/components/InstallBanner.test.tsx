@@ -76,7 +76,7 @@ describe("InstallBanner", () => {
 
     it("affiche la bannière avec le bouton Installer", () => {
       render(<InstallBanner />);
-      expect(screen.getByRole("banner")).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: "Installer l'application" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Installer" })).toBeInTheDocument();
     });
 
@@ -96,7 +96,7 @@ describe("InstallBanner", () => {
       const user = userEvent.setup();
       render(<InstallBanner />);
       await user.click(screen.getByRole("button", { name: /fermer la bannière/i }));
-      expect(screen.queryByRole("banner")).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Installer l'application" })).not.toBeInTheDocument();
     });
 
     it("cliquer sur Plus tard enregistre le dismiss dans localStorage", async () => {
@@ -116,7 +116,7 @@ describe("InstallBanner", () => {
 
     it("affiche la bannière avec les instructions iOS", () => {
       render(<InstallBanner />);
-      expect(screen.getByRole("banner")).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: "Installer l'application" })).toBeInTheDocument();
       expect(screen.getByText(/ajouter à l'écran d'accueil/i)).toBeInTheDocument();
     });
 
@@ -134,7 +134,7 @@ describe("InstallBanner", () => {
       const user = userEvent.setup();
       render(<InstallBanner />);
       await user.click(screen.getByRole("button", { name: /fermer la bannière/i }));
-      expect(screen.queryByRole("banner")).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Installer l'application" })).not.toBeInTheDocument();
     });
   });
 });

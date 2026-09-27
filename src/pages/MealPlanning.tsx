@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, CalendarDays, X, Utensils, Plus } from 'lucide-react';
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -170,7 +170,7 @@ export default function MealPlanning() {
       {/* Header */}
       <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-xs border-b border-border">
         <div className="container max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="h-9 w-9">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Retour" className="h-11 w-11">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-lg font-semibold text-foreground">Planning repas</h1>
@@ -180,17 +180,18 @@ export default function MealPlanning() {
               customMeals={groceryData.customMeals}
               hasMeals={meals.length > 0}
             />
-            <Button variant="ghost" size="icon" onClick={() => navigate('/home')} title="Demander à Chef" className="h-9 w-9">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/home')} aria-label="Demander à Chef" className="h-11 w-11">
               <Utensils className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </header>
 
+      <main className="flex flex-1 flex-col pb-[env(safe-area-inset-bottom)]">
       {/* Week navigator */}
       <div className="container max-w-4xl mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" size="icon" onClick={() => setCurrentDate(d => subWeeks(d, 1))} className="h-8 w-8">
+          <Button variant="ghost" size="icon" onClick={() => setCurrentDate(d => subWeeks(d, 1))} aria-label="Semaine précédente" className="h-11 w-11">
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -199,7 +200,7 @@ export default function MealPlanning() {
               {format(weekDays[0], 'd MMM', { locale: fr })} — {format(weekDays[6], 'd MMM yyyy', { locale: fr })}
             </span>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => setCurrentDate(d => addWeeks(d, 1))} className="h-8 w-8">
+          <Button variant="ghost" size="icon" onClick={() => setCurrentDate(d => addWeeks(d, 1))} aria-label="Semaine suivante" className="h-11 w-11">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -249,23 +250,24 @@ export default function MealPlanning() {
                         if (meal) {
                           const title = meal.recipe_title || meal.custom_meal || 'Repas';
                           return (
-                            <div key={key} className="flex items-center justify-between group">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-xs shrink-0">{icon}</span>
+                            <div key={key} className="flex min-h-11 items-center justify-between gap-2 group">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span aria-hidden="true" className="text-xs shrink-0">{icon}</span>
                                 <span className="text-xs text-muted-foreground shrink-0 w-14">{label}</span>
-                                <span
-                                  className={`text-sm truncate ${meal.recipe_id ? 'text-primary font-medium cursor-pointer hover:underline' : 'text-foreground'}`}
-                                  onClick={() => meal.recipe_id && navigate(`/recipes/${meal.recipe_id}`)}
-                                >
-                                  {title}
-                                </span>
+                                {meal.recipe_id ? (
+                                  <Link to={`/recipes/${meal.recipe_id}`} className="min-w-0 flex-1 min-h-11 flex items-center text-sm text-primary font-medium hover:underline focus-visible:underline rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
+                                    <span className="truncate">{title}</span>
+                                  </Link>
+                                ) : (
+                                  <span className="min-w-0 truncate text-sm text-foreground">{title}</span>
+                                )}
                               </div>
                               <button
                                 onClick={() => deleteMeal(meal.id)}
-                                aria-label={`Supprimer ${title}`}
-                                className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                                aria-label={`Supprimer ${label} du ${DAY_NAMES[dayIndex]} ${format(day, 'd MMM', { locale: fr })} : ${title}`}
+                                className="h-11 w-11 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors shrink-0 rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                               >
-                                <X className="h-3.5 w-3.5" />
+                                <X className="h-4 w-4" />
                               </button>
                             </div>
                           );
@@ -276,11 +278,11 @@ export default function MealPlanning() {
                             key={key}
                             onClick={() => openAddDialog(dayIndex, key)}
                             aria-label={`Ajouter ${label} le ${DAY_NAMES[dayIndex]} ${format(day, 'd MMM', { locale: fr })}`}
-                            className="flex items-center gap-2 w-full text-left group/add"
+                            className="flex min-h-11 items-center gap-2 w-full text-left group/add rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                           >
-                            <span className="text-xs shrink-0 opacity-40">{icon}</span>
-                            <span className="text-xs text-muted-foreground/50 shrink-0 w-14">{label}</span>
-                            <span className="flex items-center gap-1 text-xs text-primary/50 group-hover/add:text-primary transition-colors">
+                            <span aria-hidden="true" className="text-xs shrink-0 opacity-40">{icon}</span>
+                            <span className="text-xs text-muted-foreground shrink-0 w-14">{label}</span>
+                            <span className="flex items-center gap-1 text-xs text-primary group-hover/add:underline transition-colors">
                               <Plus className="h-3 w-3" />
                               Ajouter
                             </span>
@@ -295,6 +297,7 @@ export default function MealPlanning() {
           </div>
         )}
       </div>
+      </main>
 
       {/* Add meal dialog */}
       <Dialog open={addingMeal !== null} onOpenChange={open => { if (!open) closeAddDialog(); }}>
