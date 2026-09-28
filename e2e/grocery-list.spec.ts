@@ -59,7 +59,7 @@ test('flux liste de courses : repas planifié → ingrédient agrégé', async (
   await expect(page.getByText(recipeTitle)).toBeVisible({ timeout: 15_000 });
 
   // Ouvre la liste de courses (bouton activé une fois qu'il y a un repas).
-  const coursesBtn = page.getByRole('button', { name: 'Courses', exact: true });
+  const coursesBtn = page.getByRole('button', { name: 'Ouvrir la liste de courses', exact: true });
   await expect(coursesBtn).toBeEnabled({ timeout: 15_000 });
   await coursesBtn.click();
 
