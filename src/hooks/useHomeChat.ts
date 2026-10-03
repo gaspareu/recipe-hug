@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useRecipes } from './useRecipes';
+import { useCompositions } from './useCompositions';
+import { useReplaceWeeklyMealPlan } from './useMealPlans';
 import { useUserPreferences } from './useUserPreferences';
 import { supabase } from '@/integrations/supabase/client';
 import { useChatEngine, ActiveRecipeData, ChatEngineConfig, ToolCallAction, RecipeCard } from './useChatEngine';
@@ -29,6 +31,8 @@ export function useHomeChat() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: recipes = [], refetch: refetchRecipes } = useRecipes();
+  const { data: compositions = [] } = useCompositions();
+  const { mutateAsync: replaceWeeklyMealPlan } = useReplaceWeeklyMealPlan();
   const { preferences, updatePreferencesAsync } = useUserPreferences();
 
   // Mode cuisine : recette et éventuel nombre de portions choisi sur sa carte.
@@ -99,29 +103,31 @@ export function useHomeChat() {
         const weekStart = action.data.week_start as string;
         const meals = action.data.meals as Array<{
           day_of_week: number; meal_type: string;
-          recipe_id?: string; custom_meal?: string; notes?: string;
+          recipe_id?: string; composition_id?: string; custom_meal?: string; notes?: string;
         }>;
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.user) return { error: 'Not authenticated' };
-          
-          // Delete existing meals for this week
-          await supabase.from('meal_plans').delete()
-            .eq('user_id', session.user.id)
-            .eq('week_start', weekStart);
-          
-          // Insert new meals
+          if (!Array.isArray(meals) || meals.length > 28) return { error: 'Invalid meal plan' };
           const rows = meals.map(m => ({
-            user_id: session.user.id,
-            week_start: weekStart,
             day_of_week: m.day_of_week,
             meal_type: m.meal_type,
             recipe_id: m.recipe_id || null,
+            composition_id: m.composition_id || null,
             custom_meal: m.custom_meal || null,
             notes: m.notes || null,
           }));
-          const { error } = await supabase.from('meal_plans').insert(rows);
-          if (error) throw error;
+          if (rows.some(row => {
+            const targets = Number(!!row.recipe_id) + Number(!!row.composition_id) + Number(!!row.custom_meal?.trim());
+            return targets !== 1 ||
+              (row.recipe_id && !recipes.some(recipe => recipe.id === row.recipe_id)) ||
+              (row.composition_id && !compositions.some(composition => composition.id === row.composition_id));
+          })) return { error: 'Unknown or ambiguous meal target' };
+          if (rows.some(row => row.composition_id) && (!preferences ||
+            preferences.dietary_constraints.allergies.length > 0 ||
+            preferences.dietary_constraints.diets.length > 0 ||
+            preferences.dietary_constraints.restrictions.length > 0)) {
+            return { error: 'Compatibilité du plat ou menu à vérifier manuellement dans le planning.' };
+          }
+          await replaceWeeklyMealPlan({ weekStart, meals: rows });
           
           // Navigate to meal planning page
           setTimeout(() => navigate('/meal-planning'), 500);
@@ -170,7 +176,7 @@ export function useHomeChat() {
 
       default: console.log('Unknown tool call:', action.type); return null;
     }
-  }, [recipes, navigate, preferences, updatePreferencesAsync]);
+  }, [recipes, compositions, navigate, preferences, replaceWeeklyMealPlan, updatePreferencesAsync]);
 
   const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
     // Favoris first gives the assistant the most useful compact context while
@@ -180,11 +186,17 @@ export function useHomeChat() {
       .sort((left, right) => Number(Boolean(right.is_favorite)) - Number(Boolean(left.is_favorite)))
       .slice(0, MAX_RECIPES_IN_ASSISTANT_CONTEXT)
       .map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
+    const canSuggestCompositions = !!preferences &&
+      preferences.dietary_constraints.allergies.length === 0 &&
+      preferences.dietary_constraints.diets.length === 0 &&
+      preferences.dietary_constraints.restrictions.length === 0;
+    const compositionSummaries = (canSuggestCompositions ? compositions : []).slice(0, 100)
+      .map(item => ({ id: item.id, title: item.title.slice(0, 160), kind: item.kind, servings: item.servings }));
     return {
       endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`,
-      body: { messages: apiMessages, recipes: recipeSummaries, activeRecipe },
+      body: { messages: apiMessages, recipes: recipeSummaries, compositions: compositionSummaries, activeRecipe },
     };
-  }, [recipes]);
+  }, [recipes, compositions, preferences]);
 
   const engine = useChatEngine({
     welcomeMessage: WELCOME_MESSAGE,

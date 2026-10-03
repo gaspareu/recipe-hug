@@ -68,6 +68,7 @@ const recipe: Recipe = {
   user_id: 'u1',
   title: 'Poivrons farcis',
   status: 'validated',
+  entry_kind: null,
   is_favorite: false,
   servings: 4,
   ingredients: [{ name: 'Poivron', quantity: 4, unit: '' }],

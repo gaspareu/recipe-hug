@@ -7,7 +7,7 @@ import { formatTimer } from '@/hooks/useCookingTimers';
 import { deriveStepTitle } from '@/lib/step-title';
 import { annotateCookingText, formatCookingQuantity } from '@/lib/cooking-ingredients';
 
-function Progress({ idx, total }: { idx: number; total: number }) {
+function Progress({ idx, total, completedIndexes }: { idx: number; total: number; completedIndexes?: ReadonlySet<number> }) {
   return (
     <div className="mb-5 flex items-center justify-between">
       <span className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -19,7 +19,7 @@ function Progress({ idx, total }: { idx: number; total: number }) {
             key={i}
             className={cn(
               'h-[7px] rounded-full transition-[width] duration-200',
-              i < idx ? 'w-[7px] bg-primary' : i === idx ? 'w-[22px] bg-accent' : 'w-[7px] bg-border',
+              i === idx ? 'w-[22px] bg-accent' : (completedIndexes ? completedIndexes.has(i) : i < idx) ? 'w-[7px] bg-primary' : 'w-[7px] bg-border',
             )}
           />
         ))}
@@ -55,6 +55,7 @@ interface CookingStepFocusProps {
   onStartTimer: (label: string, seconds: number, stepIndex: number) => void;
   /** Un minuteur non terminé est déjà rattaché à l'étape courante. */
   hasActiveTimer: boolean;
+  completedIndexes?: ReadonlySet<number>;
 }
 
 function formatAnnotatedQuantity(
@@ -73,6 +74,7 @@ export function CookingStepFocus({
   ingredients,
   onStartTimer,
   hasActiveTimer,
+  completedIndexes,
 }: CookingStepFocusProps) {
   const { segments, offeredMinutes } = useMemo(() => {
     const parsed = parseStepTimers(step.text);
@@ -114,7 +116,7 @@ export function CookingStepFocus({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-[22px] pb-4 pt-[22px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <Progress idx={idx} total={total} />
+      <Progress idx={idx} total={total} completedIndexes={completedIndexes} />
       <div key={idx} className="flex-1 animate-cook-fade-up">
         <h2 className="mb-3 text-center font-solitreo text-4xl leading-tight text-primary text-pretty">
           {title}

@@ -17,6 +17,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { FavoriteToggle } from '@/components/recipes/FavoriteToggle';
 import { IngredientChecklistWithHeader } from '@/components/recipes/IngredientChecklist';
 import { CookingModeContainer } from '@/components/cooking/CookingModeContainer';
+import { RecipePairings } from '@/components/recipes/RecipePairings';
+import { PairingProfileEditor } from '@/components/recipes/PairingProfileEditor';
 import { CookingChatSheet } from '@/components/cooking/CookingChatSheet';
 import { useRecipe, useToggleFavorite, useUpdateRecipe, useCreateRecipe } from '@/hooks/useRecipes';
 import { useRecipeChat } from '@/hooks/useRecipeChat';
@@ -236,6 +238,10 @@ export default function RecipeDetail() {
         </motion.div>
 
         <RecipeDetailHeader title={recipe.title} description={recipe.ai_summary} />
+        <p className="text-sm text-muted-foreground">
+          {recipe.entry_kind === 'preparation' ? 'Préparation' : recipe.entry_kind === 'complete_dish' ? 'Plat complet' : 'À classer'}
+          {recipe.entry_kind === null && <> · <Link className="text-primary underline" to={`/recipes/${recipe.id}/edit`}>Classer cette fiche</Link></>}
+        </p>
 
         {recipe.ingredients.length === 0 ? (
           <Card className="rounded-2xl border-border bg-card">
@@ -276,6 +282,11 @@ export default function RecipeDetail() {
             <RecipeStepsList steps={steps} />
           </CardContent>
         </Card>
+
+        {recipe.entry_kind && <>
+          {recipe.status !== 'archived' && <RecipePairings recipe={recipe} />}
+          <PairingProfileEditor recipeId={recipe.id} />
+        </>}
 
         {/* Historique des versions (ouvert depuis le menu d'actions) */}
         <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>

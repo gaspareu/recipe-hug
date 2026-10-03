@@ -1,6 +1,23 @@
 import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { buildSimpleRequest, buildToolCallRequest, buildVisionRequest, callAIStreaming, extractContentFromResponse, transformAnthropicStreamToOpenAI, transformGeminiStreamToOpenAI } from "./ai-providers.ts";
+import { buildSimpleRequest, buildToolCallRequest, buildVisionRequest, callAINonStreaming, callAIStreaming, extractContentFromResponse, transformAnthropicStreamToOpenAI, transformGeminiStreamToOpenAI } from "./ai-providers.ts";
 import { AIConfig } from "./ai-types.ts";
+
+Deno.test("callAINonStreaming : propage le délai d'annulation au fournisseur", async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  let signal: AbortSignal | null | undefined;
+  globalThis.fetch = ((_input: string | URL | Request, init?: RequestInit) => {
+    signal = init?.signal;
+    return Promise.resolve(new Response(JSON.stringify({ content: [{ text: '{"suggestions":[]}' }] }), { status: 200 }));
+  }) as typeof fetch;
+  try {
+    const config: AIConfig = { provider: "anthropic", model: "claude-haiku-4-5", apiKey: "K", endpoint: "https://anthropic.test/messages" };
+    await callAINonStreaming(config, [{ role: "user", content: "accords" }], controller.signal);
+    assertEquals(signal, controller.signal);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 Deno.test("callAIStreaming (gemini natif): la clé passe par l'en-tête x-goog-api-key, jamais dans l'URL", async () => {
   const originalFetch = globalThis.fetch;

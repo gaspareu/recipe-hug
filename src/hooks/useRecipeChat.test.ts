@@ -47,6 +47,7 @@ const RECIPE: Recipe = {
   user_id: "u1",
   title: "Tarte aux pommes",
   status: "validated",
+  entry_kind: null,
   is_favorite: true,
   servings: 4,
   ingredients: [{ name: "Pomme", quantity: 3, unit: "pièce" }],
@@ -128,6 +129,38 @@ describe("useRecipeChat — contexte initial", () => {
     expect(body.recipes).toEqual([
       { id: "r1", title: "Tarte aux pommes", status: "validated", is_favorite: true },
     ]);
+  });
+
+  it("transmet à Chef le contexte de la session composée courante", async () => {
+    const compositionContext = {
+      kind: 'menu' as const, title: 'Dîner', servings: 4,
+      currentStep: 3, totalSteps: 8, currentCourse: 'Entrée',
+      currentPreparation: 'Carottes', currentInstruction: 'Râper les carottes', assembly: false,
+      sections: [{ title: 'Carottes', course: 'Entrée' }],
+    };
+    const { result } = renderHook(() => useRecipeChat({
+      recipe: RECIPE, completedSteps: new Set<number>(), compositionContext,
+    }));
+    await act(() => result.current.sendMessage("Où en est le menu ?"));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.compositionContext).toEqual(compositionContext);
+  });
+
+  it("présente le dressage comme étape active sans attribuer l'étape à la fiche source", async () => {
+    const activeRecipeOverride = {
+      id: 'composition:menu1', title: 'Dressage · Dîner', servings: 4,
+      ingredients: [], steps: [{ order: 1, text: 'Dresser les assiettes' }], completedSteps: [],
+    };
+    const { result } = renderHook(() => useRecipeChat({
+      recipe: RECIPE, completedSteps: new Set<number>(),
+      activeRecipeOverride,
+    }));
+    await act(() => result.current.sendMessage("Comment dresser ?"));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.activeRecipe).toMatchObject({
+      id: 'composition:menu1', title: 'Dressage · Dîner', steps: [{ text: 'Dresser les assiettes' }],
+    });
+    expect(body.activeRecipe.steps).not.toEqual(RECIPE.steps);
   });
 
   it("resynchronise le contexte de Chef quand les portions changent", async () => {

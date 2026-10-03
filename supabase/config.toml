@@ -13,6 +13,9 @@ verify_jwt = true
 [functions.analyze-recipe]
 verify_jwt = true
 
+[functions.recommend-pairings]
+verify_jwt = true
+
 [functions.home-assistant]
 verify_jwt = true
 

@@ -28,6 +28,8 @@ const RecipeEdit = lazy(() => import("./pages/RecipeEdit"));
 const RecipeNew = lazy(() => import("./pages/RecipeNew"));
 const Profile = lazy(() => import("./pages/Profile"));
 const MealPlanning = lazy(() => import("./pages/MealPlanning"));
+const CompositionEditor = lazy(() => import("./pages/CompositionEditor"));
+const CompositionDetail = lazy(() => import("./pages/CompositionDetail"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -89,6 +91,18 @@ const router = sentryCreateBrowserRouter([
       {
         path: "/recipes/:id/edit",
         element: <ProtectedRoute><PageTransition><RecipeEdit /></PageTransition></ProtectedRoute>,
+      },
+      {
+        path: "/compositions/new",
+        element: <ProtectedRoute><PageTransition><CompositionEditor /></PageTransition></ProtectedRoute>,
+      },
+      {
+        path: "/compositions/:id/edit",
+        element: <ProtectedRoute><PageTransition><CompositionEditor /></PageTransition></ProtectedRoute>,
+      },
+      {
+        path: "/compositions/:id",
+        element: <ProtectedRoute><PageTransition><CompositionDetail /></PageTransition></ProtectedRoute>,
       },
       {
         path: "/profile",

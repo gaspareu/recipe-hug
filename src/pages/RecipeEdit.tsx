@@ -33,7 +33,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { CollapsibleSection } from '@/components/profile/CollapsibleSection';
 import { fadeInUpVariants, fadeInUpTransition } from '@/lib/motion';
 
-import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
+import type { Ingredient, Step, RecipeStatus, RecipeEntryKind } from '@/types/recipe';
 
 const AVAILABLE_TAGS = [
   'protéines', 'fibres', 'léger', 'végétarien', 'végan',
@@ -55,6 +55,7 @@ export default function RecipeEdit() {
   const [title, setTitle] = useState('');
   const [servings, setServings] = useState<number | ''>('');
   const [status, setStatus] = useState<RecipeStatus>('draft');
+  const [entryKind, setEntryKind] = useState<RecipeEntryKind | null>(null);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [steps, setSteps] = useState<Step[]>([]);
   const [nutritionTags, setNutritionTags] = useState<string[]>([]);
@@ -69,6 +70,7 @@ export default function RecipeEdit() {
       setTitle(recipe.title);
       setServings(recipe.servings || '');
       setStatus(recipe.status);
+      setEntryKind(recipe.entry_kind);
       setIngredients(recipe.ingredients);
       setSteps(recipe.steps);
       setNutritionTags(recipe.nutrition_tags || []);
@@ -104,6 +106,7 @@ export default function RecipeEdit() {
         id,
         title: title.trim(),
         status,
+        entry_kind: entryKind,
         servings: servings || null,
         ingredients,
         steps,
@@ -184,6 +187,18 @@ export default function RecipeEdit() {
                     value={title}
                     onChange={(e) => { setTitle(e.target.value); setIsDirty(true); }}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="entry-kind">Type de fiche</Label>
+                  <Select value={entryKind ?? 'unclassified'} onValueChange={value => { setEntryKind(value === 'unclassified' ? null : value as RecipeEntryKind); setIsDirty(true); }}>
+                    <SelectTrigger id="entry-kind"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unclassified">À classer</SelectItem>
+                      <SelectItem value="preparation">Préparation ou accompagnement</SelectItem>
+                      <SelectItem value="complete_dish">Plat complet</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

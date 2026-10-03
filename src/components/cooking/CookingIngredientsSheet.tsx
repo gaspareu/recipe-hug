@@ -14,6 +14,7 @@ interface CookingIngredientsSheetProps {
   onIncreaseServings: () => void;
   checkedIndexes: ReadonlySet<number>;
   onToggleIngredient: (index: number) => void;
+  sections?: Array<{ key: string; title: string; ingredients: Ingredient[] }>;
 }
 
 export function CookingIngredientsSheet({
@@ -26,6 +27,7 @@ export function CookingIngredientsSheet({
   onIncreaseServings,
   checkedIndexes,
   onToggleIngredient,
+  sections,
 }: CookingIngredientsSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -68,7 +70,8 @@ export function CookingIngredientsSheet({
           </div>
         </SheetHeader>
 
-        <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2">
+        <ul>
           {ingredients.map((ingredient, index) => {
             const checked = checkedIndexes.has(index);
             const quantity = formatCookingQuantity(ingredient);
@@ -106,6 +109,14 @@ export function CookingIngredientsSheet({
             );
           })}
         </ul>
+        {sections && sections.length > 0 && <section className="mt-5 space-y-4" aria-label="Ingrédients par fiche">
+          <h3 className="font-solitreo text-xl">Par préparation</h3>
+          {sections.map(section => <div key={section.key} className="rounded-xl bg-muted/50 p-3">
+            <h4 className="font-semibold">{section.title}</h4>
+            <ul className="mt-1 space-y-1 font-crimson text-sm">{section.ingredients.map((ingredient, index) => <li key={`${ingredient.name}-${index}`}>{formatCookingQuantity(ingredient)} {ingredient.name}</li>)}</ul>
+          </div>)}
+        </section>}
+        </div>
       </SheetContent>
     </Sheet>
   );

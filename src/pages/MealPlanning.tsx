@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRecipes } from '@/hooks/useRecipes';
+import { useCompositions } from '@/hooks/useCompositions';
+import { resolveCookingRun } from '@/lib/resolve-cooking-run';
 import { useMealPlans, useAddMealPlan, useDeleteMealPlan, type MealPlansData } from '@/hooks/useMealPlans';
 import { GroceryListSheet } from '@/components/meal-planning/GroceryListSheet';
 import { toast } from '@/components/ui/sonner';
@@ -47,11 +49,14 @@ export default function MealPlanning() {
   const recipesMap = useMemo(() => data?.recipesMap ?? {}, [data]);
 
   const { data: allRecipes = [] } = useRecipes();
+  const { data: compositions = [] } = useCompositions();
+  const compositionsMap = useMemo(() => new Map(compositions.map(composition => [composition.id, composition])), [compositions]);
 
   // Add meal dialog state
   const [addingMeal, setAddingMeal] = useState<AddingMeal | null>(null);
   const [recipeSearch, setRecipeSearch] = useState('');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
+  const [selectedCompositionId, setSelectedCompositionId] = useState<string | null>(null);
   const [customMealText, setCustomMealText] = useState('');
   const isAdding = addMealPlan.isPending;
 
@@ -65,6 +70,7 @@ export default function MealPlanning() {
     setAddingMeal({ dayIndex, mealType });
     setRecipeSearch('');
     setSelectedRecipeId(null);
+    setSelectedCompositionId(null);
     setCustomMealText('');
   };
 
@@ -72,18 +78,20 @@ export default function MealPlanning() {
     setAddingMeal(null);
     setRecipeSearch('');
     setSelectedRecipeId(null);
+    setSelectedCompositionId(null);
     setCustomMealText('');
   };
 
   const addMealPlanEntry = async () => {
-    if (!addingMeal || (!selectedRecipeId && !customMealText.trim())) return;
+    if (!addingMeal || (!selectedRecipeId && !selectedCompositionId && !customMealText.trim())) return;
     try {
       await addMealPlan.mutateAsync({
         weekStart,
         dayIndex: addingMeal.dayIndex,
         mealType: addingMeal.mealType,
         recipeId: selectedRecipeId ?? null,
-        customMeal: selectedRecipeId ? null : customMealText.trim(),
+        compositionId: selectedCompositionId,
+        customMeal: selectedRecipeId || selectedCompositionId ? null : customMealText.trim(),
       });
       closeAddDialog();
     } catch (err) {
@@ -108,6 +116,16 @@ export default function MealPlanning() {
             category: ing.category || 'Autres',
           });
         }
+      } else if (meal.composition_id) {
+        const composition = compositionsMap.get(meal.composition_id);
+        if (!composition) { customMeals.push('Composition inaccessible (ingrédients à vérifier)'); continue; }
+        try {
+          const run = resolveCookingRun({ type: composition.kind, id: composition.id, servings: composition.servings }, allRecipes, compositions);
+          for (const ingredient of run.ingredients) allIngredients.push({
+            name: ingredient.name, quantity: ingredient.quantity, unit: ingredient.unit,
+            category: ingredient.category || 'Autres',
+          });
+        } catch { customMeals.push(`${composition.title} (ingrédients à vérifier)`); }
       } else if (meal.custom_meal) {
         if (!customMeals.includes(meal.custom_meal)) {
           customMeals.push(meal.custom_meal);
@@ -116,7 +134,7 @@ export default function MealPlanning() {
     }
 
     return { ingredients: allIngredients, customMeals };
-  }, [meals, recipesMap]);
+  }, [meals, recipesMap, compositionsMap, allRecipes, compositions]);
 
   const weekDays = useMemo(() => {
     const ws = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -163,7 +181,7 @@ export default function MealPlanning() {
 
   const today = new Date();
 
-  const canAdd = selectedRecipeId !== null || customMealText.trim().length > 0;
+  const canAdd = selectedRecipeId !== null || selectedCompositionId !== null || customMealText.trim().length > 0;
 
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col pt-[env(safe-area-inset-top)]">
@@ -248,7 +266,7 @@ export default function MealPlanning() {
                     <div className="space-y-1.5">
                       {dayMeals.map(({ key, label, icon, meal }) => {
                         if (meal) {
-                          const title = meal.recipe_title || meal.custom_meal || 'Repas';
+                          const title = meal.recipe_title || (meal.composition_id ? compositionsMap.get(meal.composition_id)?.title : null) || meal.custom_meal || 'Repas';
                           return (
                             <div key={key} className="flex min-h-11 items-center justify-between gap-2 group">
                               <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -258,6 +276,8 @@ export default function MealPlanning() {
                                   <Link to={`/recipes/${meal.recipe_id}`} className="min-w-0 flex-1 min-h-11 flex items-center text-sm text-primary font-medium hover:underline focus-visible:underline rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                                     <span className="truncate">{title}</span>
                                   </Link>
+                                ) : meal.composition_id ? (
+                                  <Link to={`/compositions/${meal.composition_id}`} className="min-w-0 flex-1 min-h-11 flex items-center text-sm text-primary font-medium hover:underline focus-visible:underline rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"><span className="truncate">{title}</span></Link>
                                 ) : (
                                   <span className="min-w-0 truncate text-sm text-foreground">{title}</span>
                                 )}
@@ -323,6 +343,7 @@ export default function MealPlanning() {
                 onChange={e => {
                   setRecipeSearch(e.target.value);
                   setSelectedRecipeId(null);
+                  setSelectedCompositionId(null);
                 }}
               />
               {filteredRecipes.length > 0 && (
@@ -332,6 +353,7 @@ export default function MealPlanning() {
                       key={recipe.id}
                       onClick={() => {
                         setSelectedRecipeId(recipe.id);
+                        setSelectedCompositionId(null);
                         setRecipeSearch(recipe.title);
                         setCustomMealText('');
                       }}
@@ -342,6 +364,17 @@ export default function MealPlanning() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Plat composé ou menu</p>
+              <div className="max-h-36 divide-y overflow-y-auto rounded-md border">
+                {compositions.filter(composition => composition.title.toLowerCase().includes(recipeSearch.toLowerCase())).map(composition => <button key={composition.id} type="button"
+                  className={`min-h-11 w-full px-3 text-left text-sm ${selectedCompositionId === composition.id ? 'bg-primary/10 font-semibold text-primary' : 'hover:bg-muted'}`}
+                  onClick={() => { setSelectedCompositionId(composition.id); setSelectedRecipeId(null); setRecipeSearch(composition.title); setCustomMealText(''); }}>
+                  {composition.title} · {composition.kind === 'menu' ? 'menu' : 'plat composé'}
+                </button>)}
+              </div>
             </div>
 
             {/* Divider */}
@@ -362,6 +395,7 @@ export default function MealPlanning() {
                   setCustomMealText(e.target.value);
                   if (e.target.value.trim()) {
                     setSelectedRecipeId(null);
+                    setSelectedCompositionId(null);
                     setRecipeSearch('');
                   }
                 }}

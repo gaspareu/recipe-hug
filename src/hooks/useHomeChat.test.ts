@@ -5,16 +5,17 @@ import { sseResponse, toolCallEvent, contentEvent } from "@/test/sse";
 import type { Recipe } from "@/types/recipe";
 import type { UserCulinaryPreferences } from "./useUserPreferences";
 
-const { mockSupabase, mockNavigate, mockRefetch, mockUpdatePreferencesAsync, mockInvalidate, hookState } = vi.hoisted(
+const { mockSupabase, mockNavigate, mockRefetch, mockUpdatePreferencesAsync, mockReplaceWeeklyMealPlan, mockInvalidate, hookState } = vi.hoisted(
   () => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockSupabase: { from: vi.fn(), auth: { getSession: vi.fn(), getUser: vi.fn() } } as any,
     mockNavigate: vi.fn(),
     mockRefetch: vi.fn(() => Promise.resolve()),
     mockUpdatePreferencesAsync: vi.fn((_prefs?: unknown) => Promise.resolve()),
+    mockReplaceWeeklyMealPlan: vi.fn((_input?: unknown) => Promise.resolve(2)),
     mockInvalidate: vi.fn(),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    hookState: { recipes: [] as any[], preferences: null as any },
+    hookState: { recipes: [] as any[], compositions: [] as any[], preferences: null as any },
   }),
 );
 
@@ -28,6 +29,8 @@ vi.mock("react-router-dom", () => ({ useNavigate: () => mockNavigate }));
 vi.mock("./useRecipes", () => ({
   useRecipes: () => ({ data: hookState.recipes, refetch: mockRefetch }),
 }));
+vi.mock("./useCompositions", () => ({ useCompositions: () => ({ data: hookState.compositions }) }));
+vi.mock("./useMealPlans", () => ({ useReplaceWeeklyMealPlan: () => ({ mutateAsync: mockReplaceWeeklyMealPlan }) }));
 vi.mock("./useUserPreferences", () => ({
   useUserPreferences: () => ({
     preferences: hookState.preferences,
@@ -55,6 +58,7 @@ function makeRecipe(overrides: Partial<Recipe> = {}): Recipe {
     user_id: "u1",
     title: "Tarte aux pommes",
     status: "validated",
+    entry_kind: null,
     is_favorite: true,
     servings: 4,
     ingredients: [{ name: "Pomme", quantity: 3, unit: "pièce" }],
@@ -129,12 +133,24 @@ beforeEach(() => {
     makeRecipe(),
     makeRecipe({ id: "r2", title: "Soupe à l'oignon", status: "draft", is_favorite: false }),
   ];
+  hookState.compositions = [];
   hookState.preferences = makePreferences();
   mockRefetch.mockImplementation(() => Promise.resolve());
   mockUpdatePreferencesAsync.mockResolvedValue(undefined);
   installSupabase();
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockResolvedValue(sseResponse([contentEvent("Ok")]));
+});
+
+it("transmet les références des plats et menus au Chef pour le planning", async () => {
+  hookState.preferences = { ...makePreferences(), dietary_constraints: { allergies: [], diets: [], restrictions: [] } };
+  hookState.compositions = [{
+    id: "1d44b508-3aac-4ea7-a5a8-17491eaa77b8", title: "Dîner de saison", kind: "menu", servings: 4,
+  }];
+  const { result } = renderHook(() => useHomeChat());
+  await act(() => result.current.sendMessage("Planifie mon dîner"));
+  const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+  expect(body.compositions).toEqual([{ id: hookState.compositions[0].id, title: "Dîner de saison", kind: "menu", servings: 4 }]);
 });
 
 // ---------------------------------------------------------------------------
@@ -666,7 +682,37 @@ describe("useHomeChat — navigation", () => {
 // Flow : planification de repas
 // ---------------------------------------------------------------------------
 describe("useHomeChat — planning de repas", () => {
-  it("save_meal_plan remplace les repas de la semaine puis redirige vers le planning", async () => {
+  it("enregistre un menu connu lorsque les contraintes alimentaires sont vides", async () => {
+    hookState.preferences = { ...makePreferences(), dietary_constraints: { allergies: [], diets: [], restrictions: [] } };
+    hookState.compositions = [{
+      id: "1d44b508-3aac-4ea7-a5a8-17491eaa77b8", title: "Dîner", kind: "menu", servings: 4,
+    }];
+    const { result } = renderHook(() => useHomeChat());
+    await sendToolCall(result, "save_meal_plan", {
+      week_start: "2026-06-08",
+      meals: [{ day_of_week: 1, meal_type: "dinner", composition_id: hookState.compositions[0].id }],
+    });
+    expect(mockReplaceWeeklyMealPlan).toHaveBeenCalledWith({ weekStart: '2026-06-08', meals: [{
+      day_of_week: 1, meal_type: 'dinner', recipe_id: null,
+      composition_id: hookState.compositions[0].id, custom_meal: null, notes: null,
+    }] });
+  });
+
+  it("écarte les compositions du contexte et de l'enregistrement si une allergie est déclarée", async () => {
+    hookState.compositions = [{
+      id: "1d44b508-3aac-4ea7-a5a8-17491eaa77b8", title: "Dîner", kind: "menu", servings: 4,
+    }];
+    const { result } = renderHook(() => useHomeChat());
+    await sendToolCall(result, "save_meal_plan", {
+      week_start: "2026-06-08",
+      meals: [{ day_of_week: 1, meal_type: "dinner", composition_id: hookState.compositions[0].id }],
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.compositions).toEqual([]);
+    expect(mockReplaceWeeklyMealPlan).not.toHaveBeenCalled();
+  });
+
+  it("save_meal_plan remplace atomiquement les repas de la semaine puis redirige", async () => {
     const { result } = renderHook(() => useHomeChat());
 
     await sendToolCall(result, "save_meal_plan", {
@@ -677,31 +723,24 @@ describe("useHomeChat — planning de repas", () => {
       ],
     });
 
-    const [deleteBuilder, insertBuilder] = buildersFor("meal_plans");
-    expect(deleteBuilder.delete).toHaveBeenCalled();
-    expect(deleteBuilder.eq).toHaveBeenCalledWith("user_id", "u1");
-    expect(deleteBuilder.eq).toHaveBeenCalledWith("week_start", "2026-06-08");
-
-    expect(insertBuilder.insert).toHaveBeenCalledWith([
+    expect(mockReplaceWeeklyMealPlan).toHaveBeenCalledWith({ weekStart: '2026-06-08', meals: [
       {
-        user_id: "u1",
-        week_start: "2026-06-08",
         day_of_week: 1,
         meal_type: "dinner",
         recipe_id: "r1",
+        composition_id: null,
         custom_meal: null,
         notes: null,
       },
       {
-        user_id: "u1",
-        week_start: "2026-06-08",
         day_of_week: 2,
         meal_type: "lunch",
         recipe_id: null,
+        composition_id: null,
         custom_meal: "Restes",
         notes: "vider le frigo",
       },
-    ]);
+    ] });
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/meal-planning"), {
       timeout: 1500,

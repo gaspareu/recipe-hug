@@ -41,6 +41,7 @@ const recipe: Recipe = {
   user_id: 'u1',
   title: 'Pain maison',
   status: 'validated',
+  entry_kind: null,
   is_favorite: false,
   servings: 4,
   ingredients: [
