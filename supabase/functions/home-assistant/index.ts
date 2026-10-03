@@ -583,7 +583,7 @@ serve(async (req) => {
     // round trips from time-to-first-token.
     const aiConfigPromise = resolveAIConfig(supabaseClient, userId, {
       agentType: "chat",
-      defaultModel: "claude-sonnet-5",
+      defaultModel: "claude-sonnet-5-5",
       requiredCapabilities: ["tools"],
     });
     const preferencesPromise = supabaseClient

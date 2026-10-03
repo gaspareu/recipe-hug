@@ -59,7 +59,8 @@ au prochain déploiement CI.
 | Secret | Usage | Obligatoire |
 |--------|-------|-------------|
 | `ANTHROPIC_API_KEY` | IA par défaut (chat, analyse, génération texte) | Oui |
-| `GEMINI_API_KEY` | Génération d'images côté serveur | Oui (images) |
+| `OPENAI_API_KEY` | Génération d'images par défaut (GPT Image 2.5 Flare) | Recommandé ; clé utilisateur OpenAI possible |
+| `GEMINI_API_KEY` | Génération d'images Gemini ou repli sans clé OpenAI | Recommandé pour le repli |
 | `AI_KEYS_ENCRYPTION_SECRET` | Chiffrement AES-GCM des clés API utilisateur | Oui |
 | `APP_URL` | URL publique (`https://recipe-hug.vercel.app`) | Oui |
 | `ELEVENLABS_API_KEY` | TTS + transcription Scribe | Oui (vocal) |
@@ -88,7 +89,7 @@ Projet : `ifpqsyyvytfpossqycpc`
 | `home-assistant` | true | Chat IA unifié (streaming) |
 | `analyze-recipe` | true | Analyse nutritionnelle |
 | `parse-recipe-image` | true | OCR image → recette |
-| `generate-recipe-image` | true | Génération photo plat (Gemini) |
+| `generate-recipe-image` | true | Génération photo plat (GPT Image 2.5 Flare par défaut) |
 | `webhook-recipe` | **false** | Réception webhook externe |
 | `manage-ai-keys` | true | CRUD clés API chiffrées |
 | `validate-ai-key` | true | Test validité clé API |
@@ -110,11 +111,11 @@ Projet : `ifpqsyyvytfpossqycpc`
 
 ## Génération d'images — détails techniques
 
-- **Modèle** : `gemini-2.5-flash-image` (API native, pas l'endpoint OpenAI-compat)
-- **Endpoint** : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent` — clé via l'en-tête `x-goog-api-key` (jamais en query string : une erreur réseau exposerait l'URL, donc la clé)
-- **Format requête** : `{ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ["IMAGE", "TEXT"] } }`
-- **Format réponse** : `candidates[0].content.parts[].inlineData.data` (base64) + `inlineData.mimeType`
-- **Fallback** : si l'utilisateur a configuré un agent config `generate_image` avec DALL-E 3, c'est utilisé à la place
+- **Modèle par défaut** : `gpt-image-2.5-flare` via `OPENAI_API_KEY` serveur, pour la génération manuelle et celle du webhook
+- **Repli des clés** : sans secret OpenAI serveur, utiliser la clé OpenAI chiffrée de l'utilisateur ; sans clé OpenAI, conserver Gemini via `GEMINI_API_KEY` serveur
+- **Endpoint OpenAI** : `https://api.openai.com/v1/images/generations` ; image JPEG 1536×864 renvoyée dans `data[0].b64_json`
+- **Choix explicites** : Gemini (`gemini-2.5-flash-image`, API native) et DALL·E 3 restent pris en charge par le module partagé
+- **Gemini** : clé via l'en-tête `x-goog-api-key` (jamais dans l'URL) ; réponse `candidates[0].content.parts[].inlineData`
 
 > **Attention** : le modèle `gemini-2.0-flash-exp-image-generation` n'existe plus dans l'API v1beta. Ne pas l'utiliser.
 
@@ -131,8 +132,8 @@ curl "https://generativelanguage.googleapis.com/v1beta/models?key=VOTRE_CLE&page
 ```typescript
 resolveAIConfig(supabase, userId, {
   agentType: "generate_image",   // identifiant de l'agent
-  defaultProvider: "gemini",     // provider serveur si pas de config user
-  defaultModel: "gemini-2.5-flash-image",
+  defaultProvider: "openai",     // provider serveur si pas de config user
+  defaultModel: "gpt-image-2.5-flare",
   requiredCapabilities: ["image_generation"],
 })
 ```

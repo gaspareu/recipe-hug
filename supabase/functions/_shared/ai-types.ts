@@ -30,7 +30,7 @@ export const PROVIDER_ENDPOINTS: Record<string, string> = {
 };
 
 export const DEFAULT_MODELS: Record<AIProvider, string> = {
-  anthropic: "claude-sonnet-5",
+  anthropic: "claude-sonnet-5-5",
   gemini: "gemini-2.5-flash",
   openai: "gpt-4o",
 };
@@ -47,6 +47,7 @@ export const TOOL_CAPABLE_MODELS = [
   "o3-mini",
   // Direct Anthropic
   "claude-opus-4-8",
+  "claude-sonnet-5-5",
   "claude-sonnet-5",
   "claude-sonnet-4-6",
   "claude-haiku-4-5",
@@ -61,19 +62,27 @@ export const VISION_MODELS = [
   "gpt-4o-mini",
   // Direct Anthropic
   "claude-opus-4-8",
+  "claude-sonnet-5-5",
   "claude-sonnet-5",
   "claude-sonnet-4-6",
 ];
 
 export const IMAGE_GEN_MODELS = [
+  "gpt-image-2.5-flare",
   "gemini-2.5-flash-image",
   "gemini-3.1-flash-image",
   "dall-e-3",
 ];
 
-export type Capability = "tools" | "vision" | "image_generation";
+export const TEXT_MODELS = [
+  ...TOOL_CAPABLE_MODELS,
+  "gemini-2.5-flash-lite-preview-06-17",
+];
+
+export type Capability = "text" | "tools" | "vision" | "image_generation";
 
 export const CAPABILITY_MODELS: Record<Capability, string[]> = {
+  text: TEXT_MODELS,
   tools: TOOL_CAPABLE_MODELS,
   vision: VISION_MODELS,
   image_generation: IMAGE_GEN_MODELS,

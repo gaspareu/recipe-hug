@@ -67,7 +67,8 @@ export interface ModelInfo {
 // Models available per provider with capabilities
 export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
   anthropic: [
-    { value: 'claude-sonnet-5', label: 'Claude Sonnet 5 (défaut)', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (défaut)', capabilities: ['text', 'streaming', 'vision', 'tools'] },
+    { value: 'claude-sonnet-5', label: 'Claude Sonnet 5', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'claude-opus-4-8', label: 'Claude Opus 4.8', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', capabilities: ['text', 'streaming', 'tools'] },
   ],
@@ -82,6 +83,7 @@ export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
     { value: 'gpt-4o', label: 'GPT-4o', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini', capabilities: ['text', 'streaming', 'vision', 'tools'] },
     { value: 'o3-mini', label: 'o3-mini', capabilities: ['text', 'streaming', 'tools'] },
+    { value: 'gpt-image-2.5-flare', label: 'GPT Image 2.5 Flare (défaut images)', capabilities: ['image_generation'] },
     { value: 'dall-e-3', label: 'DALL·E 3', capabilities: ['image_generation'] },
   ],
 };

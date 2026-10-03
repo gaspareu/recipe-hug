@@ -107,6 +107,20 @@ export async function resolveAIConfig(
 
   const settings = await getUserAISettings(createSettingsClient(supabaseClient), userId);
 
+  // Les images utilisent Flare si une clé OpenAI existe côté serveur ou chez
+  // l'utilisateur. Sans aucune clé OpenAI, conserver la génération Gemini.
+  if (options.agentType === "generate_image" && defaultProvider === "openai" && !defaultConfig.apiKey) {
+    const userOpenAIKey = getApiKeyForProvider(settings, "openai");
+    if (userOpenAIKey) {
+      defaultConfig.apiKey = userOpenAIKey;
+    } else if (serverKeyByProvider.gemini) {
+      defaultConfig.provider = "gemini";
+      defaultConfig.model = "gemini-2.5-flash-image";
+      defaultConfig.apiKey = serverKeyByProvider.gemini;
+      defaultConfig.endpoint = PROVIDER_ENDPOINTS.gemini;
+    }
+  }
+
   console.log(`[AI Config] Global: ${settings.provider}/${settings.preferred_model}`);
   console.log(`[AI Config] Agent configs: ${Object.keys(settings.agent_configs || {}).join(", ") || "none"}`);
   console.log(`[AI Config] Provider keys: ${Object.keys(settings.provider_api_keys || {}).join(", ") || "none"}`);
@@ -140,6 +154,16 @@ export async function resolveAIConfig(
   }
 
   // 2. Fall back to global user settings
+  if (settings.provider === "anthropic" && settings.preferred_model &&
+      validateCapabilities(settings.preferred_model, options.requiredCapabilities)) {
+    return {
+      provider: "anthropic",
+      model: settings.preferred_model,
+      apiKey: ANTHROPIC_API_KEY || "",
+      endpoint: PROVIDER_ENDPOINTS.anthropic,
+    };
+  }
+
   if (settings.provider && settings.provider !== "anthropic" && settings.preferred_model) {
     const globalApiKey = getApiKeyForProvider(settings, settings.provider);
 

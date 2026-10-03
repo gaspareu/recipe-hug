@@ -22,8 +22,8 @@ async function triggerImageGeneration(
   try {
     const aiConfig = await resolveAIConfig(supabaseAdmin, userId, {
       agentType: "generate_image",
-      defaultProvider: "gemini",
-      defaultModel: "gemini-2.5-flash-image",
+      defaultProvider: "openai",
+      defaultModel: "gpt-image-2.5-flare",
       requiredCapabilities: ["image_generation"],
     });
 
@@ -119,6 +119,7 @@ Deno.serve(async (req) => {
       agentType: "webhook",
       // Extraction simple : Haiku suffit et coûte ~3x moins cher que Sonnet.
       defaultModel: "claude-haiku-4-5",
+      requiredCapabilities: ["text"],
     });
     console.log(`Extracting recipe using ${aiConfig.provider}/${aiConfig.model}`);
 

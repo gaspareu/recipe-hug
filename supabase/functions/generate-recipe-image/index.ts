@@ -59,12 +59,11 @@ serve(async (req) => {
     }
 
     // Resolve AI configuration
-    // La génération d'images nécessite un fournisseur compatible (Gemini ou OpenAI/DALL·E)
-    // configuré par l'utilisateur : le fournisseur par défaut (Anthropic) ne génère pas d'images.
+    // La génération d'images utilise Flare par défaut, ou le modèle compatible choisi par l'utilisateur.
     const aiConfig = await resolveAIConfig(supabase, userId, {
       agentType: "generate_image",
-      defaultProvider: "gemini",
-      defaultModel: "gemini-2.5-flash-image",
+      defaultProvider: "openai",
+      defaultModel: "gpt-image-2.5-flare",
       requiredCapabilities: ["image_generation"],
     });
     console.log(`Generating image for recipe ${recipeId} using ${aiConfig.provider}/${aiConfig.model}`);

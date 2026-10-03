@@ -34,7 +34,7 @@ Clés serveur utilisées selon `defaultProvider` :
 - `"gemini"` → `GEMINI_API_KEY`
 - `"openai"` → `OPENAI_API_KEY`
 
-Règle : Anthropic ne génère pas d'images → `generate-recipe-image` utilise `defaultProvider: "gemini"`.
+Règle : Anthropic ne génère pas d'images → `generate-recipe-image` utilise `defaultProvider: "openai"` avec GPT Image 2.5 Flare.
 
 ---
 
@@ -94,9 +94,10 @@ Règle : Anthropic ne génère pas d'images → `generate-recipe-image` utilise 
 - **Rôle** : Génère une photo réaliste d'un plat à partir du titre et des ingrédients, puis la stocke dans le bucket de stockage.
 - **Agent Type** : `generate_image`
 - **Capabilities** : image_generation
-- **Provider par défaut** : Gemini (`gemini-2.5-flash-image`) via `GEMINI_API_KEY` serveur
-- **API** : Native Gemini (`/v1beta/models/{model}:generateContent`) — **pas** l'endpoint OpenAI-compat
-- **Réponse** : `candidates[0].content.parts[].inlineData` (base64 + mimeType)
+- **Provider par défaut** : OpenAI (`gpt-image-2.5-flare`) via `OPENAI_API_KEY` serveur
+- **Repli** : clé OpenAI utilisateur si le secret serveur manque, puis Gemini si aucune clé OpenAI n'est disponible
+- **API** : Images (`/v1/images/generations`), JPEG 1536×864 ; `response_format` est omis pour les modèles GPT Image
+- **Réponse** : `data[0].b64_json` ; Gemini reste disponible sur choix explicite
 - **verify_jwt** : `true` (modifie Storage + DB)
 
 ---

@@ -11,7 +11,7 @@ const { mockAuth } = vi.hoisted(() => ({ mockAuth: { user: null as { id: string 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => mockAuth }));
 
-import { getCompatibleModels, useAISettings } from "./useAISettings";
+import { getCompatibleModels, PROVIDER_MODELS, useAISettings } from "./useAISettings";
 
 function installSupabase(options: SupabaseMockOptions = {}) {
   Object.assign(mockSupabase, createSupabaseMock(options));
@@ -36,6 +36,7 @@ describe("getCompatibleModels", () => {
     const models = getCompatibleModels("generate_image");
     expect(models.length).toBeGreaterThan(0);
     expect(models.every((m) => m.capabilities.includes("image_generation"))).toBe(true);
+    expect(models.some((m) => m.value === "gpt-image-2.5-flare" && m.provider === "openai")).toBe(true);
     expect(models.some((m) => m.value === "dall-e-3")).toBe(true);
   });
 
@@ -51,6 +52,8 @@ describe("getCompatibleModels", () => {
       ),
     ).toBe(true);
     expect(models[0]).toHaveProperty("provider");
+    expect(PROVIDER_MODELS.anthropic[0].value).toBe("claude-sonnet-5-5");
+    expect(PROVIDER_MODELS.anthropic.some((model) => model.value === "claude-sonnet-5")).toBe(true);
   });
 });
 
@@ -67,7 +70,7 @@ describe("useAISettings", () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.effectiveProvider).toBe("anthropic");
-    expect(result.current.effectiveModel).toBe("claude-sonnet-5");
+    expect(result.current.effectiveModel).toBe("claude-sonnet-5-5");
   });
 
   it("considère toujours qu'anthropic a une clé (gérée côté serveur)", async () => {
