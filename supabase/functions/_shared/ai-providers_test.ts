@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { callAIStreaming, transformAnthropicStreamToOpenAI, transformGeminiStreamToOpenAI } from "./ai-providers.ts";
+import { buildSimpleRequest, buildToolCallRequest, buildVisionRequest, callAIStreaming, extractContentFromResponse, transformAnthropicStreamToOpenAI, transformGeminiStreamToOpenAI } from "./ai-providers.ts";
 import { AIConfig } from "./ai-types.ts";
 
 Deno.test("callAIStreaming (gemini natif): la clé passe par l'en-tête x-goog-api-key, jamais dans l'URL", async () => {
@@ -66,7 +66,7 @@ Deno.test("callAIStreaming (Anthropic): préserve le MIME d'image et propage l'a
     return Promise.resolve(new Response(JSON.stringify({ content: [] }), { status: 200 }));
   }) as typeof fetch;
 
-  const config: AIConfig = { provider: "anthropic", model: "claude-sonnet-5", apiKey: "K", endpoint: "https://anthropic.test/messages" };
+  const config: AIConfig = { provider: "anthropic", model: "claude-sonnet-5-5", apiKey: "K", endpoint: "https://anthropic.test/messages" };
   try {
     await callAIStreaming(config, [{
       role: "user",
@@ -78,7 +78,43 @@ Deno.test("callAIStreaming (Anthropic): préserve le MIME d'image et propage l'a
 
   const messages = capturedBody.messages as Array<{ content: Array<{ source?: { media_type?: string } }> }>;
   assertEquals(messages[0].content[0].source?.media_type, "image/png");
+  assertEquals(capturedBody.thinking, { type: "between_tools" });
+  assertEquals(capturedBody.output_config, { effort: "medium" });
   assertEquals(capturedSignal, controller.signal);
+});
+
+Deno.test("buildToolCallRequest (Sonnet 5.5): emploie auto et between_tools", () => {
+  const config: AIConfig = { provider: "anthropic", model: "claude-sonnet-5-5", apiKey: "K", endpoint: "https://anthropic.test/messages" };
+  const request = buildToolCallRequest(config, "Système", "Bonjour", [{
+    type: "function",
+    function: { name: "reponse", description: "Répond", parameters: { type: "object", properties: {} } },
+  }], "reponse");
+
+  assertEquals(request.body.thinking, { type: "between_tools" });
+  assertEquals(request.body.output_config, { effort: "medium" });
+  assertEquals(request.body.tool_choice, { type: "auto" });
+});
+
+Deno.test("buildVisionRequest (Sonnet 5.5): limite le thinking initial", () => {
+  const config: AIConfig = { provider: "anthropic", model: "claude-sonnet-5-5", apiKey: "K", endpoint: "https://anthropic.test/messages" };
+  const body = buildVisionRequest(config, "Système", "https://example.com/image.jpg", "Analyse");
+  assertEquals(body.thinking, { type: "between_tools" });
+  assertEquals(body.output_config, { effort: "medium" });
+});
+
+Deno.test("extractContentFromResponse (Anthropic): lit le texte après un bloc thinking", () => {
+  const config: AIConfig = { provider: "anthropic", model: "claude-sonnet-5-5", apiKey: "K", endpoint: "https://anthropic.test/messages" };
+  assertEquals(extractContentFromResponse(config, {
+    content: [{ type: "thinking" }, { type: "text", text: "Recette" }],
+  }), "Recette");
+});
+
+Deno.test("buildSimpleRequest (Sonnet 5.5): retire la température non prise en charge", () => {
+  const config: AIConfig = { provider: "anthropic", model: "claude-sonnet-5-5", apiKey: "K", endpoint: "https://anthropic.test/messages" };
+  const request = buildSimpleRequest(config, "Système", "Bonjour", { temperature: 0.3 });
+  assertEquals(request.body.temperature, undefined);
+  assertEquals(request.body.thinking, { type: "between_tools" });
+  assertEquals(request.body.output_config, { effort: "medium" });
 });
 
 /** Construit une Response SSE imitant le flux natif de l'API Anthropic. */

@@ -71,16 +71,12 @@ export async function callAINonStreaming(config: AIConfig, messages: ChatMessage
   return data.choices?.[0]?.message?.content;
 }
 
-/**
- * Sonnet 5 & Opus activent le thinking adaptatif par défaut quand le champ
- * `thinking` est absent (contrairement à Sonnet 4.6 / Haiku 4.5). On le
- * désactive explicitement pour préserver la latence et le coût actuels, éviter
- * les troncatures (thinking + réponse partagent `max_tokens`) et toute
- * interaction avec un `tool_choice` forcé. Les modèles Haiku sont laissés tels
- * quels (thinking déjà inactif par défaut).
- */
+/** Limite le thinking initial avec le paramètre accepté par chaque modèle. */
 function applyAnthropicThinking(body: Record<string, unknown>, model: string): void {
-  if (/^claude-(sonnet-5|opus)/.test(model)) {
+  if (model === "claude-sonnet-5-5") {
+    body.thinking = { type: "between_tools" };
+    body.output_config = { effort: "medium" };
+  } else if (/^claude-(sonnet-5|opus)/.test(model)) {
     body.thinking = { type: "disabled" };
   }
 }
@@ -103,7 +99,7 @@ async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage
 
   if (!response.ok) throw new Error(`Anthropic error: ${response.status}`);
   const data = await response.json();
-  return data.content?.[0]?.text;
+  return extractContentFromResponse(config, data) ?? "";
 }
 
 // ============================================================
@@ -480,21 +476,27 @@ export function buildToolCallRequest(
   if (config.provider === "anthropic") {
     headers["x-api-key"] = config.apiKey;
     headers["anthropic-version"] = "2023-06-01";
+    const body: Record<string, unknown> = {
+      model: config.model,
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+      tools: tools.map((t) => ({
+        name: t.function.name,
+        description: t.function.description,
+        input_schema: t.function.parameters,
+      })),
+    };
+    applyAnthropicThinking(body, config.model);
+    if (forcedToolName) {
+      // Sonnet 5.5 refuse les choix forcés ; le résultat doit rester validé par l'appelant.
+      body.tool_choice = config.model === "claude-sonnet-5-5"
+        ? { type: "auto" }
+        : { type: "tool", name: forcedToolName };
+    }
     return {
       headers,
-      body: {
-        model: config.model,
-        max_tokens: 4096,
-        ...(/^claude-(sonnet-5|opus)/.test(config.model) ? { thinking: { type: "disabled" } } : {}),
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-        tools: tools.map((t) => ({
-          name: t.function.name,
-          description: t.function.description,
-          input_schema: t.function.parameters,
-        })),
-        ...(forcedToolName ? { tool_choice: { type: "tool", name: forcedToolName } } : {}),
-      },
+      body,
     };
   }
 
@@ -530,7 +532,7 @@ export function extractToolCallResult(config: AIConfig, response: AIResponse): u
 /** Build a vision request body for any provider */
 export function buildVisionRequest(config: AIConfig, systemPrompt: string, imageUrl: string, userPrompt: string): Record<string, unknown> {
   if (config.provider === "anthropic") {
-    return {
+    const body: Record<string, unknown> = {
       model: config.model,
       max_tokens: 4096,
       system: systemPrompt,
@@ -542,6 +544,8 @@ export function buildVisionRequest(config: AIConfig, systemPrompt: string, image
         ],
       }],
     };
+    applyAnthropicThinking(body, config.model);
+    return body;
   }
 
   return {
@@ -574,7 +578,7 @@ export function buildRequestHeaders(config: AIConfig): Record<string, string> {
 /** Extract text content from any provider's response */
 export function extractContentFromResponse(config: AIConfig, response: AIResponse): string | null {
   if (config.provider === "anthropic") {
-    return response.content?.[0]?.text || null;
+    return response.content?.find((block) => block.type === "text")?.text || null;
   }
   return response.choices?.[0]?.message?.content || null;
 }
@@ -591,15 +595,23 @@ export function buildSimpleRequest(
   if (config.provider === "anthropic") {
     headers["x-api-key"] = config.apiKey;
     headers["anthropic-version"] = "2023-06-01";
+    const anthropicOptions = { ...extraOptions };
+    if (config.model === "claude-sonnet-5-5") {
+      delete anthropicOptions.temperature;
+      delete anthropicOptions.top_p;
+      delete anthropicOptions.top_k;
+    }
+    const body: Record<string, unknown> = {
+      model: config.model,
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+      ...anthropicOptions,
+    };
+    applyAnthropicThinking(body, config.model);
     return {
       headers,
-      body: {
-        model: config.model,
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-        ...extraOptions,
-      },
+      body,
     };
   }
 

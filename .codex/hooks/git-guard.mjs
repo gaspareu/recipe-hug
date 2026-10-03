@@ -16,7 +16,10 @@ function block(message) {
 
 function currentBranch() {
   try {
-    return execFileSync("git", ["branch", "--show-current"], {
+    // Les hooks reçoivent la commande mais pas le workdir de l'outil.
+    // Une commande lancée depuis un worktree peut préciser son chemin avec cd.
+    const commandWorkdir = command.match(/^\s*cd\s+([^\s;&]+)\s*&&\s*git\s+(?:commit|push)\b/)?.[1];
+    return execFileSync("git", ["-C", commandWorkdir ?? process.cwd(), "branch", "--show-current"], {
       encoding: "utf8",
     }).trim();
   } catch {

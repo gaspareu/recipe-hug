@@ -26,29 +26,25 @@ interface GeneratedImage {
 
 /** Appelle le fournisseur d'images et retourne les octets décodés. */
 export async function generateImage(config: AIConfig, prompt: string): Promise<GeneratedImage> {
-  if (config.provider === "openai" && config.model === "dall-e-3") {
+  if (config.provider === "openai" && (config.model === "gpt-image-2.5-flare" || config.model === "dall-e-3")) {
+    const isFlare = config.model === "gpt-image-2.5-flare";
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "dall-e-3",
-        prompt,
-        n: 1,
-        size: "1792x1024",
-        response_format: "b64_json",
-      }),
+      body: JSON.stringify(isFlare
+        ? { model: config.model, prompt, n: 1, size: "1536x864", output_format: "jpeg" }
+        : { model: config.model, prompt, n: 1, size: "1792x1024", response_format: "b64_json" }),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("DALL-E error:", response.status, errorText);
-      throw new Error(`DALL-E error: ${response.status}`);
+      console.error("OpenAI image error:", response.status);
+      throw new Error(`OpenAI image error: ${response.status}`);
     }
 
     const data = await response.json();
     const base64 = data.data?.[0]?.b64_json;
-    if (!base64) throw new Error("No image in DALL-E response");
-    return { bytes: decodeBase64(base64), mimeType: "image/png" };
+    if (!base64) throw new Error("No image in OpenAI response");
+    return { bytes: decodeBase64(base64), mimeType: isFlare ? "image/jpeg" : "image/png" };
   }
 
   if (config.provider === "gemini") {

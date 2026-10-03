@@ -74,7 +74,7 @@ Deno.test("resolveAIConfig: aucune config → défaut Anthropic + clé serveur",
   await withEnv(async () => {
     const config = await resolveAIConfig(fakeSupabase(null), "u1", { agentType: "home" });
     assertEquals(config.provider, "anthropic");
-    assertEquals(config.model, "claude-sonnet-5");
+    assertEquals(config.model, "claude-sonnet-5-5");
     assertEquals(config.apiKey, "srv-anthropic");
     assertEquals(config.endpoint, "https://api.anthropic.com/v1/messages");
   });
@@ -94,12 +94,86 @@ Deno.test("resolveAIConfig: defaultProvider gemini → défaut gemini + clé ser
   });
 });
 
+Deno.test("resolveAIConfig: défaut image Flare → clé OpenAI serveur", async () => {
+  await withEnv(async () => {
+    const config = await resolveAIConfig(fakeSupabase(null), "u1", {
+      agentType: "generate_image",
+      defaultProvider: "openai",
+      defaultModel: "gpt-image-2.5-flare",
+      requiredCapabilities: ["image_generation"],
+    });
+    assertEquals(config.provider, "openai");
+    assertEquals(config.model, "gpt-image-2.5-flare");
+    assertEquals(config.apiKey, "srv-openai");
+  });
+});
+
+Deno.test("resolveAIConfig: défaut image Flare → clé OpenAI utilisateur si secret serveur absent", async () => {
+  await withEnv(async () => {
+    Deno.env.delete("OPENAI_API_KEY");
+    const row = { provider_api_keys: { openai: "sk-user" } };
+    const config = await resolveAIConfig(fakeSupabase(row), "u1", {
+      agentType: "generate_image",
+      defaultProvider: "openai",
+      defaultModel: "gpt-image-2.5-flare",
+      requiredCapabilities: ["image_generation"],
+    });
+    assertEquals(config.provider, "openai");
+    assertEquals(config.model, "gpt-image-2.5-flare");
+    assertEquals(config.apiKey, "sk-user");
+  });
+});
+
+Deno.test("resolveAIConfig: défaut image → Gemini si aucune clé OpenAI n'est disponible", async () => {
+  await withEnv(async () => {
+    Deno.env.delete("OPENAI_API_KEY");
+    const config = await resolveAIConfig(fakeSupabase(null), "u1", {
+      agentType: "generate_image",
+      defaultProvider: "openai",
+      defaultModel: "gpt-image-2.5-flare",
+      requiredCapabilities: ["image_generation"],
+    });
+    assertEquals(config.provider, "gemini");
+    assertEquals(config.model, "gemini-2.5-flash-image");
+    assertEquals(config.apiKey, "srv-gemini");
+  });
+});
+
+Deno.test("resolveAIConfig: Flare global ne remplace pas un modèle de traitement texte", async () => {
+  await withEnv(async () => {
+    const row = {
+      provider: "openai",
+      preferred_model: "gpt-image-2.5-flare",
+      provider_api_keys: { openai: "sk-user" },
+    };
+    const config = await resolveAIConfig(fakeSupabase(row), "u1", {
+      agentType: "analyze",
+      defaultModel: "claude-haiku-4-5",
+      requiredCapabilities: ["text"],
+    });
+    assertEquals(config.provider, "anthropic");
+    assertEquals(config.model, "claude-haiku-4-5");
+  });
+});
+
 Deno.test("resolveAIConfig: agent config Anthropic → clé serveur + modèle de l'agent", async () => {
   await withEnv(async () => {
     const row = { provider: "anthropic", agent_configs: { home: { provider: "anthropic", model: "claude-opus-4-8" } } };
     const config = await resolveAIConfig(fakeSupabase(row), "u1", { agentType: "home" });
     assertEquals(config.provider, "anthropic");
     assertEquals(config.model, "claude-opus-4-8");
+    assertEquals(config.apiKey, "srv-anthropic");
+  });
+});
+
+Deno.test("resolveAIConfig: choix global Sonnet 5 conservé après le changement de défaut", async () => {
+  await withEnv(async () => {
+    const row = { provider: "anthropic", preferred_model: "claude-sonnet-5" };
+    const config = await resolveAIConfig(fakeSupabase(row), "u1", {
+      agentType: "chat",
+      requiredCapabilities: ["tools"],
+    });
+    assertEquals(config.model, "claude-sonnet-5");
     assertEquals(config.apiKey, "srv-anthropic");
   });
 });

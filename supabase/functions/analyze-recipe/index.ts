@@ -62,6 +62,7 @@ serve(async (req) => {
       agentType: "analyze",
       // Extraction simple : Haiku suffit et coûte ~3x moins cher que Sonnet.
       defaultModel: "claude-haiku-4-5",
+      requiredCapabilities: ["text"],
     });
     console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
 
