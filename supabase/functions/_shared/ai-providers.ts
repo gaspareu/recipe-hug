@@ -54,9 +54,9 @@ function parseInlineImageData(url: string): InlineImageData {
 // ============================================================
 
 /** Call AI (non-streaming) and return the text content */
-export async function callAINonStreaming(config: AIConfig, messages: ChatMessage[]): Promise<string> {
+export async function callAINonStreaming(config: AIConfig, messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
   if (config.provider === "anthropic") {
-    return callAnthropicNonStreaming(config, messages);
+    return callAnthropicNonStreaming(config, messages, signal);
   }
 
   // OpenAI-compatible format (OpenAI, Gemini OpenAI-compat)
@@ -64,6 +64,7 @@ export async function callAINonStreaming(config: AIConfig, messages: ChatMessage
     method: "POST",
     headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model: config.model, messages }),
+    signal,
   });
 
   if (!response.ok) throw new Error(`AI error (${config.provider}): ${response.status}`);
@@ -81,7 +82,7 @@ function applyAnthropicThinking(body: Record<string, unknown>, model: string): v
   }
 }
 
-async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage[]): Promise<string> {
+async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
   const systemMessage = messages.find((m) => m.role === "system")?.content || "";
   const chatMessages = messages
     .filter((m) => m.role !== "system")
@@ -95,6 +96,7 @@ async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage
     method: "POST",
     headers: { "x-api-key": config.apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!response.ok) throw new Error(`Anthropic error: ${response.status}`);

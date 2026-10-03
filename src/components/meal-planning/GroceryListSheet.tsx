@@ -40,7 +40,7 @@ export function GroceryListSheet({ ingredients, customMeals, hasMeals }: Grocery
       lines.push('');
     }
     if (customMeals.length > 0) {
-      lines.push('— Plats sans recette (prévoir les ingrédients) —');
+      lines.push('— Repas à compléter (prévoir les ingrédients) —');
       customMeals.forEach(m => lines.push(`• ${m}`));
     }
     navigator.clipboard.writeText(lines.join('\n'));
@@ -115,7 +115,7 @@ export function GroceryListSheet({ ingredients, customMeals, hasMeals }: Grocery
               {customMeals.length > 0 && (
                 <div>
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                    Plats sans recette
+                    Repas à compléter
                   </h3>
                   <p className="text-xs text-muted-foreground/70 mb-2 italic">
                     Prévoir les ingrédients pour ces plats

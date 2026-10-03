@@ -31,12 +31,14 @@ export interface Step {
 
 
 export type RecipeStatus = 'draft' | 'tested' | 'validated' | 'archived';
+export type RecipeEntryKind = 'preparation' | 'complete_dish';
 
 export interface Recipe {
   id: string;
   user_id: string;
   title: string;
   status: RecipeStatus;
+  entry_kind: RecipeEntryKind | null;
   is_favorite: boolean;
   servings: number | null;
   ingredients: Ingredient[];
@@ -51,4 +53,6 @@ export interface Recipe {
   updated_at: string;
 }
 
-export type RecipeFormData = Omit<Recipe, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
+export type RecipeFormData = Omit<Recipe, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'entry_kind'> & {
+  entry_kind?: RecipeEntryKind | null;
+};

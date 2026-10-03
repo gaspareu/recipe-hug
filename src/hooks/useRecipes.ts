@@ -10,6 +10,7 @@ import { generateRecipeImageInBackground } from '@/lib/recipe-image';
 export function parseRecipe(data: Record<string, unknown>): Recipe {
   return {
     ...data,
+    entry_kind: data.entry_kind === 'preparation' || data.entry_kind === 'complete_dish' ? data.entry_kind : null,
     ingredients: (data.ingredients as Ingredient[]) || [],
     steps: (data.steps as Step[]) || [],
   } as Recipe;
@@ -63,6 +64,7 @@ export function useCreateRecipe() {
         .from('recipes')
         .insert([{
           title: recipe.title,
+          entry_kind: recipe.entry_kind ?? null,
           status: recipe.status,
           is_favorite: recipe.is_favorite,
           servings: recipe.servings,
@@ -161,8 +163,11 @@ export function useDeleteRecipe() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
     },
-    onError: () => {
-      toast('Impossible de supprimer la recette');
+    onError: (error) => {
+      const code = 'code' in error ? error.code : undefined;
+      toast(code === '23503'
+        ? 'Cette fiche est utilisée dans un plat, un menu ou un planning. Retirez ces références avant de la supprimer.'
+        : 'Impossible de supprimer la recette');
     },
   });
 }

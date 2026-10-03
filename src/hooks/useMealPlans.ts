@@ -1,12 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Ingredient } from '@/types/recipe';
+import type { Json } from '@/integrations/supabase/types';
 
 export interface MealPlanEntry {
   id: string;
   day_of_week: number;
   meal_type: string;
   recipe_id: string | null;
+  composition_id: string | null;
   custom_meal: string | null;
   notes: string | null;
   recipe_title?: string;
@@ -30,7 +32,7 @@ export function useMealPlans(weekStart: string) {
     queryFn: async (): Promise<MealPlansData> => {
       const { data, error } = await supabase
         .from('meal_plans')
-        .select('id, day_of_week, meal_type, recipe_id, custom_meal, notes')
+        .select('id, day_of_week, meal_type, recipe_id, composition_id, custom_meal, notes')
         .eq('week_start', weekStart);
       if (error) throw error;
 
@@ -61,6 +63,7 @@ export interface NewMealPlanEntry {
   dayIndex: number;
   mealType: string;
   recipeId: string | null;
+  compositionId?: string | null;
   customMeal: string | null;
 }
 
@@ -78,6 +81,7 @@ export function useAddMealPlan() {
         day_of_week: entry.dayIndex,
         meal_type: entry.mealType,
         recipe_id: entry.recipeId,
+        composition_id: entry.compositionId ?? null,
         custom_meal: entry.customMeal,
         notes: null,
       }]);
@@ -95,5 +99,29 @@ export function useDeleteMealPlan() {
       const { error } = await supabase.from('meal_plans').delete().eq('id', mealId);
       if (error) throw error;
     },
+  });
+}
+
+export interface WeeklyMealInput {
+  day_of_week: number;
+  meal_type: string;
+  recipe_id: string | null;
+  composition_id: string | null;
+  custom_meal: string | null;
+  notes: string | null;
+}
+
+export function useReplaceWeeklyMealPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ weekStart, meals }: { weekStart: string; meals: WeeklyMealInput[] }) => {
+      const { data, error } = await supabase.rpc('replace_week_meal_plan', {
+        p_week_start: weekStart,
+        p_meals: meals as unknown as Json,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, input) => queryClient.invalidateQueries({ queryKey: ['meal_plans', input.weekStart] }),
   });
 }

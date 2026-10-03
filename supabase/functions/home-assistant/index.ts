@@ -5,7 +5,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { captureEdgeException, initializeEdgeErrorMonitoring } from "../_shared/error-monitoring.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAIStreaming } from "../_shared/ai-providers.ts";
-import { formatPreferencesContext, formatFavoritesContext, formatRecipeContext } from "../_shared/context-format.ts";
+import { formatPreferencesContext, formatFavoritesContext, formatRecipeContext, formatCompositionContext, formatCompositionsContext } from "../_shared/context-format.ts";
 import { TM7_MODES, TM7_ACCESSORY_LABELS, buildTm7ReferenceForPrompt } from "../_shared/thermomix/reference.ts";
 
 initializeEdgeErrorMonitoring();
@@ -81,10 +81,32 @@ const ActiveRecipeSchema = z.object({
   completedSteps: z.array(z.number()).optional(),
 }).optional().nullable();
 
+const CompositionSummarySchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().max(160),
+  kind: z.enum(['dish', 'menu']),
+  servings: z.number().positive(),
+});
+
+const CompositionContextSchema = z.object({
+  kind: z.enum(['dish', 'menu']),
+  title: z.string().max(160),
+  servings: z.number().positive(),
+  currentStep: z.number().int().min(0),
+  totalSteps: z.number().int().positive(),
+  currentCourse: z.string().max(120).nullable(),
+  currentPreparation: z.string().max(160),
+  currentInstruction: z.string().max(2000),
+  assembly: z.boolean(),
+  sections: z.array(z.object({ title: z.string().max(160), course: z.string().max(120).nullable() })).max(30),
+});
+
 const RequestSchema = z.object({
   messages: z.array(MessageSchema).max(30, "Too many messages"),
   recipes: z.array(RecipeSchema).max(100, "Too many recipes").optional(),
   activeRecipe: ActiveRecipeSchema,
+  compositions: z.array(CompositionSummarySchema).max(100).optional(),
+  compositionContext: CompositionContextSchema.optional(),
 });
 
 // ===== UNIFIED SYSTEM PROMPT =====
@@ -159,6 +181,7 @@ Quand l'utilisateur veut planifier ses repas de la semaine :
 - Adapte les suggestions à la saison
 - Le planning couvre 7 jours (lundi=0 à dimanche=6) avec petit-déjeuner, déjeuner et dîner
 - Pour les recettes existantes, utilise leur recipe_id. Pour les nouvelles idées, mets custom_meal avec le nom du plat.
+- Pour un plat composé ou menu enregistré présent dans le contexte, utilise son composition_id à la place du recipe_id.
 - Quand l'utilisateur valide le planning, appelle save_meal_plan IMMÉDIATEMENT
 
 ## RÈGLES IMPORTANTES
@@ -502,6 +525,7 @@ const TOOLS = [
                 day_of_week: { type: "number", description: "Jour de la semaine (0=lundi, 6=dimanche)" },
                 meal_type: { type: "string", enum: ["breakfast", "lunch", "dinner"] },
                 recipe_id: { type: "string", description: "ID d'une recette existante (si applicable)" },
+                composition_id: { type: "string", description: "ID d'un plat composé ou menu existant dans le contexte" },
                 custom_meal: { type: "string", description: "Nom du plat si pas de recette existante" },
                 notes: { type: "string", description: "Notes ou précisions optionnelles" },
               },
@@ -575,7 +599,7 @@ serve(async (req) => {
       );
     }
 
-    const { messages, recipes, activeRecipe } = parseResult.data;
+    const { messages, recipes, activeRecipe, compositions, compositionContext } = parseResult.data;
     console.log("Home assistant (unified) - messages:", messages.length, "user:", userId);
     if (activeRecipe) console.log("Active recipe:", activeRecipe.title);
 
@@ -616,11 +640,13 @@ serve(async (req) => {
     }
 
     systemPrompt += formatFavoritesContext(favorites);
+    systemPrompt += formatCompositionsContext(compositions);
 
     // Add active recipe context
     if (activeRecipe) {
       systemPrompt += formatRecipeContext(activeRecipe);
     }
+    systemPrompt += formatCompositionContext(compositionContext);
 
     const response = await callAIStreaming(aiConfig, [{ role: "system", content: systemPrompt }, ...messages], {
       tools: TOOLS,

@@ -23,7 +23,7 @@ import { useCreateRecipe } from '@/hooks/useRecipes';
 import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
 
-import type { Ingredient, Step, RecipeStatus } from '@/types/recipe';
+import type { Ingredient, Step, RecipeStatus, RecipeEntryKind } from '@/types/recipe';
 
 type CreationMode = 'choose' | 'manual' | 'photo';
 
@@ -92,6 +92,7 @@ export default function RecipeNew() {
   const [title, setTitle] = useState('');
   const [servings, setServings] = useState<number | ''>('');
   const [status, setStatus] = useState<RecipeStatus>('draft');
+  const [entryKind, setEntryKind] = useState<RecipeEntryKind | ''>('');
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [steps, setSteps] = useState<Step[]>([]);
   const [nutritionTags, setNutritionTags] = useState<string[]>([]);
@@ -151,11 +152,13 @@ export default function RecipeNew() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    if (!entryKind) { toast('Choisissez « Préparation » ou « Plat complet »'); return; }
 
     try {
       const newRecipe = await createRecipe.mutateAsync({
         title: title.trim(),
         status,
+        entry_kind: entryKind,
         servings: servings || null,
         ingredients,
         steps,
@@ -310,6 +313,18 @@ export default function RecipeNew() {
                       onChange={(e) => setTitle(e.target.value)}
                       disabled={isAnalyzing}
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="entry-kind">Type de fiche *</Label>
+                    <Select value={entryKind} onValueChange={value => setEntryKind(value as RecipeEntryKind)} disabled={isAnalyzing}>
+                      <SelectTrigger id="entry-kind"><SelectValue placeholder="Choisir un type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="preparation">Préparation ou accompagnement</SelectItem>
+                        <SelectItem value="complete_dish">Plat complet</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Une préparation peut être associée à d’autres fiches pour former un plat.</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">

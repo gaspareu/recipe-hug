@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -63,6 +58,97 @@ export type Database = {
           extracted_recipe?: Json | null
           id?: string
           messages?: Json
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      composition_items: {
+        Row: {
+          child_composition_id: string | null
+          composition_id: string
+          course: string | null
+          id: string
+          notes: string | null
+          position: number
+          quantity_factor: number
+          recipe_id: string | null
+          user_id: string
+        }
+        Insert: {
+          child_composition_id?: string | null
+          composition_id: string
+          course?: string | null
+          id?: string
+          notes?: string | null
+          position: number
+          quantity_factor?: number
+          recipe_id?: string | null
+          user_id: string
+        }
+        Update: {
+          child_composition_id?: string | null
+          composition_id?: string
+          course?: string | null
+          id?: string
+          notes?: string | null
+          position?: number
+          quantity_factor?: number
+          recipe_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "composition_items_child_fkey"
+            columns: ["user_id", "child_composition_id"]
+            isOneToOne: false
+            referencedRelation: "compositions"
+            referencedColumns: ["user_id", "id"]
+          },
+          {
+            foreignKeyName: "composition_items_parent_fkey"
+            columns: ["user_id", "composition_id"]
+            isOneToOne: false
+            referencedRelation: "compositions"
+            referencedColumns: ["user_id", "id"]
+          },
+          {
+            foreignKeyName: "composition_items_recipe_fkey"
+            columns: ["user_id", "recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["user_id", "id"]
+          },
+        ]
+      }
+      compositions: {
+        Row: {
+          assembly_steps: Json
+          created_at: string
+          id: string
+          kind: string
+          servings: number
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assembly_steps?: Json
+          created_at?: string
+          id?: string
+          kind: string
+          servings?: number
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assembly_steps?: Json
+          created_at?: string
+          id?: string
+          kind?: string
+          servings?: number
           title?: string
           updated_at?: string
           user_id?: string
@@ -125,6 +211,7 @@ export type Database = {
       }
       meal_plans: {
         Row: {
+          composition_id: string | null
           created_at: string
           custom_meal: string | null
           day_of_week: number
@@ -137,6 +224,7 @@ export type Database = {
           week_start: string
         }
         Insert: {
+          composition_id?: string | null
           created_at?: string
           custom_meal?: string | null
           day_of_week: number
@@ -149,6 +237,7 @@ export type Database = {
           week_start: string
         }
         Update: {
+          composition_id?: string | null
           created_at?: string
           custom_meal?: string | null
           day_of_week?: number
@@ -162,11 +251,94 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "meal_plans_recipe_id_fkey"
-            columns: ["recipe_id"]
+            foreignKeyName: "meal_plans_composition_owner_fkey"
+            columns: ["user_id", "composition_id"]
+            isOneToOne: false
+            referencedRelation: "compositions"
+            referencedColumns: ["user_id", "id"]
+          },
+          {
+            foreignKeyName: "meal_plans_recipe_owner_fkey"
+            columns: ["user_id", "recipe_id"]
             isOneToOne: false
             referencedRelation: "recipes"
-            referencedColumns: ["id"]
+            referencedColumns: ["user_id", "id"]
+          },
+        ]
+      }
+      pairing_ai_rate_limit_buckets: {
+        Row: {
+          bucket_key: string
+          request_count: number
+          scope: string
+          user_id: string | null
+          window_started_at: string
+        }
+        Insert: {
+          bucket_key: string
+          request_count?: number
+          scope: string
+          user_id?: string | null
+          window_started_at?: string
+        }
+        Update: {
+          bucket_key?: string
+          request_count?: number
+          scope?: string
+          user_id?: string | null
+          window_started_at?: string
+        }
+        Relationships: []
+      }
+      pairing_feedback: {
+        Row: {
+          candidate_recipe_id: string
+          id: string
+          signal: string
+          source_composition_id: string | null
+          source_recipe_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          candidate_recipe_id: string
+          id?: string
+          signal: string
+          source_composition_id?: string | null
+          source_recipe_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          candidate_recipe_id?: string
+          id?: string
+          signal?: string
+          source_composition_id?: string | null
+          source_recipe_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pairing_feedback_candidate_fkey"
+            columns: ["user_id", "candidate_recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["user_id", "id"]
+          },
+          {
+            foreignKeyName: "pairing_feedback_source_composition_fkey"
+            columns: ["user_id", "source_composition_id"]
+            isOneToOne: false
+            referencedRelation: "compositions"
+            referencedColumns: ["user_id", "id"]
+          },
+          {
+            foreignKeyName: "pairing_feedback_source_recipe_fkey"
+            columns: ["user_id", "source_recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["user_id", "id"]
           },
         ]
       }
@@ -199,6 +371,65 @@ export type Database = {
           webhook_token?: string | null
         }
         Relationships: []
+      }
+      recipe_pairing_profiles: {
+        Row: {
+          active_minutes: number | null
+          allergen_review_state: string
+          allergens: string[]
+          dietary_compatibilities: string[]
+          dietary_exclusions: string[]
+          dietary_review_state: string
+          equipment: string[]
+          flavors: string[]
+          make_ahead: boolean
+          recipe_id: string
+          roles: string[]
+          textures: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_minutes?: number | null
+          allergen_review_state?: string
+          allergens?: string[]
+          dietary_compatibilities?: string[]
+          dietary_exclusions?: string[]
+          dietary_review_state?: string
+          equipment?: string[]
+          flavors?: string[]
+          make_ahead?: boolean
+          recipe_id: string
+          roles?: string[]
+          textures?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_minutes?: number | null
+          allergen_review_state?: string
+          allergens?: string[]
+          dietary_compatibilities?: string[]
+          dietary_exclusions?: string[]
+          dietary_review_state?: string
+          equipment?: string[]
+          flavors?: string[]
+          make_ahead?: boolean
+          recipe_id?: string
+          roles?: string[]
+          textures?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_pairing_profiles_recipe_owner_fkey"
+            columns: ["user_id", "recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["user_id", "id"]
+          },
+        ]
       }
       recipe_shares: {
         Row: {
@@ -296,6 +527,7 @@ export type Database = {
           cookidoo_exported_at: string | null
           cookidoo_recipe_id: string | null
           created_at: string | null
+          entry_kind: string | null
           id: string
           ingredients: Json
           is_favorite: boolean | null
@@ -316,6 +548,7 @@ export type Database = {
           cookidoo_exported_at?: string | null
           cookidoo_recipe_id?: string | null
           created_at?: string | null
+          entry_kind?: string | null
           id?: string
           ingredients?: Json
           is_favorite?: boolean | null
@@ -336,6 +569,7 @@ export type Database = {
           cookidoo_exported_at?: string | null
           cookidoo_recipe_id?: string | null
           created_at?: string | null
+          entry_kind?: string | null
           id?: string
           ingredients?: Json
           is_favorite?: boolean | null
@@ -451,6 +685,30 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_rate_limit_buckets: {
+        Row: {
+          bucket_key: string
+          cost_count: number
+          request_count: number
+          scope: string
+          window_started_at: string
+        }
+        Insert: {
+          bucket_key: string
+          cost_count?: number
+          request_count?: number
+          scope: string
+          window_started_at?: string
+        }
+        Update: {
+          bucket_key?: string
+          cost_count?: number
+          request_count?: number
+          scope?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       profiles_safe: {
@@ -539,9 +797,35 @@ export type Database = {
       }
     }
     Functions: {
+      consume_pairing_ai_quota: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
+      consume_voice_quota: {
+        Args: { p_cost?: number; p_scope: string; p_user_id: string }
+        Returns: {
+          allowed: boolean
+          retry_after_seconds: number
+        }[]
+      }
       generate_webhook_token: { Args: { user_uuid: string }; Returns: string }
       get_my_webhook_token: { Args: never; Returns: string }
       get_user_id_by_phone: { Args: { phone_number: string }; Returns: string }
+      replace_week_meal_plan: {
+        Args: { p_meals: Json; p_week_start: string }
+        Returns: number
+      }
+      save_composition: {
+        Args: {
+          p_assembly_steps: Json
+          p_id?: string
+          p_items: Json
+          p_kind: string
+          p_servings: number
+          p_title: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

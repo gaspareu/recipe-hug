@@ -5,6 +5,7 @@ import { useRecipes } from './useRecipes';
 import { useUserPreferences } from './useUserPreferences';
 import { useChatEngine, ActiveRecipeData, ChatEngineConfig, PendingRecipe, RecipeCard, ToolCallAction } from './useChatEngine';
 import type { Recipe } from '@/types/recipe';
+import type { CompositionChatContext } from '@/types/livre';
 import { applyPreferenceOperations } from '@/lib/preference-operations';
 import { buildPendingRecipeFromToolCall, parsePreferenceOperations } from '@/lib/chat-tool-payloads';
 
@@ -17,9 +18,11 @@ interface UseRecipeChatOptions {
   onRecipeUpdate?: (data: PendingRecipe) => Promise<void>;
   onRecipeCreate?: (data: PendingRecipe) => Promise<string>;
   onStartCooking?: (recipeId: string, servings?: number) => void;
+  compositionContext?: CompositionChatContext;
+  activeRecipeOverride?: ActiveRecipeData;
 }
 
-export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipeCreate, onStartCooking }: UseRecipeChatOptions) {
+export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipeCreate, onStartCooking, compositionContext, activeRecipeOverride }: UseRecipeChatOptions) {
   const navigate = useNavigate();
   const { data: recipes = [] } = useRecipes();
   const { preferences, updatePreferencesAsync } = useUserPreferences();
@@ -29,13 +32,13 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
     [completedStepsKey],
   );
 
-  const welcomeMessage = `Salut ! 👨‍🍳 Je suis prêt à t'accompagner pour "**${recipe.title}**".\n\nJe peux te guider en cuisine, modifier la recette ou répondre à tes questions. Que veux-tu faire ?`;
+  const welcomeMessage = `Salut ! 👨‍🍳 Je suis prêt à t'accompagner pour "**${compositionContext?.title ?? recipe.title}**".\n\nJe peux te guider en cuisine, ${onRecipeUpdate ? 'modifier la recette' : 'proposer une nouvelle fiche'} ou répondre à tes questions. Que veux-tu faire ?`;
 
-  const initialActiveRecipe = useMemo<ActiveRecipeData>(() => ({
+  const initialActiveRecipe = useMemo<ActiveRecipeData>(() => activeRecipeOverride ?? ({
     id: recipe.id, title: recipe.title, servings: recipe.servings,
     season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
     completedSteps: completedStepsSnapshot,
-  }), [recipe.id, recipe.title, recipe.servings, recipe.season, recipe.ingredients, recipe.steps, completedStepsSnapshot]);
+  }), [activeRecipeOverride, recipe.id, recipe.title, recipe.servings, recipe.season, recipe.ingredients, recipe.steps, completedStepsSnapshot]);
 
   const handleToolCall = useCallback(async (action: ToolCallAction, activeRecipe: ActiveRecipeData | null): Promise<unknown> => {
     console.log('Recipe chat tool call:', action.type, action.data);
@@ -119,6 +122,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
       case 'create_new_recipe': {
         const pending = buildPendingRecipeFromToolCall(action, activeRecipe);
         if (!pending) return null;
+        if (pending.isUpdate && !onRecipeUpdate) return { error: 'Ouvrez la fiche source dans le Livre pour la modifier sans altérer les quantités de cette session.' };
         if (
           pending.isUpdate
           && pending.originalRecipeId
@@ -141,15 +145,15 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
       default: console.log('Unknown tool call:', action.type); return null;
     }
-  }, [recipes, recipe.id, navigate, onStartCooking, preferences, updatePreferencesAsync]);
+  }, [recipes, recipe.id, navigate, onStartCooking, onRecipeUpdate, preferences, updatePreferencesAsync]);
 
   const buildRequest = useCallback(async ({ apiMessages, activeRecipe }: Parameters<ChatEngineConfig['buildRequest']>[0]) => {
-    const recipeSummaries = recipes.map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
+    const recipeSummaries = recipes.slice(0, 100).map(r => ({ id: r.id, title: r.title, status: r.status, is_favorite: r.is_favorite }));
     return {
       endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-assistant`,
-      body: { messages: apiMessages, recipes: recipeSummaries, activeRecipe },
+      body: { messages: apiMessages, recipes: recipeSummaries, activeRecipe, ...(compositionContext ? { compositionContext } : {}) },
     };
-  }, [recipes]);
+  }, [recipes, compositionContext]);
 
   const engine = useChatEngine({
     welcomeMessage,

@@ -3,6 +3,8 @@ import {
   formatPreferencesContext,
   formatFavoritesContext,
   formatRecipeContext,
+  formatCompositionContext,
+  formatCompositionsContext,
   type FavoriteRecipe,
 } from "./context-format.ts";
 
@@ -79,4 +81,23 @@ Deno.test("recette active : formate titre, étapes et progression", () => {
   assertStringIncludes(result, "✓ 1. Casser les œufs");
   assertStringIncludes(result, "○ 2. Cuire");
   assertStringIncludes(result, "Progression : 1/2 étapes complétées");
+});
+
+Deno.test("session composée : donne à Chef la progression et les préparations", () => {
+  const result = formatCompositionContext({
+    kind: 'menu', title: 'Dîner', servings: 4, currentStep: 5, totalSteps: 12,
+    currentCourse: 'Entrée', currentPreparation: 'Carottes', currentInstruction: 'Râper les carottes', assembly: false,
+    sections: [{ title: 'Carottes', course: 'Entrée' }, { title: 'Riz', course: 'Plat' }],
+  });
+  assertStringIncludes(result, '"currentStep":5');
+  assertStringIncludes(result, '"title":"Riz"');
+  assertStringIncludes(result, '"currentInstruction":"Râper les carottes"');
+  assertStringIncludes(result, 'une seule session continue');
+});
+
+Deno.test("plats et menus : expose seulement les références utiles au planning", () => {
+  assertEquals(formatCompositionsContext([]), '');
+  const result = formatCompositionsContext([{ id: 'c1', title: 'Dîner', kind: 'menu', servings: 4 }]);
+  assertStringIncludes(result, '"id":"c1"');
+  assertStringIncludes(result, 'composition_id');
 });

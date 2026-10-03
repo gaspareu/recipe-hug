@@ -9,6 +9,7 @@ import { FilterBar } from '@/components/recipes/FilterBar';
 import { FilterBadge } from '@/components/ui/filter-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRecipes, useToggleFavorite } from '@/hooks/useRecipes';
+import { useCompositions } from '@/hooks/useCompositions';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import type { RecipeStatus } from '@/types/recipe';
 
@@ -35,6 +36,7 @@ export default function Dashboard() {
     threshold: 80,
   });
   const { data: recipes, isLoading } = useRecipes();
+  const { data: compositions = [] } = useCompositions();
   const toggleFavorite = useToggleFavorite();
 
   const [search, setSearch] = useState('');
@@ -42,11 +44,16 @@ export default function Dashboard() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [seasonFilter, setSeasonFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'recent' | 'alpha' | 'favorites'>('recent');
+  const [section, setSection] = useState<'preparations' | 'dishes' | 'menus' | 'unclassified'>('preparations');
 
   const filteredRecipes = useMemo(() => {
     if (!recipes) return [];
 
     return recipes.filter((recipe) => {
+      if (section === 'preparations' && recipe.entry_kind !== 'preparation') return false;
+      if (section === 'dishes' && recipe.entry_kind !== 'complete_dish') return false;
+      if (section === 'unclassified' && recipe.entry_kind !== null) return false;
+      if (section === 'menus') return false;
       // Recherche par titre, résumé et ingrédients
       if (search) {
         const q = search.toLowerCase();
@@ -78,7 +85,13 @@ export default function Dashboard() {
       // recent: ordre de la liste (supposé trié par created_at desc côté serveur)
       return 0;
     });
-  }, [recipes, search, statusFilter, favoritesOnly, seasonFilter, sortBy]);
+  }, [recipes, search, statusFilter, favoritesOnly, seasonFilter, sortBy, section]);
+
+  const visibleCompositions = useMemo(() => compositions.filter(composition =>
+    composition.kind === (section === 'menus' ? 'menu' : 'dish') &&
+    (section === 'menus' || section === 'dishes') &&
+    composition.title.toLocaleLowerCase('fr').includes(search.toLocaleLowerCase('fr')),
+  ), [compositions, section, search]);
 
   const handleToggleFavorite = (id: string, isFavorite: boolean) => {
     toggleFavorite.mutate({ id, is_favorite: isFavorite });
@@ -95,9 +108,9 @@ export default function Dashboard() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-solitreo font-bold text-foreground">Mes Recettes</h1>
+            <h1 className="text-2xl font-solitreo font-bold text-foreground">Le Livre</h1>
             <p className="text-muted-foreground">
-              {filteredRecipes.length} sur {recipes?.length || 0} recette{(recipes?.length || 0) !== 1 ? 's' : ''}
+              Préparations, plats et menus à composer
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -112,13 +125,21 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
             <Button asChild className="h-11">
-              <Link to="/home">
+              <Link to="/recipes/new">
                 <Plus className="mr-2 h-4 w-4" />
                 Nouvelle
               </Link>
             </Button>
           </div>
         </div>
+
+        <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Sections du Livre">
+          {([
+            ['preparations', 'Préparations'], ['dishes', 'Plats'], ['menus', 'Menus'], ['unclassified', 'À classer'],
+          ] as const).map(([key, label]) => <button key={key} type="button" aria-current={section === key ? 'page' : undefined} onClick={() => setSection(key)}
+            className={`min-h-11 shrink-0 rounded-full px-4 text-sm font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${section === key ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>{label}</button>)}
+        </nav>
+        {(section === 'dishes' || section === 'menus') && <Button asChild variant="outline" className="min-h-11"><Link to={`/compositions/new?kind=${section === 'menus' ? 'menu' : 'dish'}`}><Plus className="mr-2 h-4 w-4" /> {section === 'menus' ? 'Créer un menu' : 'Composer un plat'}</Link></Button>}
 
         <FilterBar
           search={search}
@@ -169,35 +190,44 @@ export default function Dashboard() {
           </div>
         )}
 
+        {visibleCompositions.length > 0 && <section className="space-y-2" aria-label={section === 'menus' ? 'Menus enregistrés' : 'Plats composés'}>
+          <h2 className="font-solitreo text-xl">{section === 'menus' ? 'Menus enregistrés' : 'Plats composés'}</h2>
+          <div className="grid gap-2 sm:grid-cols-2">{visibleCompositions.map(composition => <Link key={composition.id} to={`/compositions/${composition.id}`} className="block rounded-2xl border border-border bg-card p-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
+            <span className="text-xs font-semibold uppercase tracking-widest text-primary">{composition.kind === 'menu' ? 'Menu' : 'Plat composé'}</span>
+            <h3 className="font-solitreo text-xl">{composition.title}</h3>
+            <p className="text-sm text-muted-foreground">{composition.items.length} élément{composition.items.length > 1 ? 's' : ''}</p>
+          </Link>)}</div>
+        </section>}
+
         {isLoading ? (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:gap-3 lg:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <Skeleton key={i} className="aspect-square rounded-xl" />
             ))}
           </div>
-        ) : filteredRecipes.length === 0 ? (
+        ) : filteredRecipes.length === 0 && visibleCompositions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in-up">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <BookOpen className="h-7 w-7 text-muted-foreground" />
             </div>
             <h2 className="font-solitreo text-lg font-semibold text-foreground">
-              {recipes?.length === 0 ? 'Votre livre est vide' : 'Aucun résultat'}
+              {recipes?.length === 0 && compositions.length === 0 ? 'Votre livre est vide' : 'Aucun résultat'}
             </h2>
             <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-              {recipes?.length === 0
-                ? 'Discutez avec Chef pour créer votre première recette.'
+              {recipes?.length === 0 && compositions.length === 0
+                ? 'Créez votre première préparation ou votre premier plat.'
                 : 'Aucune recette ne correspond à vos filtres. Essayez d’en retirer un.'}
             </p>
-            {recipes?.length === 0 && (
+            {recipes?.length === 0 && compositions.length === 0 && (
               <Button asChild className="mt-5">
-                <Link to="/home">
+                <Link to="/recipes/new">
                   <Plus className="mr-2 h-4 w-4" />
                   Créer une recette
                 </Link>
               </Button>
             )}
           </div>
-        ) : (
+        ) : filteredRecipes.length > 0 ? (
           <ImageGallery
             items={filteredRecipes.map((recipe) => ({
               id: recipe.id,
@@ -208,7 +238,7 @@ export default function Dashboard() {
             onToggleFavorite={handleToggleFavorite}
             isTogglingFavorite={toggleFavorite.isPending}
           />
-        )}
+        ) : null}
       </div>
     </MainLayout>
   );
