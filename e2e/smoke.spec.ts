@@ -22,9 +22,9 @@ test.describe('pages protégées — authentifié', () => {
     await expect(page.locator('#root')).not.toBeEmpty();
   });
 
-  test('dashboard affiche « Mes Recettes »', async ({ page }) => {
+  test('dashboard affiche « Le Livre »', async ({ page }) => {
     await page.goto('/dashboard');
-    await expect(page.getByRole('heading', { name: 'Mes Recettes' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Le Livre' })).toBeVisible();
   });
 
   test('profil affiche « Mon Profil »', async ({ page }) => {
