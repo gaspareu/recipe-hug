@@ -33,6 +33,8 @@ jobs:
     # seule main est autorisée à utiliser le token de production.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Les identifiants de production sont stockés dans cet environnement GitHub.
+    environment: Production
     env:
       PROJECT_REF: ifpqsyyvytfpossqycpc
     steps:

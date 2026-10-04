@@ -50,7 +50,7 @@ test.describe('PWA mobile — compte de développement', () => {
 
   test('Livre nomme ses filtres et permet de les effacer au clavier', async ({ page }) => {
     await page.goto('/dashboard');
-    await expect(page.getByRole('heading', { level: 1, name: 'Mes Recettes' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Le Livre' })).toBeVisible();
     await expectTouchTarget(page.getByRole('combobox', { name: 'Trier les recettes' }));
     await expect(page.getByRole('combobox', { name: 'Trier les recettes' })).toHaveAccessibleDescription('Plus récentes');
     await expectTouchTarget(page.getByRole('combobox', { name: 'Filtrer par statut' }));
@@ -101,13 +101,21 @@ test.describe('PWA mobile — compte de développement', () => {
   });
 
   test('les contrastes restent lisibles en thème sombre sans changer le compte', async ({ page }) => {
+    // Le fournisseur de thème recharge la préférence du compte après connexion.
+    // Simuler seulement cette lecture garde le thème stable sans modifier le profil.
+    await page.route('**/rest/v1/profiles_safe?**', async route => {
+      const url = new URL(route.request().url());
+      if (route.request().method() === 'GET' && url.searchParams.get('select') === 'theme') {
+        await route.fulfill({ json: { theme: 'dark' } });
+        return;
+      }
+      await route.continue();
+    });
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'));
     for (const route of ['/dashboard', '/meal-planning', '/profile']) {
       await page.goto(route);
       await expect(page.getByRole('main')).toBeVisible();
-      await page.evaluate(() => {
-        document.documentElement.classList.remove('light');
-        document.documentElement.classList.add('dark');
-      });
+      await expect(page.locator('html')).toHaveClass(/dark/);
       await expectNoAuditedViolations(page);
       await expect(page.locator('html')).toHaveClass(/dark/);
     }
