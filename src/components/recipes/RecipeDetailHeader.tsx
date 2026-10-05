@@ -7,11 +7,11 @@ interface RecipeDetailHeaderProps {
 export function RecipeDetailHeader({ title, description }: RecipeDetailHeaderProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <h1 className="font-solitreo text-3xl leading-tight text-foreground text-balance">
+      <h1 className="font-solitreo text-3xl sm:text-4xl leading-tight text-foreground text-balance">
         {title}
       </h1>
       {description && (
-        <p className="text-[15px] leading-relaxed text-muted-foreground">{description}</p>
+        <p className="text-base leading-relaxed text-muted-foreground">{description}</p>
       )}
     </div>
   );

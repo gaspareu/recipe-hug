@@ -1,4 +1,5 @@
 import { renderHook, act, render, screen } from "@testing-library/react";
+import userEvent from '@testing-library/user-event';
 import type { Ingredient } from "@/types/recipe";
 import { useIngredientChecklist, IngredientChecklist } from "./IngredientChecklist";
 
@@ -103,4 +104,15 @@ describe("IngredientChecklist — affichage des quantités", () => {
     expect(screen.getByText("Sel")).toBeInTheDocument();
     expect(screen.queryByText(/null/)).toBeNull();
   });
+});
+
+it('annonce le cochage et permet de préparer les ingrédients au clavier', async () => {
+  const user = userEvent.setup();
+  render(<IngredientChecklist ingredients={INGREDIENTS} />);
+  const checkbox = screen.getByRole('checkbox', { name: '1 pincée Sel' });
+  checkbox.focus();
+  await user.keyboard(' ');
+  expect(checkbox).toBeChecked();
+  await user.keyboard(' ');
+  expect(checkbox).not.toBeChecked();
 });

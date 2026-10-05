@@ -1,7 +1,6 @@
 import { useState, useRef } from 'react';
 import { Camera, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { getPlaceholderForRecipe } from '@/lib/recipePlaceholder';
 import { useIsGeneratingImage } from '@/lib/imageGenerationStore';
 
@@ -13,143 +12,39 @@ interface RecipeImageDisplayProps {
   onImageRemove: () => Promise<void>;
   isEditable?: boolean;
   showTitleOverlay?: boolean;
+  showPlaceholder?: boolean;
 }
 
-export function RecipeImageDisplay({
-  recipeId,
-  imageUrl,
-  title,
-  onImageChange,
-  onImageRemove,
-  isEditable = true,
-  showTitleOverlay = true,
+export function RecipeImageDisplay({ recipeId, imageUrl, title, onImageChange, onImageRemove,
+  isEditable = true, showTitleOverlay = true, showPlaceholder = true,
 }: RecipeImageDisplayProps) {
   const [isUploading, setIsUploading] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const displayUrl = imageUrl || getPlaceholderForRecipe(recipeId);
-  const hasCustomImage = !!imageUrl;
-
-  // Génération d'image IA en arrière-plan : on n'affiche l'indicateur que tant
-  // qu'aucune image n'est encore disponible (le refetch la fera apparaître).
   const isGenerating = useIsGeneratingImage(recipeId) && !imageUrl;
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    try {
-      await onImageChange(file);
-    } finally {
-      setIsUploading(false);
-      if (inputRef.current) {
-        inputRef.current.value = '';
-      }
-    }
-  };
-
-  const handleRemove = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsUploading(true);
-    try {
-      await onImageRemove();
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleClick = () => {
-    if (isEditable && !isUploading && !isGenerating && inputRef.current) {
-      inputRef.current.click();
-    }
-  };
-
   const isBusy = isUploading || isGenerating;
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try { await onImageChange(file); }
+    finally { setIsUploading(false); if (inputRef.current) inputRef.current.value = ''; }
+  };
+  const handleRemove = async () => {
+    setIsUploading(true);
+    try { await onImageRemove(); }
+    finally { setIsUploading(false); }
+  };
 
-  return (
-    <div
-      className={cn(
-        'relative w-full aspect-[16/9] rounded-lg overflow-hidden bg-muted group',
-        isEditable && !isBusy && 'cursor-pointer'
-      )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={handleClick}
-    >
-      <img
-        src={displayUrl}
-        alt={title || "Photo de la recette"}
-        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-      />
-
-      {/* Dark overlay - always visible, darker on hover */}
-      <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300" />
-
-      {/* Title centered on image */}
-      {title && showTitleOverlay && !isHovered && !isBusy && (
-        <div className="absolute inset-0 flex items-center justify-center p-4">
-          <h2 className="text-center font-solitreo text-2xl sm:text-3xl leading-tight line-clamp-3 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white font-bold">
-            {title}
-          </h2>
-        </div>
-      )}
-
-      {/* Overlay on hover for editable state */}
-      {isEditable && isHovered && !isBusy && (
-        <div className="absolute inset-0 bg-background/60 flex items-center justify-center transition-opacity">
-          <div className="flex flex-col items-center gap-2 text-foreground">
-            <Camera className="h-8 w-8" />
-            <span className="text-sm font-medium">
-              {hasCustomImage ? 'Changer l\'image' : 'Ajouter une image'}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Badge caméra - toujours visible sur mobile, indicateur d'édition */}
-      {isEditable && !isBusy && (
-        <div className="absolute bottom-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-sm pointer-events-none">
-          <Camera className="h-4 w-4 text-foreground/70" />
-        </div>
-      )}
-
-      {/* Remove button for custom images */}
-      {isEditable && hasCustomImage && isHovered && !isBusy && (
-        <Button
-          variant="destructive"
-          size="icon"
-          className="absolute top-2 right-2 h-8 w-8"
-          onClick={handleRemove}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      )}
-
-      {/* Overlay de chargement : upload manuel ou génération d'image IA en fond.
-          Le libellé n'apparaît que pour la génération (l'upload n'a qu'un spinner). */}
-      {isBusy && (
-        <div
-          className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center gap-2 text-foreground"
-          role="status"
-          aria-live="polite"
-        >
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          {isGenerating && !isUploading && (
-            <span className="text-sm font-medium">Image en cours de génération…</span>
-          )}
-        </div>
-      )}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        onChange={handleFileSelect}
-        className="hidden"
-        disabled={!isEditable || isUploading}
-      />
-    </div>
-  );
+  return <div className="space-y-2">
+    {(imageUrl || showPlaceholder || isBusy) && <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-muted">
+      {(imageUrl || showPlaceholder) && <img src={imageUrl || getPlaceholderForRecipe(recipeId)} alt={title || 'Photo de la recette'} className="h-full w-full object-cover" />}
+      {title && showTitleOverlay && <div className="absolute inset-0 flex items-center justify-center bg-black/30 p-4"><h2 className="font-solitreo text-center text-2xl text-white">{title}</h2></div>}
+      {isBusy && <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/80" role="status" aria-live="polite"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="text-sm">{isUploading ? 'Envoi de la photo…' : 'Image en cours de génération…'}</span></div>}
+    </div>}
+    {isEditable && <div className="flex flex-wrap gap-2">
+      <Button variant="ghost" className="min-h-11 text-muted-foreground" disabled={isBusy} onClick={() => inputRef.current?.click()}><Camera className="mr-2 h-4 w-4" aria-hidden="true" />{imageUrl ? 'Modifier la photo' : 'Ajouter une photo'}</Button>
+      {imageUrl && <Button variant="ghost" className="min-h-11 text-muted-foreground" disabled={isBusy} onClick={handleRemove}><X className="mr-2 h-4 w-4" aria-hidden="true" />Retirer la photo</Button>}
+      <input ref={inputRef} type="file" aria-label="Choisir une photo" accept="image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" disabled={isBusy} />
+    </div>}
+  </div>;
 }

@@ -23,7 +23,7 @@ vi.mock('@/components/recipes/RecipeStepsList', () => ({ RecipeStepsList: () => 
 vi.mock('@/components/recipes/RecipeVersionHistory', () => ({ RecipeVersionHistory: () => null }));
 vi.mock('@/components/recipes/FavoriteToggle', () => ({ FavoriteToggle: () => <button type="button">Favori</button> }));
 vi.mock('@/components/recipes/IngredientChecklist', () => ({
-  IngredientChecklistWithHeader: ({ renderHeader }: { renderHeader: (toggle: React.ReactNode) => React.ReactNode }) => <div>{renderHeader(null)}</div>,
+  IngredientChecklistWithHeader: ({ renderHeader, ingredients }: { ingredients: Recipe['ingredients']; renderHeader: (toggle: React.ReactNode) => React.ReactNode }) => <div>{renderHeader(null)}{ingredients.map(item => <p key={item.name}>{item.quantity} {item.name}</p>)}</div>,
 }));
 vi.mock('@/components/cooking/CookingModeContainer', () => ({
   CookingModeContainer: ({ recipeId, initialServings, chatSession }: { recipeId: string; initialServings?: number; chatSession?: unknown }) => (
@@ -49,6 +49,9 @@ vi.mock('@/components/cooking/CookingChatSheet', () => ({
     </div>
   ) : null,
 }));
+vi.mock('@/hooks/usePairings', () => ({ usePairingProfile: () => ({ data: { roles: ['accompagnement'] } }) }));
+vi.mock('@/components/recipes/RecipePairings', () => ({ RecipePairings: () => <h2>Avec quoi les servir ?</h2> }));
+vi.mock('@/components/recipes/PairingProfileEditor', () => ({ PairingProfileEditor: () => null }));
 vi.mock('@/hooks/useRecipeChat', () => ({ useRecipeChat: mockUseRecipeChat }));
 vi.mock('@/hooks/useRecipes', () => ({
   useRecipe: () => ({ data: hookState.recipe, isLoading: false }),
@@ -182,5 +185,28 @@ describe('RecipeDetail — assistant contextualisé', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Démarrer une autre recette' }));
 
     expect(screen.getByText('Mode cuisine r2 · 2 portions · session partagée : non')).toBeInTheDocument();
+  });
+});
+
+describe('RecipeDetail — Livre modulaire et portions', () => {
+  it('recalcule les ingrédients et transmet les portions choisies à la cuisine', () => {
+    renderPage();
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Portions' }), { target: { value: '6' } });
+    expect(screen.getByText('6 Poivron')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cuisiner' }));
+    expect(screen.getByText('Mode cuisine r1 · 6 portions · session partagée : oui')).toBeInTheDocument();
+    expect(recipe.ingredients[0].quantity).toBe(4);
+  });
+  it('affiche le rôle de préparation sans créer un type accompagnement', () => {
+    hookState.recipe = { ...recipe, entry_kind: 'preparation' };
+    renderPage();
+    expect(screen.getByText('Préparation · Accompagnement')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Avec quoi les servir ?' })).toBeInTheDocument();
+  });
+  it('signale le rendement absent sans convertir une ancienne fiche', () => {
+    hookState.recipe = { ...recipe, servings: null };
+    renderPage();
+    expect(screen.getByText(/Quantités supposées pour 2 portions/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Classer cette fiche' })).toBeInTheDocument();
   });
 });
