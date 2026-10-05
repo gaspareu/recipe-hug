@@ -1,10 +1,13 @@
 import { useCallback, useState, useMemo } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
 import { toast } from '@/components/ui/sonner';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Users, ListChecks, ChefHat, History, MessageCircle } from 'lucide-react';
+import { ArrowLeft, ListChecks, ChefHat, History, MessageCircle } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
+import { ServingsControl } from '@/components/recipes/ServingsControl';
+import { RecipeIdentity } from '@/components/recipes/RecipeIdentity';
+import { useDetailServings } from '@/hooks/useDetailServings';
+import { scaleIngredients } from '@/lib/recipe-scaling';
 import { RecipeDetailHeader } from '@/components/recipes/RecipeDetailHeader';
 import { RecipeActionsMenu } from '@/components/recipes/RecipeActionsMenu';
 import { RecipeStepsList } from '@/components/recipes/RecipeStepsList';
@@ -132,7 +135,6 @@ function RecipeDetailAssistant({
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const reduceMotion = useReducedMotion();
   const { user } = useAuth();
   const { data: recipe, isLoading } = useRecipe(id || '');
   const toggleFavorite = useToggleFavorite();
@@ -150,6 +152,8 @@ export default function RecipeDetail() {
   // appelés dans le même ordre à chaque rendu (sinon React #310 → page blanche).
   const steps = useMemo(() => (recipe?.steps || []) as Step[], [recipe?.steps]);
   const totalSteps = steps.length;
+  const { servings, baseServings, setServings } = useDetailServings(id ?? '', recipe?.servings);
+  const ingredients = useMemo(() => scaleIngredients(recipe?.ingredients ?? [], baseServings, servings), [recipe?.ingredients, baseServings, servings]);
   const assistantOpen = assistantState.recipeId === id && assistantState.open;
   const activeCookingTarget = cookingTarget?.sourceRecipeId === id ? cookingTarget : null;
 
@@ -201,7 +205,7 @@ export default function RecipeDetail() {
     return <MainLayout><div className="max-w-2xl mx-auto space-y-6"><Skeleton className="h-10 w-48" /><Skeleton className="h-[200px]" /><Skeleton className="h-[200px]" /></div></MainLayout>;
   }
   if (!recipe) {
-    return <MainLayout><div className="text-center py-12"><p className="text-muted-foreground">Recette introuvable</p><Button asChild className="mt-4"><Link to="/dashboard">Retour au dashboard</Link></Button></div></MainLayout>;
+    return <MainLayout><div className="text-center py-12"><p className="text-muted-foreground">Recette introuvable</p><Button asChild className="mt-4"><Link to="/dashboard">Retour au Livre</Link></Button></div></MainLayout>;
   }
 
   const handleAnalyzeAndGenerate = () => {
@@ -216,53 +220,46 @@ export default function RecipeDetail() {
 
   return (
     <MainLayout>
-      <div className="mx-auto max-w-2xl space-y-6 pb-24">
-        {/* Image avec actions en surimpression */}
-        <motion.div
-          className="relative"
-          initial={reduceMotion ? false : { scale: 0.96, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }}
-        >
-          <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={imageChange.run} onImageRemove={imageRemove.run} showTitleOverlay={false} />
-          <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/50 to-transparent pointer-events-none rounded-t-lg" />
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Retour" className="absolute top-3 left-3 bg-background/60 backdrop-blur-sm hover:bg-background/80">
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-          </Button>
-          <div className="absolute top-3 right-3 flex items-center gap-1" data-testid="action-buttons">
+      <div className="mx-auto max-w-5xl space-y-8 pb-32">
+        <nav className="flex items-center justify-between gap-2" aria-label="Actions de la fiche">
+          <Button variant="ghost" onClick={() => navigate('/dashboard')} className="min-h-11 px-0"><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Retour au livre</Button>
+          <div className="flex items-center gap-1" data-testid="action-buttons">
             <TooltipProvider>
-              <FavoriteToggle isFavorite={recipe.is_favorite} onToggle={handleToggleFavorite} disabled={toggleFavorite.isPending} tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} variant="overlay" />
+              <FavoriteToggle isFavorite={recipe.is_favorite} onToggle={handleToggleFavorite} disabled={toggleFavorite.isPending} tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} />
               <RecipeActionsMenu recipeId={recipe.id} onAnalyzeAndGenerate={handleAnalyzeAndGenerate} isAnalyzing={isAnalyzing} onOpenHistory={() => setHistoryOpen(true)} />
             </TooltipProvider>
           </div>
-        </motion.div>
-
-        <RecipeDetailHeader title={recipe.title} description={recipe.ai_summary} />
-        <p className="text-sm text-muted-foreground">
-          {recipe.entry_kind === 'preparation' ? 'Préparation' : recipe.entry_kind === 'complete_dish' ? 'Plat complet' : 'À classer'}
-          {recipe.entry_kind === null && <> · <Link className="text-primary underline" to={`/recipes/${recipe.id}/edit`}>Classer cette fiche</Link></>}
-        </p>
-
+        </nav>
+        <header className="max-w-2xl space-y-3">
+          <RecipeIdentity recipe={recipe} />
+          <RecipeDetailHeader title={recipe.title} description={recipe.ai_summary} />
+          <p className="text-sm text-muted-foreground">{totalSteps} étape{totalSteps > 1 ? 's' : ''} · {servings} portion{servings > 1 ? 's' : ''}</p>
+        </header>
+        <div className="max-w-xl">
+          <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={imageChange.run} onImageRemove={imageRemove.run} showTitleOverlay={false} showPlaceholder={false} />
+        </div>
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.7fr)]">
+        <section className="space-y-3" aria-label="Ingrédients et portions">
+          <ServingsControl value={servings} onChange={setServings} />
+          {(!recipe.servings || recipe.servings <= 0) && <p className="text-sm text-muted-foreground">Quantités supposées pour 2 portions. <Link className="underline" to={`/recipes/${recipe.id}/edit`}>Préciser le rendement</Link></p>}
         {recipe.ingredients.length === 0 ? (
-          <Card className="rounded-2xl border-border bg-card">
+          <Card className="rounded-none border-0 border-t border-border bg-transparent shadow-none">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-solitreo text-xl font-normal tracking-normal">
+              <CardTitle role="heading" aria-level={2} className="flex items-center gap-2 font-solitreo text-2xl font-normal tracking-normal">
                 <ListChecks className="h-5 w-5" />
                 Ingrédients
-                {recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />{recipe.servings} portions</span>}
               </CardTitle>
             </CardHeader>
             <CardContent><p className="text-muted-foreground text-sm">Aucun ingrédient</p></CardContent>
           </Card>
         ) : (
-          <Card className="rounded-2xl border-border bg-card">
-            <IngredientChecklistWithHeader ingredients={recipe.ingredients} recipeId={id} renderHeader={toggleButton => (
+          <Card className="rounded-none border-0 border-t border-border bg-transparent shadow-none">
+            <IngredientChecklistWithHeader key={recipe.id} ingredients={ingredients} recipeId={id} renderHeader={toggleButton => (
               <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between font-solitreo text-xl font-normal tracking-normal">
+                <CardTitle role="heading" aria-level={2} className="flex items-center justify-between font-solitreo text-2xl font-normal tracking-normal">
                   <span className="flex items-center gap-2">
                     <ListChecks className="h-5 w-5" />
                     Ingrédients
-                    {recipe.servings && <span className="text-sm font-normal text-muted-foreground flex items-center gap-1 ml-1"><Users className="h-3.5 w-3.5" />{recipe.servings} portions</span>}
                   </span>
                   {toggleButton}
                 </CardTitle>
@@ -271,10 +268,11 @@ export default function RecipeDetail() {
           </Card>
         )}
 
-        <Card className="rounded-2xl border-border bg-card">
+        </section>
+        <Card className="rounded-none border-0 border-t border-border bg-transparent shadow-none">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between font-solitreo text-xl font-normal tracking-normal">
-              <span>Étapes</span>
+            <CardTitle role="heading" aria-level={2} className="flex items-center justify-between font-solitreo text-2xl font-normal tracking-normal">
+              <span>Préparation</span>
               {totalSteps > 0 && <span className="text-sm font-normal text-muted-foreground">{totalSteps} étapes</span>}
             </CardTitle>
           </CardHeader>
@@ -283,10 +281,11 @@ export default function RecipeDetail() {
           </CardContent>
         </Card>
 
-        {recipe.entry_kind && <>
-          {recipe.status !== 'archived' && <RecipePairings recipe={recipe} />}
+        </div>
+        {recipe.entry_kind && <div className="space-y-6 border-t border-border pt-6">
+          {recipe.status !== 'archived' && <RecipePairings recipe={recipe} servings={servings} />}
           <PairingProfileEditor recipeId={recipe.id} />
-        </>}
+        </div>}
 
         {/* Historique des versions (ouvert depuis le menu d'actions) */}
         <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
@@ -316,7 +315,7 @@ export default function RecipeDetail() {
                 onClick={() => setCookingTarget({
                   sourceRecipeId: recipe.id,
                   recipeId: recipe.id,
-                  servings: recipe.servings ?? undefined,
+                  servings,
                 })}
                 size="lg"
                 className="h-12 min-w-0 flex-1 gap-1.5 px-2 text-sm font-semibold sm:gap-2 sm:px-8 sm:text-base"

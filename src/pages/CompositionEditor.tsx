@@ -24,7 +24,10 @@ export default function CompositionEditor() {
   const { data: recipes = [] } = useRecipes();
   const save = useSaveComposition();
   const [title, setTitle] = useState('');
-  const [servings, setServings] = useState(2);
+  const [servings, setServings] = useState(() => {
+    const requested = Number(params.get('servings'));
+    return Number.isSafeInteger(requested) && requested > 0 ? requested : 2;
+  });
   const [items, setItems] = useState<CompositionDraftItem[]>(() => {
     const ids = (params.get('recipes') ?? '').split(',').filter(Boolean).slice(0, 10);
     return ids.length ? ids.map(recipeId => ({ ...emptyItem(), recipe_id: recipeId })) : [emptyItem()];

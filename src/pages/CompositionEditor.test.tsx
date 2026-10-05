@@ -19,7 +19,7 @@ import CompositionEditor from './CompositionEditor';
 
 it('préremplit les accords choisis puis enregistre le plat après validation', async () => {
   const user = userEvent.setup();
-  render(<MemoryRouter initialEntries={['/compositions/new?kind=dish&recipes=carottes,riz']}>
+  render(<MemoryRouter initialEntries={['/compositions/new?kind=dish&recipes=carottes,riz&servings=6']}>
     <Routes>
       <Route path="/compositions/new" element={<CompositionEditor />} />
       <Route path="/compositions/:id" element={<h1>Plat enregistré</h1>} />
@@ -29,7 +29,7 @@ it('préremplit les accords choisis puis enregistre le plat après validation', 
   await user.type(screen.getByRole('textbox', { name: 'Nom *' }), 'Carottes et riz');
   await user.click(screen.getByRole('button', { name: 'Enregistrer' }));
   await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({
-    kind: 'dish', title: 'Carottes et riz',
+    kind: 'dish', title: 'Carottes et riz', servings: 6,
     items: [
       expect.objectContaining({ recipe_id: 'carottes' }),
       expect.objectContaining({ recipe_id: 'riz' }),

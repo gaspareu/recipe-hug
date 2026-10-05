@@ -17,21 +17,18 @@ function renderRecipeImageDisplay(
 }
 
 describe("RecipeImageDisplay", () => {
-  it("affiche le badge caméra quand isEditable=true et isUploading=false", () => {
-    renderRecipeImageDisplay({ isEditable: true });
-    // Le badge est un div avec une icône Camera (svg)
-    // On vérifie qu'un svg est présent dans le badge (bottom-2 right-2)
-    const badge = document
-      .querySelector(".absolute.bottom-2.right-2");
-    expect(badge).toBeInTheDocument();
-    expect(badge?.querySelector("svg")).toBeInTheDocument();
+  it("propose une commande photo accessible même sans survol", () => {
+    renderRecipeImageDisplay({ isEditable: true, showPlaceholder: false });
+    expect(screen.getByRole('button', { name: 'Ajouter une photo' })).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
-
-  it("n'affiche pas le badge caméra quand isEditable=false", () => {
+  it("masque les commandes d’édition en lecture seule", () => {
     renderRecipeImageDisplay({ isEditable: false });
-    const badge = document
-      .querySelector(".absolute.bottom-2.right-2");
-    expect(badge).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+  it("propose le retrait d’une photo sans survol", () => {
+    renderRecipeImageDisplay({ imageUrl: 'https://example.com/image.jpg' });
+    expect(screen.getByRole('button', { name: 'Retirer la photo' })).toBeInTheDocument();
   });
 
   it("affiche l'image de la recette", () => {
