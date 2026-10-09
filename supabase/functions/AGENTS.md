@@ -173,6 +173,10 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
     température, Varoma, sens inverse) construites en priorité depuis les champs structurés
     `step.tm7`, avec **repli regex** sur le texte pour les recettes existantes ; annotations
     **INGREDIENT** liant les noms d'ingrédients au texte (c'est ce qui rend une étape « guidée »).
+    Le repli texte exclut les phrases mentionnant le four et les durées seules sans indice
+    machine (vitesse, température compatible, Varoma ou mention TM7/Thermomix). Le texte et les
+    liens ingrédients restent exportés. Une température hors plage est omise, jamais ramenée
+    artificiellement à une température TM7 ; les paramètres structurés `step.tm7` restent prioritaires.
     Types d'annotation confirmés : `TTS` (`{time, speed, direction:"CCW", temperature:{value,unit}}`),
     `MODE` (modes nommés : `name:"dough"|"browning"|"steaming"`, `{time, temperature?, power?}`) et
     `INGREDIENT` (`{description: "20 g d'huile"}`). Le sens inverse s'exprime par `direction`,

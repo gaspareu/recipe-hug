@@ -138,12 +138,22 @@ function spanOf(spans: Found[]): Span | null {
   return { offset: start, length: end - start };
 }
 
-/**
- * Extrait en UNE passe les réglages machine présents dans le texte, avec leur
- * empan global. L'empan positionne l'annotation TTS sur le seul segment de
- * réglages : les annotations INGREDIENT occupent d'autres segments de la phrase
- * et ne doivent pas être chevauchées.
- */
+function maskManualInstructions(text: string): string {
+  // Le repli texte est conservateur : une consigne de four reste manuelle,
+  // même à une température compatible TM7. Une durée seule (repos, pousse…)
+  // ne suffit pas non plus à identifier une opération machine. Masquer les
+  // phrases plutôt que les retirer conserve les offsets du texte original.
+  // Le point de « vit. 2 » et les décimales ne coupent pas les réglages.
+  return text.replace(/.*?(?:\.(?=\s+\p{L})|[;!?\n]|$)/gu, (phrase) => {
+    const temp = extractTemperature(phrase);
+    const compatibleTemp = temp && clampTemperature(Number(temp.value)) === Number(temp.value);
+    const isMachine = extractSpeed(phrase) || compatibleTemp ||
+      extractVaroma(phrase) || /\b(?:thermomix|tm7)\b/i.test(phrase);
+    return /\bfour\b/i.test(phrase) || !isMachine ? " ".repeat(phrase.length) : phrase;
+  });
+}
+
+/** Empan des réglages du texte, distinct des segments annotés INGREDIENT. */
 function extractTextParams(text: string): TextParams {
   const time = extractTime(text);
   const speed = extractSpeed(text);
@@ -160,7 +170,11 @@ function annotationsFromText(p: TextParams): Annotation[] {
   if (p.time) data.time = p.time.seconds;
   if (p.speed) data.speed = p.speed.speed;
   if (p.varoma) data.temperature = { value: "varoma" };
-  else if (p.temp) data.temperature = { value: p.temp.value, unit: "C" };
+  // Ne jamais convertir une température hors plage en un autre réglage TM7.
+  else if (p.temp && clampTemperature(Number(p.temp.value)) === Number(p.temp.value)) {
+    data.temperature = { value: p.temp.value, unit: "C" };
+  }
+  if (Object.keys(data).length === 0) return [];
   return [{ type: "TTS", data, position: p.position }];
 }
 
@@ -170,7 +184,7 @@ function annotationsFromText(p: TextParams): Annotation[] {
  * empan (TTS). « Varoma » → `temperature: { value: "varoma" }`.
  */
 export function parseStepAnnotations(text: string): Annotation[] {
-  return annotationsFromText(extractTextParams(text));
+  return annotationsFromText(extractTextParams(maskManualInstructions(text)));
 }
 
 // ── Vocabulaire Cookidoo (confirmé par inspection réseau) ────────────────────
@@ -314,7 +328,9 @@ function ingredientAnnotations(text: string, ingredients: Ingredient[]): Annotat
  */
 function buildStepAnnotations(step: Step, ingredients: Ingredient[]): Annotation[] {
   const text = step.text.trim();
-  const params = extractTextParams(text); // une seule passe de regex par étape
+  // Les champs structurés gardent leurs empans d'origine : masquer une durée
+  // de pétrissage ferait couvrir toute la phrase à MODE, y compris l'ingrédient.
+  const params = extractTextParams(step.tm7 ? text : maskManualInstructions(text));
   const machine = step.tm7
     ? modeFromTm7(text, step.tm7, params.position) ?? ttsFromTm7(text, step.tm7, params.position)
     : null;
