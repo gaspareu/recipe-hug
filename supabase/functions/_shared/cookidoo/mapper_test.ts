@@ -54,6 +54,89 @@ Deno.test("parseStepAnnotations: texte simple → aucune annotation", () => {
 
 // ── Annotations structurées TM7 ──────────────────────────────────────────────
 
+Deno.test("mapRecipeToCookidoo: seconde pousse et préchauffage restent du texte", () => {
+  const text = "Couvrir d'un linge et laisser gonfler 45 min à 1 h. Préchauffer le four à 180°C pendant ce temps.";
+  const payload = mapRecipeToCookidoo({
+    title: "Buns briochés moelleux pour burgers",
+    ingredients: [],
+    steps: [{ order: 9, text, duration_minutes: 50 }],
+  });
+  assertEquals(payload.instructions[0].text, text);
+  assertEquals(payload.instructions[0].annotations, []);
+});
+
+Deno.test("parseStepAnnotations: le four ne devient pas un réglage machine, même à 100°C", () => {
+  for (const text of [
+    "Préchauffer le four à 180°C.",
+    "Cuire au four 20 min à 100°C.",
+    "Cuire 20 min à 100°C dans le four.",
+  ]) assertEquals(parseStepAnnotations(text), []);
+});
+
+Deno.test("parseStepAnnotations: phrases four et TM7 séparées, offsets conservés", () => {
+  for (const text of [
+    "Préchauffer le four à 180°C. Mixer 8 min/100°C/vitesse 2.",
+    "Mixer 8 min/100°C/vitesse 2. Préchauffer le four à 180°C.",
+    "Préchauffer le four à 180°C ; mixer 8 min/100°C/vitesse 2.",
+  ]) {
+    const ann = parseStepAnnotations(text);
+    assertEquals(ann.length, 1);
+    assertEquals(ann[0].data, { time: 480, speed: "2", temperature: { value: "100", unit: "C" } });
+    assertEquals(text.slice(ann[0].position.offset, ann[0].position.offset + ann[0].position.length), "8 min/100°C/vitesse 2");
+  }
+});
+
+Deno.test("parseStepAnnotations: une durée de repos seule ne suffit pas à identifier le TM7", () => {
+  assertEquals(parseStepAnnotations("Laisser gonfler 45 min."), []);
+});
+
+Deno.test("parseStepAnnotations: abréviation, vitesse décimale et minuterie TM7 préservées", () => {
+  const ann = parseStepAnnotations("Mixer 8 min/100°C/vit. 2.5.");
+  assertEquals(ann[0].data, { time: 480, speed: "2.5", temperature: { value: "100", unit: "C" } });
+  assertEquals(parseStepAnnotations("Régler la minuterie du TM7 sur 3 min.")[0].data, { time: 180 });
+});
+
+Deno.test("mapRecipeToCookidoo: consigne de four conservée avec ses liens ingrédients", () => {
+  const text = "Cuire les carottes au four 20 min à 100°C.";
+  const payload = mapRecipeToCookidoo({
+    title: "Carottes",
+    ingredients: [{ name: "carottes", quantity: 500, unit: "g" }],
+    steps: [{ order: 1, text }],
+  });
+  assertEquals(payload.instructions[0].text, text);
+  assertEquals(payload.instructions[0].annotations.map((a) => a.type), ["INGREDIENT"]);
+});
+
+Deno.test("parseStepAnnotations: température hors plage omise sans la remplacer par 160°C", () => {
+  const ann = parseStepAnnotations("Cuire 8 min/180°C/vitesse 2.");
+  assertEquals(ann[0].data, { time: 480, speed: "2" });
+  assertEquals(parseStepAnnotations("TM7 : 180°C."), []);
+});
+
+Deno.test("mapRecipeToCookidoo: paramètres structurés prioritaires avec une consigne de four", () => {
+  const payload = mapRecipeToCookidoo({
+    title: "Test",
+    ingredients: [],
+    steps: [{ order: 1, text: "Préchauffer le four à 180°C. Chauffer 3 min/37°C/vitesse 1.",
+      tm7: { mode: "cook", seconds: 180, temperature: 37, speed: "1" } }],
+  });
+  assertEquals(payload.instructions[0].annotations[0].data.temperature, { value: "37", unit: "C" });
+});
+
+Deno.test("mapRecipeToCookidoo: pétrissage structuré sans chevauchement de l'ingrédient", () => {
+  const text = "Ajouter la farine et pétrir 3 min.";
+  const payload = mapRecipeToCookidoo({
+    title: "Pâte",
+    ingredients: [{ name: "farine", quantity: 200, unit: "g" }],
+    steps: [{ order: 1, text, tm7: { mode: "knead", seconds: 180 } }],
+  });
+  const [machine, ingredient] = payload.instructions[0].annotations;
+  assertEquals(machine.type, "MODE");
+  assertEquals(machine.position, { offset: text.indexOf("3 min"), length: 5 });
+  assertEquals(ingredient.type, "INGREDIENT");
+  assertEquals(ingredient.position.offset + ingredient.position.length <= machine.position.offset, true);
+});
+
 Deno.test("mapRecipeToCookidoo: étape tm7 → annotation TTS structurée", () => {
   const payload = mapRecipeToCookidoo({
     title: "Test",
