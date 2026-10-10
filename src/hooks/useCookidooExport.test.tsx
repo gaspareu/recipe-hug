@@ -102,3 +102,23 @@ describe('useCookidooExport', () => {
     expect(maybeSingle).not.toHaveBeenCalled();
   });
 });
+
+it("ne transmet jamais action:prepare à un ancien backend qui pourrait l'interpréter comme un envoi", async () => {
+  vi.clearAllMocks();
+  vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: { ok: false, error: 'invalid_input' }, error: null } as never);
+  const { result } = renderHook(() => useCookidooExport(), { wrapper });
+  await act(async () => { await expect(result.current.prepareExport('recipe-1')).rejects.toThrow('mise à jour'); });
+  expect(supabase.functions.invoke).toHaveBeenCalledExactlyOnceWith('export-recipe-cookidoo', { method: 'GET' });
+});
+
+it("prépare une copie seulement après annonce de la capacité du backend, sans démarrer d'export", async () => {
+  vi.clearAllMocks();
+  const preview = { ok: true, prepared: { recipe: { title: 'Bao' }, notes: [], signature: 'signed' } };
+  vi.mocked(supabase.functions.invoke)
+    .mockResolvedValueOnce({ data: { capabilities: ['tm7_preparation_v1'] }, error: null } as never)
+    .mockResolvedValueOnce({ data: preview, error: null } as never);
+  const { result } = renderHook(() => useCookidooExport(), { wrapper });
+  await act(async () => { expect(await result.current.prepareExport('recipe-1')).toEqual(preview); });
+  expect(supabase.functions.invoke).toHaveBeenNthCalledWith(2, 'export-recipe-cookidoo', { body: { recipe_id: 'recipe-1', action: 'prepare' } });
+  expect(result.current.exportId).toBeNull();
+});

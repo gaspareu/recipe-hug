@@ -426,3 +426,8 @@ Un contrôle indisponible ferme l'accès à l'IA ; aucun appel ni envoi n'est al
 lancé. La migration `20261009184203_cookidoo_preparation_quota.sql` doit précéder
 le déploiement de la fonction, via le workflow CI habituel. La RPC et ses
 compteurs ne sont accessibles qu'au rôle de service.
+
+Pendant un déploiement progressif, le frontend demande d'abord les capacités par
+`GET` et exige `tm7_preparation_v1`. L'ancien backend répond sans cette capacité,
+sans écriture ; le frontend refuse alors tout POST de préparation. Cela évite
+qu'une ancienne fonction, ignorant `action:"prepare"`, déclenche un envoi réel.

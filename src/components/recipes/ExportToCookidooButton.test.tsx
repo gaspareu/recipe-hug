@@ -64,7 +64,7 @@ describe('ExportToCookidooButton — flux asynchrone', () => {
   });
 
   it("n'émet le toast final qu'une seule fois et ne boucle pas indéfiniment après le succès", async () => {
-    vi.mocked(supabase.functions.invoke).mockResolvedValueOnce({
+    vi.mocked(supabase.functions.invoke).mockResolvedValueOnce({ data: { capabilities: ['tm7_preparation_v1'] }, error: null } as never).mockResolvedValueOnce({
       data: { ok: true, prepared: { recipe: { title: 'Bao', ingredients: [], steps: [{ order: 1, text: 'Mélanger. Réglages TM7 : 30 s / vitesse 2.' }] }, notes: [], expires_at: Date.now() + 900000, signature: 'signed' }, ingredients: ['2 c. à soupe d’huile'], guided_steps: 1 }, error: null,
     } as never).mockResolvedValue({
       data: { ok: true, export_id: 'job-1', status: 'pending' },
@@ -87,7 +87,7 @@ describe('ExportToCookidooButton — flux asynchrone', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /préparer pour le tm7/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /confirmer l’envoi/i })).toBeInTheDocument());
-    expect(supabase.functions.invoke).toHaveBeenCalledTimes(1);
+    expect(supabase.functions.invoke).toHaveBeenCalledTimes(2);
     expect(toast.info).not.toHaveBeenCalled();
     expect(screen.getByText(/Réglages TM7 : 30 s/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /confirmer l’envoi/i }));

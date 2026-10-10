@@ -94,6 +94,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  // Permet au nouveau frontend de refuser un ancien backend qui interpréterait
+  // action:prepare comme un envoi réel pendant le déploiement progressif.
+  if (req.method === "GET") return json({ capabilities: ["tm7_preparation_v1"] });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   try {

@@ -60,6 +60,10 @@ export function useCookidooExport() {
   const [timedOut, setTimedOut] = useState(false);
   const preparation = useMutation({
     mutationFn: async (recipeId: string): Promise<CookidooPreparation> => {
+      const capability = await supabase.functions.invoke('export-recipe-cookidoo', { method: 'GET' });
+      if (capability.error || !Array.isArray(capability.data?.capabilities) || !capability.data.capabilities.includes('tm7_preparation_v1')) {
+        throw new Error('La préparation TM7 est en cours de mise à jour. Réessayez dans quelques instants. Aucun envoi effectué.');
+      }
       const { data, error } = await supabase.functions.invoke('export-recipe-cookidoo', { body: { recipe_id: recipeId, action: 'prepare' } });
       if (error) throw error;
       if (!data?.ok || !data.prepared) throw new Error(data?.message ?? 'Préparation impossible. Aucun envoi effectué.');

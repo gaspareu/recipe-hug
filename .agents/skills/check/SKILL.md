@@ -18,7 +18,7 @@ Baseline vérifié au **2026-10-10** :
 
 | Commande | Baseline (dette préexistante) |
 |----------|-------------------------------|
-| `npm run test:run` | **0 échec** (590 tests) |
+| `npm run test:run` | **0 échec** (592 tests) |
 | `npm run typecheck` | **0 erreur** |
 | `npm run lint` | **0 erreur** (26 avertissements `react-refresh` attendus dans les primitives UI) |
 | `npm run lint:dead-code` | **0 résultat** |
