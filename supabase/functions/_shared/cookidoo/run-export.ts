@@ -12,6 +12,7 @@
  */
 import { CookidooHttpError, type ClientCtx } from "./client.ts";
 import type { CookidooRecipePayload } from "./types.ts";
+import { verifyReadback } from "./readback.ts";
 
 /** Recette créée sur Cookidoo mais ni remplie ni supprimable : nettoyage manuel requis. */
 export class PartialCreateError extends Error {
@@ -139,6 +140,12 @@ export async function runExport(
   // ensuite en simple texte, sans erreur HTTP (cf. docs/COOKIDOO-CONTRAT.md §8).
   // La vue « appareil » est le seul endroit où ce silence devient visible.
   let unguided: number[] = [];
+  try {
+    await sleep(2000);
+    warnings.push(...verifyReadback(payload, await ops.getRecipe(ctx, id)));
+  } catch {
+    warnings.push("content_not_verified");
+  }
   const expectedGuided = payload.instructions
     .map((step, i) => (step.annotations.some((a) => a.type !== "INGREDIENT") ? i : -1))
     .filter((i) => i >= 0);
@@ -153,6 +160,7 @@ export async function runExport(
     } catch (checkErr) {
       // Contrôle best-effort : son échec ne remet pas en cause l'export.
       console.error("[run-export] contrôle guided cooking", checkErr);
+      warnings.push("device_check_failed");
     }
   }
 

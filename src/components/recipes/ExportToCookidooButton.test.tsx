@@ -64,7 +64,9 @@ describe('ExportToCookidooButton — flux asynchrone', () => {
   });
 
   it("n'émet le toast final qu'une seule fois et ne boucle pas indéfiniment après le succès", async () => {
-    vi.mocked(supabase.functions.invoke).mockResolvedValue({
+    vi.mocked(supabase.functions.invoke).mockResolvedValueOnce({ data: { capabilities: ['tm7_preparation_v1'] }, error: null } as never).mockResolvedValueOnce({
+      data: { ok: true, prepared: { recipe: { title: 'Bao', ingredients: [], steps: [{ order: 1, text: 'Mélanger. Réglages TM7 : 30 s / vitesse 2.' }] }, notes: [], expires_at: Date.now() + 900000, signature: 'signed' }, ingredients: ['2 c. à soupe d’huile'], guided_steps: 1 }, error: null,
+    } as never).mockResolvedValue({
       data: { ok: true, export_id: 'job-1', status: 'pending' },
       error: null,
     } as never);
@@ -83,8 +85,12 @@ describe('ExportToCookidooButton — flux asynchrone', () => {
 
     renderButton();
 
-    const button = screen.getByRole('button', { name: /envoyer la recette/i });
-    fireEvent.click(button);
+    fireEvent.click(screen.getByRole('button', { name: /préparer pour le tm7/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /confirmer l’envoi/i })).toBeInTheDocument());
+    expect(supabase.functions.invoke).toHaveBeenCalledTimes(2);
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(screen.getByText(/Réglages TM7 : 30 s/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /confirmer l’envoi/i }));
 
     // Accusé de réception synchrone.
     await waitFor(() => expect(toast.info).toHaveBeenCalledTimes(1));
@@ -107,4 +113,14 @@ describe('ExportToCookidooButton — flux asynchrone', () => {
     // rafale illimitée caractéristique d'une boucle).
     expect(renderCount).toBeLessThanOrEqual(renderCountAfterSuccess + 2);
   });
+});
+
+it("un échec de préparation ne déclenche aucun envoi Cookidoo", async () => {
+  vi.clearAllMocks();
+  vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: { ok: false, message: 'Préparation impossible' }, error: null } as never);
+  renderButton();
+  fireEvent.click(screen.getByRole('button', { name: /préparer pour le tm7/i }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalled());
+  expect(supabase.functions.invoke).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('button', { name: /confirmer l’envoi/i })).not.toBeInTheDocument();
 });

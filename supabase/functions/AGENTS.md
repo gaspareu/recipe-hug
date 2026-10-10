@@ -194,7 +194,7 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
   - `manage-cookidoo-credentials` — GET (statut, email masqué) / POST (upsert chiffré AES-GCM) / DELETE.
     Mot de passe chiffré via `AI_KEYS_ENCRYPTION_SECRET`, jamais renvoyé en clair. Stocké dans
     `user_cookidoo_credentials` (vue `_safe` sans `password_enc`).
-  - `export-recipe-cookidoo` — **asynchrone en deux phases** (l'export prend ~5-15 s, il ne doit
+  - `export-recipe-cookidoo` — préparation `{action:"prepare", recipe_id}` sans écriture Cookidoo, aperçu signé quinze minutes et lié à la révision. Confirmation avec `{recipe_id, prepared}`, puis **envoi asynchrone en deux phases** (l'export prend ~5-15 s, il ne doit
     pas bloquer l'interface) :
     1. **Phase synchrone** (< 1 s) : auth → lecture recette (RLS) → déchiffrement creds → mapping
        → **validation**. Un payload invalide répond immédiatement, sans consommer de requête

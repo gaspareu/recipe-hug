@@ -137,6 +137,7 @@ const deviceView = (types: string[]) =>
         Type,
         PreparationStepIndex: i,
         ActionText: `étape ${i}`,
+        Annotations: [{ IntentId: "cooking-mode/manual" }],
       })),
     },
   });
@@ -174,4 +175,9 @@ Deno.test("findUnguidedSteps: étape absente de la vue appareil → signalée", 
 Deno.test("findUnguidedSteps: seules les étapes attendues sont contrôlées", async () => {
   const ctx = testCtx(() => deviceView(["CustomerText", "CustomerAnnotations"]));
   assertEquals(await findUnguidedSteps(ctx, "r1", [1]), []);
+});
+
+Deno.test("findUnguidedSteps : liens ingrédients seuls ne prouvent pas une commande machine", async () => {
+  const ctx = testCtx(() => okJson({ PromptDetails: { Prompts: [{ Type: "CustomerAnnotations", PreparationStepIndex: 0, Annotations: [{ IntentId: "weighing" }] }] } }));
+  assertEquals(await findUnguidedSteps(ctx, "r1", [0]), [0]);
 });

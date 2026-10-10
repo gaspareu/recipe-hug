@@ -32,8 +32,15 @@ import {
   fillRecipe,
   getRecipe,
   recipeWebUrl,
+  renameRecipe,
+  findUnguidedSteps,
+  uploadRecipeImage,
   type ClientCtx,
 } from "../../supabase/functions/_shared/cookidoo/client.ts";
+
+import { runExport } from "../../supabase/functions/_shared/cookidoo/run-export.ts";
+import { validateCookidooPayload } from "../../supabase/functions/_shared/cookidoo/validate.ts";
+import { exportQualityNotes } from "../../supabase/functions/_shared/cookidoo/quality.ts";
 
 // ── Portabilité Deno / Node ──────────────────────────────────────────────────
 const g = globalThis as unknown as {
@@ -65,7 +72,7 @@ function die(msg: string): never {
   throw new Error(msg);
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -109,7 +116,12 @@ async function main() {
     ? (toolsArg.split(",").map((t) => t.trim()) as ThermomixTool[])
     : (["TM7"] as ThermomixTool[]);
 
+  if (tools.some((tool) => tool !== "TM7")) die("Seul le TM7 est pris en charge.");
   const payload = mapRecipeToCookidoo(recipe, { tools });
+  const validation = validateCookidooPayload(payload);
+  if (!validation.ok) die(`Recette non exportable : ${validation.errors.join(" ; ")}`);
+  const notes = exportQualityNotes(recipe, payload);
+  for (const note of notes) console.warn(`⚠️ ${note}`);
 
   if (has("--dry-run")) {
     console.log("── Payload Cookidoo (dry-run, aucun envoi) ──");
@@ -117,19 +129,20 @@ async function main() {
     return;
   }
 
+  // L'outil local ne propose pas de réglages IA : exige une validation explicite
+  // des actions manuelles plutôt que prétendre optimiser une recette incomplète.
+  if (notes.length && !has("--accept-manual")) die("Précisez les réglages dans le JSON ou confirmez les limites avec --accept-manual.");
   // Envoi réel
   const jar = await authenticate(lang);
   const ctx: ClientCtx = { cookieHeader: jar.headerForUrl("https://cookidoo.fr"), lang };
 
-  console.log(`▶ Création « ${payload.name} » (${lang}, ${tools.join(",")})…`);
-  const id = await createRecipe(ctx, payload.name);
-  console.log(`✅ Recette créée : ${id} — remplissage dans 5 s…`);
-  await sleep(5000);
-  await fillRecipe(ctx, id, payload);
-
-  console.log(`\n🎉 Envoyée. Vérifiez dans Cookidoo → « Mes recettes créées ».`);
-  console.log(`   URL : ${recipeWebUrl(ctx, id)}`);
-  console.log(`   Pour supprimer : … cli.ts --delete ${id}`);
+  const outcome = await runExport({ ctx, payload, existingId: arg("--existing-id") ?? null, supabaseHost: "" }, {
+    getRecipe, createRecipe, fillRecipe, renameRecipe, deleteRecipe,
+    uploadRecipeImage, findUnguidedSteps, recipeWebUrl,
+  }, sleep);
+  for (const warning of outcome.warnings) console.warn(`⚠️ ${warning}`);
+  console.log(`Recette envoyée : ${outcome.url}`);
+  console.log(`Identifiant à réutiliser avec --existing-id : ${outcome.cookidoo_recipe_id}`);
 }
 
 main().catch((e) => die(e instanceof Error ? e.message : String(e)));
