@@ -54,7 +54,7 @@ Règle : Anthropic ne génère pas d'images → `generate-recipe-image` utilise 
 | 10 | `share-recipe` | Utilitaire | — | — | Sans IA |
 | 11 | `claim-shares` | Utilitaire | — | — | Sans IA |
 | 12 | `manage-cookidoo-credentials` | Utilitaire | — | — | Sans IA (AES-GCM) |
-| 13 | `export-recipe-cookidoo` | Utilitaire | — | — | Sans IA (export TM7) |
+| 13 | `export-recipe-cookidoo` | Préparation + export | Config utilisateur | Sonnet 5.5 par défaut | Aperçu signé, propositions TM7 bornées, puis export confirmé et relu |
 
 ---
 

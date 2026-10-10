@@ -30,6 +30,10 @@ import { validateCookidooPayload } from "../_shared/cookidoo/validate.ts";
 import { buildExportDiagnostics } from "../_shared/cookidoo/diagnostics.ts";
 import { PartialCreateError, runExport, type CookidooOps } from "../_shared/cookidoo/run-export.ts";
 import type { Recipe, ThermomixTool } from "../_shared/cookidoo/types.ts";
+import { resolveAIConfig } from "../_shared/ai-config.ts";
+import { callAINonStreaming } from "../_shared/ai-providers.ts";
+import { applyPreparation, ExportSourceSchema, PREPARATION_PROMPT, signPreparation, verifyPreparation } from "../_shared/cookidoo/preparation.ts";
+import { exportQualityNotes } from "../_shared/cookidoo/quality.ts";
 
 initializeEdgeErrorMonitoring();
 
@@ -90,6 +94,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -114,9 +119,12 @@ serve(async (req) => {
     }
 
     // ── Validation de l'entrée ─────────────────────────────────────────────
-    const body = await req.json().catch(() => ({}));
+    const input: unknown = await req.json().catch(() => null);
+    if (!input || typeof input !== "object" || Array.isArray(input)) return fail("invalid_input", "Un objet JSON est requis.");
+    const body = input as Record<string, unknown>;
+    if (body.action !== undefined && body.action !== "prepare") return fail("invalid_input", "Action inconnue.");
     const recipeId = typeof body.recipe_id === "string" ? body.recipe_id : "";
-    if (!recipeId) {
+    if (!recipeId || recipeId.length > 100 || JSON.stringify(body).length > 200_000) {
       return fail("invalid_input", "recipe_id requis");
     }
     // Scope mono-appareil : l'export cible toujours le TM7 (cf. type ThermomixTool).
@@ -125,11 +133,67 @@ serve(async (req) => {
     // ── Lecture de la recette (RLS : propriété garantie côté DB) ────────────
     const { data: recipeRow, error: recipeError } = await supabase
       .from("recipes")
-      .select("title, servings, ingredients, steps, source_image_url, cookidoo_recipe_id")
+      .select("title, servings, ingredients, steps, source_image_url, cookidoo_recipe_id, updated_at")
       .eq("id", recipeId)
       .maybeSingle();
     if (recipeError) return json({ error: "db_error", message: recipeError.message }, 500);
     if (!recipeRow) return fail("not_found", "Recette introuvable");
+
+    const source: Recipe = {
+      title: recipeRow.title,
+      servings: recipeRow.servings,
+      ingredients: (recipeRow.ingredients ?? []) as Recipe["ingredients"],
+      steps: (recipeRow.steps ?? []) as Recipe["steps"],
+    };
+    if (!ExportSourceSchema.safeParse(source).success) return fail("invalid_input", "La recette contient des ingrédients ou étapes incomplets. Corrigez-les avant l’export.");
+    if (!ENCRYPTION_SECRET) return fail("server_misconfigured", "Secret de signature absent.");
+    if (source.steps.length > 100 || source.ingredients.length > 200 || JSON.stringify(source).length > 100_000) {
+      return fail("invalid_input", "Recette trop volumineuse pour cet export.");
+    }
+    const binding = { userId: user.id, recipeId, revision: recipeRow.updated_at };
+    // Préparation sans login Cookidoo, sans journal et sans modification de la source.
+    if (body.action === "prepare") {
+      try {
+        const initialPayload = mapRecipeToCookidoo(source, { tools });
+        let candidate = { recipe: source, notes: [] as string[] };
+        if (exportQualityNotes(source, initialPayload).some((note) => note.startsWith("Réglages machine absents"))) {
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+          if (!serviceKey) return fail("preparation_unavailable", "Préparation indisponible. Aucun envoi effectué.");
+          const quotaClient = createClient(SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+          const { data: quotaAllowed, error: quotaError } = await quotaClient.rpc("consume_cookidoo_preparation_quota", { p_user_id: user.id });
+          if (quotaError || typeof quotaAllowed !== "boolean") return fail("preparation_unavailable", "Le contrôle de quota est indisponible. Aucun envoi effectué.");
+          if (!quotaAllowed) return fail("preparation_rate_limited", "Limite de préparation TM7 atteinte (2 par minute, 10 par jour, avec un plafond global). Réessayez plus tard.");
+          const config = await resolveAIConfig(supabase, user.id, { agentType: "cookidoo_export", defaultModel: "claude-sonnet-5-5" });
+          const output = await callAINonStreaming(config, [
+            { role: "system", content: PREPARATION_PROMPT },
+            { role: "user", content: JSON.stringify({ ...source, steps: [...source.steps].sort((a, b) => a.order - b.order) }) },
+          ], AbortSignal.timeout(45_000));
+          candidate = applyPreparation(source, output);
+        }
+        const mapped = mapRecipeToCookidoo(candidate.recipe, { tools });
+        // L'aperçu montre exactement le texte envoyé, y compris les réglages
+        // structurés rendus explicites pour éviter les chevauchements.
+        candidate.recipe = { ...candidate.recipe, steps: [...candidate.recipe.steps].sort((a, b) => a.order - b.order).map((step, i) => ({ ...step, text: mapped.instructions[i].text })) };
+        const validation = validateCookidooPayload(mapped);
+        if (!validation.ok) return fail("invalid_payload", validation.errors.join(" ; "));
+        candidate.notes = [...new Set([...candidate.notes, ...exportQualityNotes(candidate.recipe, mapped)])];
+        const prepared = await signPreparation(candidate, binding, ENCRYPTION_SECRET);
+        return json({ ok: true, prepared, ingredients: mapped.ingredients.map((ing) => ing.text), guided_steps: mapped.instructions.filter((s) => s.annotations.some((a) => a.type !== "INGREDIENT")).length });
+      } catch {
+        await captureEdgeException("export-recipe-cookidoo", "preparation_failed");
+        return fail("preparation_failed", "La préparation TM7 a échoué. Réessayez ; aucun envoi n'a été effectué.");
+      }
+    }
+    let recipe = source;
+    let preparationNotes: string[] = [];
+    if (body.prepared !== undefined) {
+      const verified = await verifyPreparation(body.prepared, binding, ENCRYPTION_SECRET);
+      if (!verified) return fail("preview_expired", "L'aperçu a expiré ou la recette a changé. Préparez un nouvel aperçu.");
+      recipe = verified.recipe;
+      preparationNotes = verified.notes;
+    } else if (exportQualityNotes(source, mapRecipeToCookidoo(source, { tools })).length) {
+      return fail("preparation_required", "Préparez l'aperçu TM7 avant l'envoi pour vérifier les réglages et les mesures.");
+    }
 
     // ── Lecture + déchiffrement des identifiants Cookidoo ──────────────────
     const { data: creds, error: credsError } = await supabase
@@ -140,9 +204,6 @@ serve(async (req) => {
     if (credsError) return json({ error: "db_error", message: credsError.message }, 500);
     if (!creds) {
       return fail("not_configured", "Identifiants Cookidoo non configurés (Profil → Cookidoo).");
-    }
-    if (!ENCRYPTION_SECRET) {
-      return json({ error: "server_misconfigured", message: "AI_KEYS_ENCRYPTION_SECRET absent" }, 500);
     }
 
     let password: string;
@@ -156,12 +217,6 @@ serve(async (req) => {
     // N'extraire que le champ utile : la tâche de fond vit plusieurs secondes,
     // inutile qu'elle retienne toute la ligne d'identifiants (dont le chiffré).
     const { email } = creds;
-    const recipe: Recipe = {
-      title: recipeRow.title,
-      servings: recipeRow.servings,
-      ingredients: (recipeRow.ingredients ?? []) as Recipe["ingredients"],
-      steps: (recipeRow.steps ?? []) as Recipe["steps"],
-    };
     const imageUrl =
       typeof recipeRow.source_image_url === "string" && recipeRow.source_image_url.trim()
         ? recipeRow.source_image_url.trim()
@@ -190,7 +245,7 @@ serve(async (req) => {
     }
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    const diagnostics = buildExportDiagnostics(recipe, payload);
+    const diagnostics = { ...buildExportDiagnostics(recipe, payload), source_steps_with_tm7: source.steps.filter((s) => s.tm7).length, prepared: body.prepared !== undefined };
     const { data: job, error: jobError } = await admin
       .from("cookidoo_exports")
       .insert({ user_id: user.id, recipe_id: recipeId, diagnostics })
@@ -236,7 +291,7 @@ serve(async (req) => {
             cookidoo_recipe_id: outcome.cookidoo_recipe_id,
             cookidoo_url: outcome.url,
             updated: outcome.updated,
-            warnings: outcome.warnings,
+            warnings: [...new Set([...outcome.warnings, ...((preparationNotes.length || exportQualityNotes(recipe, payload).length) ? ["source_needs_review"] : [])])],
             unguided_steps: outcome.unguided_steps,
             duration_ms: Date.now() - startedAt,
             finished_at: new Date().toISOString(),

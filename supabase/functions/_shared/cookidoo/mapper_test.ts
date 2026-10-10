@@ -31,6 +31,29 @@ Deno.test("formatIngredient: préparation ajoutée en suffixe", () => {
 
 // ── parseStepAnnotations (fallback texte libre) ──────────────────────────────
 
+Deno.test("formatIngredient : unités longues conservées et reconnues, mesure ambiguë non inventée", () => {
+  assertEquals(formatIngredient({ name: "huile d'olive", quantity: 2, unit: "cuillères à soupe" }), "2 c. à soupe d'huile d'olive");
+  assertEquals(formatIngredient({ name: "levure chimique", quantity: 2, unit: "cuillères à café" }), "2 c. à café de levure chimique");
+  assertEquals(formatIngredient({ name: "sucre", quantity: 4, unit: "cuillères" }), "4 cuillères sucre");
+});
+
+Deno.test("annotations ingrédients : alias unique huile et portions par étape sans répéter le total", () => {
+  const payload = mapRecipeToCookidoo({ title: "Test", ingredients: [{ name: "huile d'olive", quantity: 40, unit: "g" }], steps: [{ order: 1, text: "Ajouter 10 g d'huile." }, { order: 2, text: "Ajouter 30 g d'huile." }] });
+  assertEquals(payload.instructions.map((s) => s.annotations[0].data.description), ["10 g d'huile", "30 g d'huile"]);
+  assertEquals(payload.instructions[0].annotations[0].position, { offset: 8, length: 12 });
+});
+
+Deno.test("annotations ingrédients : alias ambigu non deviné et plage conservée comme texte", () => {
+  const payload = mapRecipeToCookidoo({ title: "Test", ingredients: [{ name: "huile d'olive", quantity: 20, unit: "g" }, { name: "huile de sésame", quantity: 10, unit: "g" }, { name: "farine", quantity: 315, unit: "g" }], steps: [{ order: 1, text: "Ajouter l'huile et entre 315 et 350g de farine." }] });
+  assertEquals(payload.instructions[0].annotations.map((a) => a.data.description), ["farine"]);
+});
+
+Deno.test("repli texte : mijotage, virgule décimale et sens inverse sont normalisés", () => {
+  assertEquals(parseStepAnnotations("Cuire 10 min/100°C/vitesse mijotage, sens inverse.")[0].data.speed, "soft");
+  assertEquals(parseStepAnnotations("Cuire 10 min/100°C/vitesse mijotage, sens inverse.")[0].data.direction, "CCW");
+  assertEquals(parseStepAnnotations("Mixer 10 s/vitesse 2,5.")[0].data.speed, "2.5");
+});
+
 Deno.test("parseStepAnnotations: TTS temps/vitesse/température", () => {
   const ann = parseStepAnnotations("Mixer 8 min/100°C/vitesse 2.");
   assertEquals(ann.length, 1);
@@ -426,4 +449,23 @@ Deno.test("mapRecipeToCookidoo: `power` ignoré hors rissolage", () => {
     .find((a) => a.type === "MODE");
   assertEquals(ann?.name, "dough");
   assertEquals((ann?.data as Record<string, unknown>).power, undefined);
+});
+
+Deno.test("mentions répétées : chaque portion garde sa quantité sans répéter le total", () => {
+  const payload = mapRecipeToCookidoo({ title: "Huile", ingredients: [{ name: "huile", quantity: 40, unit: "g" }], steps: [{ order: 1, text: "Ajouter 10 g d'huile, puis 30 g d'huile." }] });
+  assertEquals(payload.instructions[0].annotations.map((a) => a.data.description), ["10 g d'huile", "30 g d'huile"]);
+});
+
+Deno.test("réglages structurés sans texte : suffixe explicite sans chevauchement des ingrédients", () => {
+  const payload = mapRecipeToCookidoo({ title: "Lait", ingredients: [{ name: "lait", quantity: 120, unit: "ml" }], steps: [{ order: 1, text: "Mélanger le lait.", tm7: { mode: "mix", seconds: 30, speed: "2" } }] });
+  const [machine, ingredient] = payload.instructions[0].annotations;
+  assertEquals(machine.position.offset > ingredient.position.offset + ingredient.position.length, true);
+  assertEquals(payload.instructions[0].text.includes("Réglages TM7 : 30 s / vitesse 2."), true);
+});
+
+Deno.test("portion avec unité libre : ne remplace pas deux cuillères par le poids total", () => {
+  for (const unit of ["cuillères", "doses"]) {
+    const payload = mapRecipeToCookidoo({ title: "Huile", ingredients: [{ name: "huile d’olive", quantity: 40, unit: "g" }], steps: [{ order: 1, text: `Ajouter 2 ${unit} d’huile.` }] });
+    assertEquals(payload.instructions[0].annotations[0].data.description, `2 ${unit} d’huile`);
+  }
 });

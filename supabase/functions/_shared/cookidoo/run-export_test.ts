@@ -34,7 +34,7 @@ function fakeOps(overrides: Partial<CookidooOps> = {}): CookidooOps & { calls: s
   const calls: string[] = [];
   return {
     calls,
-    getRecipe: (_c, id) => { calls.push(`get:${id}`); return Promise.resolve({}); },
+    getRecipe: (_c, id) => { calls.push(`get:${id}`); return Promise.resolve(payload()); },
     createRecipe: (_c, name) => { calls.push(`create:${name}`); return Promise.resolve("new-id"); },
     fillRecipe: (_c, id) => { calls.push(`fill:${id}`); return Promise.resolve(); },
     renameRecipe: (_c, id) => { calls.push(`rename:${id}`); return Promise.resolve(); },
@@ -222,4 +222,11 @@ Deno.test("aucune étape guidée attendue : pas de contrôle appareil", async ()
   );
 
   assertEquals(ops.calls.includes("check"), false);
+});
+
+Deno.test("relecture impossible : avertissement explicite, sans recréer de recette", async () => {
+  const ops = fakeOps({ getRecipe: () => Promise.reject(new Error("HTTP 429")) });
+  const out = await runExport({ ctx, payload: payload(), existingId: null, supabaseHost: "db.example.com" }, ops, noSleep);
+  assertEquals(out.warnings.includes("content_not_verified"), true);
+  assertEquals(ops.calls.filter((c) => c.startsWith("create:")).length, 1);
 });

@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Step, Ingredient } from '@/types/recipe';
+
+export interface CookidooPreparation {
+  prepared: {
+    recipe: { title: string; servings?: number | null; ingredients: Ingredient[]; steps: Step[] };
+    notes: string[];
+    expires_at: number;
+    signature: string;
+  };
+  ingredients: string[];
+  guided_steps: number;
+}
 
 /** Intervalle d'interrogation de la ligne de journal, en millisecondes. */
 const POLL_INTERVAL_MS = 2000;
@@ -46,11 +58,19 @@ export interface StartExportResponse {
 export function useCookidooExport() {
   const [exportId, setExportId] = useState<string | null>(null);
   const [timedOut, setTimedOut] = useState(false);
+  const preparation = useMutation({
+    mutationFn: async (recipeId: string): Promise<CookidooPreparation> => {
+      const { data, error } = await supabase.functions.invoke('export-recipe-cookidoo', { body: { recipe_id: recipeId, action: 'prepare' } });
+      if (error) throw error;
+      if (!data?.ok || !data.prepared) throw new Error(data?.message ?? 'Préparation impossible. Aucun envoi effectué.');
+      return data as CookidooPreparation;
+    },
+  });
 
   const start = useMutation({
-    mutationFn: async (recipeId: string): Promise<StartExportResponse> => {
+    mutationFn: async ({ recipeId, prepared }: { recipeId: string; prepared?: CookidooPreparation['prepared'] }): Promise<StartExportResponse> => {
       const response = await supabase.functions.invoke('export-recipe-cookidoo', {
-        body: { recipe_id: recipeId, tools: ['TM7'] },
+        body: { recipe_id: recipeId, tools: ['TM7'], ...(prepared ? { prepared } : {}) },
       });
       const data = response.data as StartExportResponse | null;
       if (data) return data;
@@ -90,10 +110,10 @@ export function useCookidooExport() {
   }, [exportId]);
 
   /** Lance l'export. Renvoie la réponse synchrone : un `ok: false` est définitif. */
-  const startExport = async (recipeId: string): Promise<StartExportResponse> => {
+  const startExport = async (recipeId: string, prepared?: CookidooPreparation['prepared']): Promise<StartExportResponse> => {
     setExportId(null);
     setTimedOut(false);
-    const response = await start.mutateAsync(recipeId);
+    const response = await start.mutateAsync({ recipeId, prepared });
     if (response.ok && response.export_id) setExportId(response.export_id);
     return response;
   };
@@ -106,6 +126,8 @@ export function useCookidooExport() {
 
   return {
     startExport,
+    prepareExport: preparation.mutateAsync,
+    isPreparing: preparation.isPending,
     reset,
     exportId,
     isStarting: start.isPending,

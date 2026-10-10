@@ -178,7 +178,7 @@ export async function fillRecipe(
 
 /** Met à jour le nom d'une recette existante (ré-export « update-in-place »). */
 export function renameRecipe(ctx: ClientCtx, id: string, name: string): Promise<unknown> {
-  return patchFields(ctx, id, { recipeName: name });
+  return patchFields(ctx, id, { name });
 }
 
 /**
@@ -278,10 +278,11 @@ export function getRecipe(ctx: ClientCtx, id: string): Promise<unknown> {
 // Cookidoo accepte un mode inconnu en 200 OK, le stocke, puis le dégrade en
 // simple texte à la conversion. Cf. docs/COOKIDOO-CONTRAT.md §8.
 
-/** Étape telle que l'appareil la reçoit. `CustomerAnnotations` = étape guidée. */
+/** Étape telle que l'appareil la reçoit. Une étape machine exige une intention cooking-mode, pas seulement des ingrédients. */
 interface DevicePrompt {
   Type?: string;
   PreparationStepIndex?: number;
+  Annotations?: { IntentId?: string }[];
 }
 
 interface DeviceRecipe {
@@ -314,7 +315,7 @@ export async function findUnguidedSteps(
   const prompts = device.PromptDetails?.Prompts ?? [];
   const guided = new Set(
     prompts
-      .filter((p) => p.Type === "CustomerAnnotations")
+      .filter((p) => p.Type === "CustomerAnnotations" && p.Annotations?.some((a) => a.IntentId?.startsWith("cooking-mode/")))
       .map((p) => p.PreparationStepIndex),
   );
   return expectedGuidedIndexes.filter((i) => !guided.has(i));

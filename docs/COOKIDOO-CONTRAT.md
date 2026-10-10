@@ -376,3 +376,53 @@ créations » (`isBasedOn: true`) — les annotations y sont produites par Cooki
 `_shared/cookidoo/{mapper,client,validate}_test.ts`, `_shared/thermomix/reference_test.ts`,
 `src/lib/thermomix/reference.sync.test.ts`.
 La CI n'exécute que `supabase/functions/_shared/` côté Deno : **tout test Deno doit vivre là**.
+
+## 10. Préparation et fidélité de l'export (09/10/2026)
+
+Le constat sur les pains Bao exportés est distinct d'un refus HTTP : la source
+ne portait aucun champ `tm7`, et les mesures « cuillères à soupe » étaient perdues
+par le formatage des unités. Une consigne « mélanger » seule ne définit ni durée,
+ni vitesse, ni chauffe ; le mapper ne peut pas les retrouver dans le texte.
+
+Le parcours applicatif ajoute une préparation avant envoi :
+
+1. `POST export-recipe-cookidoo` avec `{recipe_id, action:"prepare"}` lit la source
+   sous RLS et valide ses données. Si des actions n'ont aucun réglage, le fournisseur
+   IA configuré propose uniquement des paramètres par étape existante. Le serveur
+   refuse les étapes déplacées, supprimées, les champs supplémentaires et les
+   paramètres hors plage. Les faits et ingrédients restent ceux de la source.
+2. L'utilisateur vérifie la copie, les mesures, les commandes proposées et les
+   ambiguïtés. Les actions manuelles restent manuelles. Une nouvelle proposition
+   vapeur reste manuelle et signale que l'eau et les réglages doivent être validés
+   dans la source ; aucune quantité d'eau n'est ajoutée automatiquement.
+3. La confirmation transmet `{recipe_id, prepared}`. L'aperçu est signé HMAC,
+   lié au propriétaire, à l'identifiant et à la révision de la recette, avec une
+   validité de quinze minutes. Il ne modifie pas la recette d'origine.
+4. Après remplissage, le connecteur relit la vue *full* : textes, ingrédients,
+   positions et données des annotations. La vue appareil doit contenir une
+   intention `cooking-mode/…` pour chaque commande attendue. Des liens ingrédients
+   seuls ne prouvent pas une commande machine.
+
+Les unités connues sont normalisées (notamment cuillères au pluriel) ; une unité
+inconnue reste lisible. Une portion explicitement écrite dans l'étape prime sur
+le total de la liste. Un ingrédient utilisé plusieurs fois sans quantité précise
+n'est pas automatiquement pesé avec son total à chaque ajout.
+
+Les avertissements `content_not_verified`, `content_mismatch`,
+`annotations_mismatch`, `device_check_failed` et `source_needs_review` rendent
+visible une fidélité non confirmée. Une recette envoyée avec ces avertissements
+n'est pas présentée comme entièrement vérifiée. Le journal conserve les nombres
+de champs TM7 source et exportés pour distinguer adaptation et mapping.
+
+Le CLI utilise les mêmes validations, nettoyage après échec, relecture et contrôle
+appareil. `--existing-id` permet un ré-export sans créer un doublon ; une recette
+incomplète exige `--accept-manual` pour un envoi réel. Le CLI ne propose pas de
+réglages IA. Aucun de ces contrôles ne constitue une validation culinaire réelle
+sur un TM7 ni une garantie de parité avec une recette officielle Cookidoo.
+
+La préparation IA consomme un quota atomique avant tout appel fournisseur :
+2 appels/minute et 10/jour par utilisateur, 10/minute et 100/jour globalement.
+Un contrôle indisponible ferme l'accès à l'IA ; aucun appel ni envoi n'est alors
+lancé. La migration `20261009184203_cookidoo_preparation_quota.sql` doit précéder
+le déploiement de la fonction, via le workflow CI habituel. La RPC et ses
+compteurs ne sont accessibles qu'au rôle de service.

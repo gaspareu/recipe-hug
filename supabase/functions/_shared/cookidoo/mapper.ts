@@ -29,6 +29,8 @@ import {
   VAROMA,
 } from "../thermomix/reference.ts";
 import type { Tm7StepParams } from "../thermomix/reference.ts";
+import { formatExportSettings } from "./settings.ts";
+import { normalizeCookidooUnit } from "./units.ts";
 
 export interface MapOptions {
   tools?: ThermomixTool[]; // défaut ["TM7"]
@@ -60,7 +62,7 @@ export function formatIngredient(ing: Ingredient): string {
     ing.quantity === null || ing.quantity === undefined || Number.isNaN(ing.quantity)
       ? ""
       : String(ing.quantity);
-  const unit = (ing.unit ?? "").trim();
+  const unit = normalizeCookidooUnit(ing.unit ?? "");
   const name = ing.name.trim();
   const prep = ing.preparation?.trim();
 
@@ -70,7 +72,7 @@ export function formatIngredient(ing: Ingredient): string {
     core = `${qty} ${unit} ${liaison}${name}`.trim();
   } else {
     // « pièce » ou sans unité : quantité + nom (ex. « 2 œufs »)
-    core = [qty, name].filter((p) => p.length > 0).join(" ");
+    core = [qty, /^pièces?$/.test(unit) ? "" : unit, name].filter((p) => p.length > 0).join(" ");
   }
   return prep ? `${core}, ${prep}` : core;
 }
@@ -123,6 +125,7 @@ function extractVaroma(text: string): Found | null {
 type Span = { offset: number; length: number };
 
 interface TextParams {
+  reverse: boolean;
   time: { seconds: number; span: Found } | null;
   speed: { speed: string; span: Found } | null;
   temp: { value: string; span: Found } | null;
@@ -159,16 +162,21 @@ function extractTextParams(text: string): TextParams {
   const speed = extractSpeed(text);
   const temp = extractTemperature(text);
   const varoma = extractVaroma(text);
-  const spans = [time?.span, speed?.span, temp?.span, varoma].filter((s): s is Found => !!s);
-  return { time, speed, temp, varoma, position: spanOf(spans) };
+  const inverse = /sens\s+inverse/i.exec(text);
+  const reverseSpan = inverse ? { start: inverse.index, end: inverse.index + inverse[0].length } : null;
+  const spans = [time?.span, speed?.span, temp?.span, varoma, reverseSpan].filter((s): s is Found => !!s);
+  return { time, speed, temp, varoma, reverse: !!inverse, position: spanOf(spans) };
 }
 
 /** Annotation TTS dérivée des réglages lus dans le texte. */
 function annotationsFromText(p: TextParams): Annotation[] {
   if (!p.position) return [];
   const data: Record<string, unknown> = {};
-  if (p.time) data.time = p.time.seconds;
-  if (p.speed) data.speed = p.speed.speed;
+  if (p.time && p.time.seconds > 0 && p.time.seconds <= TM7_MAX_SECONDS) data.time = p.time.seconds;
+  const speed = normalizeSpeed(p.speed?.speed);
+  if (speed && speed !== "Turbo") data.speed = toCookidooSpeed(speed);
+  if (p.varoma && speed && Number(speed) > TM7_STEAM_SPEED_MAX) data.speed = String(TM7_STEAM_SPEED_MAX);
+  if (p.reverse) data.direction = "CCW";
   if (p.varoma) data.temperature = { value: "varoma" };
   // Ne jamais convertir une température hors plage en un autre réglage TM7.
   else if (p.temp && clampTemperature(Number(p.temp.value)) === Number(p.temp.value)) {
@@ -269,7 +277,7 @@ function modeFromTm7(text: string, tm7: Tm7StepParams, span: Span | null): Annot
   ) {
     data.time = Math.round(tm7.seconds);
   }
-  const temp = clampTemperature(tm7.temperature);
+  const temp = tm7.mode === "high_temp" ? clampTemperature(tm7.temperature) : undefined;
   if (typeof temp === "number") data.temperature = { value: String(temp), unit: "C" };
   // Le rissolage porte une puissance, qui détermine l'intention machine côté TM7
   // (« Intense » → FullPower, « Gentle » → MediumPower). Défaut : « Intense »,
@@ -283,41 +291,62 @@ function modeFromTm7(text: string, tm7: Tm7StepParams, span: Span | null): Annot
 // ── Annotations INGREDIENT (liaison texte ↔ ingrédient) ──────────────────────
 
 function isLetter(ch: string | undefined): boolean {
-  return ch !== undefined && /[a-zàâäéèêëïîôöûüç]/i.test(ch);
+  return ch !== undefined && /\p{L}/u.test(ch);
 }
 
-/** Première occurrence de `needle` sur une frontière de mot (évite « ail » dans « travail »). */
-function findWordIndex(haystack: string, needle: string): number {
+/** Occurrences sur frontières de mot (évite « ail » dans « travail »). */
+function findWordIndexes(haystack: string, needle: string): number[] {
+  const indexes: number[] = [];
   let from = 0;
   while (from <= haystack.length) {
     const idx = haystack.indexOf(needle, from);
-    if (idx === -1) return -1;
-    if (!isLetter(haystack[idx - 1]) && !isLetter(haystack[idx + needle.length])) return idx;
-    from = idx + 1;
+    if (idx === -1) break;
+    if (!isLetter(haystack[idx - 1]) && !isLetter(haystack[idx + needle.length])) indexes.push(idx);
+    from = idx + Math.max(1, needle.length);
   }
-  return -1;
+  return indexes;
 }
 
 /**
  * Repère les noms d'ingrédients présents dans le texte de l'étape et crée les
  * annotations INGREDIENT (ce qui « lie » l'ingrédient à l'action sur l'écran TM7).
  */
-function ingredientAnnotations(text: string, ingredients: Ingredient[]): Annotation[] {
-  const lower = text.toLowerCase();
+function ingredientAnnotations(text: string, ingredients: Ingredient[], steps: Step[]): Annotation[] {
+  const lower = text.toLowerCase().replace(/’/g, "'");
   const annotations: Annotation[] = [];
-  const usedOffsets = new Set<number>();
+  const usedSpans: { start: number; end: number }[] = [];
 
   for (const ing of ingredients) {
     const name = ing.name.trim();
     if (name.length < 3) continue; // évite les faux positifs sur des mots trop courts
-    const idx = findWordIndex(lower, name.toLowerCase());
-    if (idx === -1 || usedOffsets.has(idx)) continue;
-    usedOffsets.add(idx);
-    annotations.push({
-      type: "INGREDIENT",
-      data: { description: formatIngredient(ing) },
-      position: { offset: idx, length: name.length },
-    });
+    const fullName = name.toLowerCase().replace(/’/g, "'");
+    const baseName = fullName.replace(/\s+(?:chaude?s?|froide?s?|fondu[e]?s?|mou|molle)\b/g, "").trim();
+    const core = baseName.split(" ")[0].replace(/s$/, "");
+    const uniqueCore = core.length >= 3 && ingredients.filter((other) =>
+      other.name.toLowerCase().replace(/s\b/g, "").startsWith(core)
+    ).length === 1;
+    const variants = [...new Set([fullName, baseName, ...(uniqueCore ? [core] : [])])].sort((a, b) => b.length - a.length);
+    const matches = variants.flatMap((variant) => findWordIndexes(lower, variant).map((idx) => ({ idx, variant })));
+    matches.sort((a, b) => a.idx - b.idx || b.variant.length - a.variant.length);
+    for (const { idx, variant } of matches) {
+      if (usedSpans.some((span) => idx < span.end && idx + variant.length > span.start)) continue;
+      usedSpans.push({ start: idx, end: idx + variant.length });
+      const before = text.slice(0, idx);
+      const quantity = before.match(/(\d+(?:[.,]\d+)?(?:\/\d+)?|un|une|deux|trois|quatre)\s*(g|kg|mg|ml|cl|dl|l|c\.\s*à\s*(?:soupe|café)|cuillères?\s+à\s+(?:soupe|café)|pincées?|sachets?|[\p{L}]+)?\s*(?:d['’]|de\s+)?$/iu);
+      const isRange = quantity && /(?:entre\s+\d+\s+et|\d+\s*[-–à])\s*$/i.test(before.slice(0, quantity.index));
+      // La portion écrite à cette étape prime sur le total de la liste. Sans
+      // portion explicite, ne pas répéter le total à chaque ajout d'un ingrédient.
+      const start = quantity && !isRange ? quantity.index! : idx;
+      const fragment = text.slice(start, idx + variant.length);
+      const usageCount = steps.reduce((total, step) => total + Math.max(...variants.map((v) =>
+        findWordIndexes(step.text.toLowerCase().replace(/’/g, "'"), v).length
+      )), 0);
+      annotations.push({
+        type: "INGREDIENT",
+        data: { description: quantity && !isRange ? fragment : usageCount <= 1 && !isRange ? formatIngredient(ing) : name },
+        position: { offset: start, length: idx + variant.length - start },
+      });
+    }
   }
   return annotations;
 }
@@ -326,16 +355,18 @@ function ingredientAnnotations(text: string, ingredients: Ingredient[]): Annotat
  * Annotations complètes d'une étape : annotation machine (MODE pour un mode
  * nommé, sinon TTS — structuré si `tm7`, à défaut repli regex) + INGREDIENT.
  */
-function buildStepAnnotations(step: Step, ingredients: Ingredient[]): Annotation[] {
+function buildStepAnnotations(step: Step, ingredients: Ingredient[], steps: Step[]): Annotation[] {
   const text = step.text.trim();
   // Les champs structurés gardent leurs empans d'origine : masquer une durée
   // de pétrissage ferait couvrir toute la phrase à MODE, y compris l'ingrédient.
-  const params = extractTextParams(step.tm7 ? text : maskManualInstructions(text));
+  const suffix = step.tm7 ? text.lastIndexOf("\nRéglages TM7 :") : -1;
+  const params = extractTextParams(step.tm7 ? text.slice(Math.max(0, suffix)) : maskManualInstructions(text));
+  if (suffix >= 0 && params.position) params.position.offset += suffix;
   const machine = step.tm7
     ? modeFromTm7(text, step.tm7, params.position) ?? ttsFromTm7(text, step.tm7, params.position)
     : null;
   const machineList = machine ? [machine] : (step.tm7 ? [] : annotationsFromText(params));
-  return [...machineList, ...ingredientAnnotations(text, ingredients)];
+  return [...machineList, ...ingredientAnnotations(text, ingredients, steps)];
 }
 
 // ── Mapping principal ────────────────────────────────────────────────────────
@@ -352,11 +383,18 @@ export function mapRecipeToCookidoo(
   }));
 
   const ordered = [...recipe.steps].sort((a, b) => a.order - b.order);
-  const instructions: CookidooStep[] = ordered.map((s) => ({
-    type: "STEP",
-    text: s.text.trim(),
-    annotations: buildStepAnnotations(s, recipe.ingredients),
-  }));
+  const instructions: CookidooStep[] = ordered.map((s) => {
+    let step = { ...s, text: s.text.trim() };
+    let annotations = buildStepAnnotations(step, recipe.ingredients, recipe.steps);
+    const machine = annotations.find((a) => a.type !== "INGREDIENT");
+    if (s.tm7 && machine && (machine.position.length === step.text.length || annotations.some((a) =>
+      a.type === "INGREDIENT" && a.position.offset < machine.position.offset + machine.position.length &&
+      a.position.offset + a.position.length > machine.position.offset))) {
+      step = { ...step, text: `${step.text}\nRéglages TM7 : ${formatExportSettings(s.tm7)}.` };
+      annotations = buildStepAnnotations(step, recipe.ingredients, recipe.steps);
+    }
+    return { type: "STEP", text: step.text, annotations };
+  });
 
   // Temps : cuisson = somme des durées machine (tm7.seconds) ; préparation =
   // somme des durées manuelles (duration_minutes) ; total = prépa + cuisson.
