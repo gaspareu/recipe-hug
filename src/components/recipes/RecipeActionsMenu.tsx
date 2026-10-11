@@ -9,13 +9,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ShareRecipeDialog } from './ShareRecipeDialog';
-import { ExportToCookidooButton } from './ExportToCookidooButton';
 
 interface RecipeActionsMenuProps {
   recipeId: string;
   onAnalyzeAndGenerate: () => void;
   isAnalyzing: boolean;
   onOpenHistory: () => void;
+  onExportCookidoo: () => void;
 }
 
 /**
@@ -23,9 +23,8 @@ interface RecipeActionsMenuProps {
  * pour désencombrer le haut de la page (cf. refonte #5). Le favori reste un
  * bouton direct ; le menu pilote les dialogs Partage / Cookidoo (contrôlés).
  */
-export function RecipeActionsMenu({ recipeId, onAnalyzeAndGenerate, isAnalyzing, onOpenHistory }: RecipeActionsMenuProps) {
+export function RecipeActionsMenu({ recipeId, onAnalyzeAndGenerate, isAnalyzing, onOpenHistory, onExportCookidoo }: RecipeActionsMenuProps) {
   const [shareOpen, setShareOpen] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
 
   return (
     <>
@@ -49,8 +48,8 @@ export function RecipeActionsMenu({ recipeId, onAnalyzeAndGenerate, isAnalyzing,
           <DropdownMenuItem onSelect={() => setShareOpen(true)}>
             <Share2 className="mr-2 h-4 w-4" />Partager
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setExportOpen(true)}>
-            <UtensilsCrossed className="mr-2 h-4 w-4" />Exporter vers Cookidoo
+          <DropdownMenuItem onSelect={onExportCookidoo}>
+            <UtensilsCrossed className="mr-2 h-4 w-4" />Envoyer vers Cookidoo
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onAnalyzeAndGenerate()} disabled={isAnalyzing}>
             {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -63,7 +62,6 @@ export function RecipeActionsMenu({ recipeId, onAnalyzeAndGenerate, isAnalyzing,
       </DropdownMenu>
 
       <ShareRecipeDialog recipeId={recipeId} open={shareOpen} onOpenChange={setShareOpen} showTrigger={false} />
-      <ExportToCookidooButton recipeId={recipeId} open={exportOpen} onOpenChange={setExportOpen} showTrigger={false} />
     </>
   );
 }

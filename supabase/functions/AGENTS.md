@@ -194,41 +194,47 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
   - `manage-cookidoo-credentials` — GET (statut, email masqué) / POST (upsert chiffré AES-GCM) / DELETE.
     Mot de passe chiffré via `AI_KEYS_ENCRYPTION_SECRET`, jamais renvoyé en clair. Stocké dans
     `user_cookidoo_credentials` (vue `_safe` sans `password_enc`).
-  - `export-recipe-cookidoo` — préparation `{action:"prepare", recipe_id}` sans écriture Cookidoo, aperçu signé quinze minutes et lié à la révision. Confirmation avec `{recipe_id, prepared}`, puis **envoi asynchrone en deux phases** (l'export prend ~5-15 s, il ne doit
-    pas bloquer l'interface) :
-    1. **Phase synchrone** (< 1 s) : auth → lecture recette (RLS) → déchiffrement creds → mapping
-       → **validation**. Un payload invalide répond immédiatement, sans consommer de requête
-       Cookidoo. Sinon la fonction insère une ligne `cookidoo_exports` au statut `pending` et
-       répond aussitôt `{ ok: true, export_id, status: "pending", tools }`.
-    2. **Phase asynchrone** (`EdgeRuntime.waitUntil`) : login → create **ou** update-in-place →
-       patch → image → contrôle du guided cooking. Le résultat complet est écrit dans la ligne
-       de journal (`success` / `failed`). Aucune exception ne peut s'en échapper (double
-       `try/catch`) : elle serait perdue et laisserait la ligne bloquée en `pending`.
+  - `export-recipe-cookidoo` — contrat `cookidoo_adaptation_v2` annoncé par GET.
+    Le chat crée des recettes classiques ; l'adaptation TM7 est exclusivement préparée depuis
+    la fiche. POST `prepare` réserve une adaptation persistante puis lance l'IA en arrière-plan ;
+    `status` rend son état et un aperçu signé quinze minutes. `send` reçoit uniquement
+    `recipe_id`, `adaptation_id`, `confirmation` et les confirmations de conflit éventuelles.
+    Aucun contenu adapté fourni par le navigateur n'est envoyé à Cookidoo.
 
-    ⚠️ La réponse HTTP ne contient donc **plus** le résultat de l'export (`cookidoo_recipe_id`,
-    `url`, `updated`, `warnings`) : ces champs vivent désormais dans `cookidoo_exports`. Le front
-    (`src/hooks/useCookidooExport.ts`) interroge la ligne toutes les 2 s tant qu'elle est
-    `pending`, s'arrête au statut final et abandonne après 2 min.
+    **Cache** : `recipe_cookidoo_adaptations` conserve la copie, ses changements, notes,
+    blocages et précisions utilisateur (`request_context`). Clé propriétaire + recette +
+    empreinte culinaire + version de l'adaptateur. Titre, favori et image n'invalident pas la
+    copie ; ingrédients, portions et étapes l'invalident. La recette source reste intacte.
+    La réservation SQL et son bail empêchent deux préparations concurrentes ; une tentative
+    expirée ne peut pas écraser la suivante. Les reprises gardent les précisions précédentes.
 
-    **Journal `cookidoo_exports`** (migration `20260719000000`) : une ligne par export. RLS en
-    **lecture seule pour le propriétaire, aucune policy d'écriture** — seule la fonction écrit,
-    en service role, pour qu'un client ne puisse pas falsifier un journal. La colonne
-    `diagnostics` (jsonb, produite par `_shared/cookidoo/diagnostics.ts`) porte `steps_total`,
-    `steps_with_tm7`, `steps_guided`, `annotations`, `ingredients_count`, `has_image` : c'est
-    l'outil de diagnostic qualité — si `steps_with_tm7` ≪ `steps_total`, le défaut est **en amont**
-    (génération IA), pas dans le connecteur.
+    **Validation** : tous les ingrédients alimentaires et leurs quantités sont conservés ;
+    chaque étape source est référencée. Les commandes, mesures et accessoires sont rendus
+    depuis les données structurées, les actions manuelles reprennent un extrait source ou
+    une opération technique autorisée. L'eau vapeur doit être explicitement renseignée,
+    ajoutée seule après vidage du bol et réservée à la vapeur. L'aperçu reste à vérifier par
+    l'utilisateur : les contrôles structurels ne prouvent pas la réussite culinaire.
 
-    **Orchestration** : `_shared/cookidoo/run-export.ts` (create/update → fill → image → contrôle),
-    avec les opérations réseau **injectées** (`CookidooOps`) pour rendre testables les chemins
-    d'échec — rollback, dégradation des annotations, réutilisation d'identifiant. Le `login` reste
-    volontairement dans `index.ts` : il dépend des identifiants déchiffrés.
-    **Anti-doublon** : `recipes.cookidoo_recipe_id` mémorise la recette Cookidoo associée ; un
-    ré-export la met à jour au lieu d'en recréer une (`updated: true` dans le journal). La validité
-    de cet identifiant est revérifiée avant réutilisation (`resolveExistingId` dans `run-export.ts`) :
-    404 → la recette a été supprimée côté Cookidoo, on la recrée ; toute autre erreur remonte, car
-    recréer sur un doute fabriquerait le doublon que ce mécanisme sert à éviter.
-    **Rollback** : si le remplissage échoue après création, la recette est supprimée ; si la
-    suppression échoue aussi → `partial_created` (id + commande CLI dans le message).
+    **Envoi** : RPC `begin_cookidoo_export` verrouille la recette, vérifie sa révision et réutilise
+    tout envoi `pending`/`unknown`. Le journal contient l'adaptation, la phase et le payload
+    attendu. Le front interroge `status` toutes les deux secondes pendant la préparation/envoi.
+    Login et réseau partagent un délai borné ; chaque écriture vérifie que sa réservation est
+    encore active. L'identifiant créé est sauvegardé avant l'attente de cinq secondes.
+    Le contrôle final relit la recette et la vue appareil avant d'annoncer le succès.
+
+    **Résultat incertain** : un envoi expiré devient `unknown` et bloque un nouvel envoi.
+    `check` vérifie une destination connue. Sans destination vérifiable, `acknowledge_absent`
+    requiert une confirmation explicite après consultation de Cookidoo. Les modifications
+    distantes, destinations supprimées et créations partielles exigent aussi une confirmation
+    liée à la tentative courante ; aucun remplacement/recréation silencieux.
+
+    **Sécurité** : adaptations et journaux en lecture propriétaire uniquement, écritures/RPC
+    réservées au service role. Confirmation HMAC liée au propriétaire, aux révisions et à la
+    durée de validité. Les erreurs remontées sont des codes traduits en français, jamais les
+    réponses brutes du fournisseur. Les anciens clients échouent sans écriture avec ce contrat.
+
+    **CLI** : il partage les modules réseau/mapper/validation. L'adaptation persistante et ses
+    confirmations appartiennent au parcours web ; le CLI conserve son contrat propre.
     **Image** : Cookidoo ré-héberge l'image sur son CDN — flux confirmé par inspection réseau :
     signature (`POST /created-recipes/{lang}/image/signature`) → upload multipart Cloudinary →
     `PATCH {image: "<public_id>.<ext>"}` (le champ `image` attend un identifiant Cloudinary, **pas**

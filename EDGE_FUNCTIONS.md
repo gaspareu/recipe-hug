@@ -54,7 +54,7 @@ Règle : Anthropic ne génère pas d'images → `generate-recipe-image` utilise 
 | 10 | `share-recipe` | Utilitaire | — | — | Sans IA |
 | 11 | `claim-shares` | Utilitaire | — | — | Sans IA |
 | 12 | `manage-cookidoo-credentials` | Utilitaire | — | — | Sans IA (AES-GCM) |
-| 13 | `export-recipe-cookidoo` | Préparation + export | Config utilisateur | Sonnet 5.5 par défaut | Aperçu signé, propositions TM7 bornées, puis export confirmé et relu |
+| 13 | `export-recipe-cookidoo` | Préparation + export | Config utilisateur | Sonnet 5.5 par défaut | Copie TM7 persistante à la demande, aperçu signé, puis export confirmé et relu |
 
 ---
 
@@ -142,3 +142,12 @@ Les deux fonctions lisent `ELEVENLABS_ZERO_RETENTION_MODE`. La valeur par défau
 ### `_shared/decrypt-keys_test.ts`
 - 9 tests Deno couvrant le roundtrip chiffrement/déchiffrement, les caractères spéciaux, les IVs aléatoires et la validation base64.
 - Exécution : `deno test supabase/functions/_shared/decrypt-keys_test.ts`
+
+## Adaptation Cookidoo à la demande
+
+`home-assistant` génère des recettes classiques sans paramètres TM7. La fiche appelle
+`export-recipe-cookidoo` (`cookidoo_adaptation_v2`) pour préparer une copie conservée dans
+`recipe_cookidoo_adaptations`, puis l’envoyer après vérification. La recette source reste
+intacte. Les migrations du 10 octobre 2026 doivent précéder le déploiement des fonctions.
+Le frontend vérifie la capacité du backend avant toute préparation ou tout envoi.
+Voir le guide opérationnel `supabase/functions/AGENTS.md` pour les reprises et confirmations.

@@ -1,6 +1,13 @@
-import { assertEquals, assertRejects } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { PartialCreateError, runExport, type CookidooOps } from "./run-export.ts";
-import { CookidooHttpError, type ClientCtx } from "./client.ts";
+import {
+  assertEquals,
+  assertRejects,
+} from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import {
+  type CookidooOps,
+  PartialCreateError,
+  runExport,
+} from "./run-export.ts";
+import { type ClientCtx, CookidooHttpError } from "./client.ts";
 import type { CookidooRecipePayload } from "./types.ts";
 
 const ctx: ClientCtx = { cookieHeader: "cookie", lang: "fr" };
@@ -20,7 +27,9 @@ function payload(guided = true): CookidooRecipePayload {
       {
         type: "STEP",
         text: "Mixer",
-        annotations: guided ? [{ type: "TTS", data: {}, position: { offset: 0, length: 5 } }] : [],
+        annotations: guided
+          ? [{ type: "TTS", data: {}, position: { offset: 0, length: 5 } }]
+          : [],
       },
     ],
     hints: "",
@@ -30,17 +39,40 @@ function payload(guided = true): CookidooRecipePayload {
 }
 
 /** Doublure : chaque opération réussit, et enregistre son appel. */
-function fakeOps(overrides: Partial<CookidooOps> = {}): CookidooOps & { calls: string[] } {
+function fakeOps(
+  overrides: Partial<CookidooOps> = {},
+): CookidooOps & { calls: string[] } {
   const calls: string[] = [];
   return {
     calls,
-    getRecipe: (_c, id) => { calls.push(`get:${id}`); return Promise.resolve(payload()); },
-    createRecipe: (_c, name) => { calls.push(`create:${name}`); return Promise.resolve("new-id"); },
-    fillRecipe: (_c, id) => { calls.push(`fill:${id}`); return Promise.resolve(); },
-    renameRecipe: (_c, id) => { calls.push(`rename:${id}`); return Promise.resolve(); },
-    deleteRecipe: (_c, id) => { calls.push(`delete:${id}`); return Promise.resolve(); },
-    uploadRecipeImage: (_c, id) => { calls.push(`image:${id}`); return Promise.resolve(); },
-    findUnguidedSteps: () => { calls.push("check"); return Promise.resolve([]); },
+    getRecipe: (_c, id) => {
+      calls.push(`get:${id}`);
+      return Promise.resolve(payload());
+    },
+    createRecipe: (_c, name) => {
+      calls.push(`create:${name}`);
+      return Promise.resolve("new-id");
+    },
+    fillRecipe: (_c, id) => {
+      calls.push(`fill:${id}`);
+      return Promise.resolve();
+    },
+    renameRecipe: (_c, id) => {
+      calls.push(`rename:${id}`);
+      return Promise.resolve();
+    },
+    deleteRecipe: (_c, id) => {
+      calls.push(`delete:${id}`);
+      return Promise.resolve();
+    },
+    uploadRecipeImage: (_c, id) => {
+      calls.push(`image:${id}`);
+      return Promise.resolve();
+    },
+    findUnguidedSteps: () => {
+      calls.push("check");
+      return Promise.resolve([]);
+    },
     recipeWebUrl: (_c, id) => `https://cookidoo.fr/created-recipes/fr/r/${id}`,
     ...overrides,
   };
@@ -52,7 +84,12 @@ Deno.test("création : crée puis remplit, et renvoie l'URL", async () => {
   const ops = fakeOps();
 
   const out = await runExport(
-    { ctx, payload: payload(), existingId: null, supabaseHost: "db.example.com" },
+    {
+      ctx,
+      payload: payload(),
+      existingId: null,
+      supabaseHost: "db.example.com",
+    },
     ops,
     noSleep,
   );
@@ -68,7 +105,12 @@ Deno.test("ré-export : réutilise l'identifiant existant sans créer de doublon
   const ops = fakeOps();
 
   const out = await runExport(
-    { ctx, payload: payload(), existingId: "old-id", supabaseHost: "db.example.com" },
+    {
+      ctx,
+      payload: payload(),
+      existingId: "old-id",
+      supabaseHost: "db.example.com",
+    },
     ops,
     noSleep,
   );
@@ -86,7 +128,12 @@ Deno.test("ré-export d'une recette supprimée côté Cookidoo (404) : recrée",
   });
 
   const out = await runExport(
-    { ctx, payload: payload(), existingId: "ghost-id", supabaseHost: "db.example.com" },
+    {
+      ctx,
+      payload: payload(),
+      existingId: "ghost-id",
+      supabaseHost: "db.example.com",
+    },
     ops,
     noSleep,
   );
@@ -100,15 +147,22 @@ Deno.test("ré-export : une erreur non-404 remonte, sans recréer de doublon", a
   // Sur un doute (429, 5xx, réseau), recréer fabriquerait le doublon que
   // l'anti-doublon sert justement à éviter.
   const ops = fakeOps({
-    getRecipe: () => Promise.reject(new CookidooHttpError(429, "Too Many Requests")),
+    getRecipe: () =>
+      Promise.reject(new CookidooHttpError(429, "Too Many Requests")),
   });
 
   await assertRejects(
-    () => runExport(
-      { ctx, payload: payload(), existingId: "old-id", supabaseHost: "db.example.com" },
-      ops,
-      noSleep,
-    ),
+    () =>
+      runExport(
+        {
+          ctx,
+          payload: payload(),
+          existingId: "old-id",
+          supabaseHost: "db.example.com",
+        },
+        ops,
+        noSleep,
+      ),
     CookidooHttpError,
   );
 
@@ -121,11 +175,17 @@ Deno.test("échec du remplissage après création : supprime la recette et relai
   });
 
   await assertRejects(
-    () => runExport(
-      { ctx, payload: payload(), existingId: null, supabaseHost: "db.example.com" },
-      ops,
-      noSleep,
-    ),
+    () =>
+      runExport(
+        {
+          ctx,
+          payload: payload(),
+          existingId: null,
+          supabaseHost: "db.example.com",
+        },
+        ops,
+        noSleep,
+      ),
     Error,
     "HTTP 500",
   );
@@ -142,11 +202,17 @@ Deno.test("remplissage ET suppression en échec : PartialCreateError portant l'i
   });
 
   const err = await assertRejects(
-    () => runExport(
-      { ctx, payload: payload(), existingId: null, supabaseHost: "db.example.com" },
-      ops,
-      noSleep,
-    ),
+    () =>
+      runExport(
+        {
+          ctx,
+          payload: payload(),
+          existingId: null,
+          supabaseHost: "db.example.com",
+        },
+        ops,
+        noSleep,
+      ),
     PartialCreateError,
   );
 
@@ -157,7 +223,12 @@ Deno.test("image absente : avertissement no_image, export réussi", async () => 
   const ops = fakeOps();
 
   const out = await runExport(
-    { ctx, payload: payload(), existingId: null, supabaseHost: "db.example.com" },
+    {
+      ctx,
+      payload: payload(),
+      existingId: null,
+      supabaseHost: "db.example.com",
+    },
     ops,
     noSleep,
   );
@@ -190,7 +261,12 @@ Deno.test("étapes dégradées par Cookidoo : avertissement et index conservés"
   const ops = fakeOps({ findUnguidedSteps: () => Promise.resolve([0]) });
 
   const out = await runExport(
-    { ctx, payload: payload(), existingId: null, supabaseHost: "db.example.com" },
+    {
+      ctx,
+      payload: payload(),
+      existingId: null,
+      supabaseHost: "db.example.com",
+    },
     ops,
     noSleep,
   );
@@ -200,10 +276,17 @@ Deno.test("étapes dégradées par Cookidoo : avertissement et index conservés"
 });
 
 Deno.test("échec du contrôle guided cooking : n'invalide pas l'export", async () => {
-  const ops = fakeOps({ findUnguidedSteps: () => Promise.reject(new Error("HTTP 429")) });
+  const ops = fakeOps({
+    findUnguidedSteps: () => Promise.reject(new Error("HTTP 429")),
+  });
 
   const out = await runExport(
-    { ctx, payload: payload(), existingId: null, supabaseHost: "db.example.com" },
+    {
+      ctx,
+      payload: payload(),
+      existingId: null,
+      supabaseHost: "db.example.com",
+    },
     ops,
     noSleep,
   );
@@ -216,7 +299,12 @@ Deno.test("aucune étape guidée attendue : pas de contrôle appareil", async ()
   const ops = fakeOps();
 
   await runExport(
-    { ctx, payload: payload(false), existingId: null, supabaseHost: "db.example.com" },
+    {
+      ctx,
+      payload: payload(false),
+      existingId: null,
+      supabaseHost: "db.example.com",
+    },
     ops,
     noSleep,
   );
@@ -225,8 +313,111 @@ Deno.test("aucune étape guidée attendue : pas de contrôle appareil", async ()
 });
 
 Deno.test("relecture impossible : avertissement explicite, sans recréer de recette", async () => {
-  const ops = fakeOps({ getRecipe: () => Promise.reject(new Error("HTTP 429")) });
-  const out = await runExport({ ctx, payload: payload(), existingId: null, supabaseHost: "db.example.com" }, ops, noSleep);
+  const ops = fakeOps({
+    getRecipe: () => Promise.reject(new Error("HTTP 429")),
+  });
+  const out = await runExport(
+    {
+      ctx,
+      payload: payload(),
+      existingId: null,
+      supabaseHost: "db.example.com",
+    },
+    ops,
+    noSleep,
+  );
   assertEquals(out.warnings.includes("content_not_verified"), true);
   assertEquals(ops.calls.filter((c) => c.startsWith("create:")).length, 1);
+});
+
+Deno.test("destination sauvegardée avant le premier remplissage", async () => {
+  const ops = fakeOps();
+  await runExport(
+    {
+      ctx,
+      payload: payload(),
+      existingId: null,
+      supabaseHost: "db.example.com",
+      onDestination: (id) => {
+        ops.calls.push(`saved:${id}`);
+        return Promise.resolve();
+      },
+    },
+    ops,
+    ms => { ops.calls.push(`sleep:${ms}`); return Promise.resolve(); },
+  );
+  assertEquals(ops.calls.indexOf("saved:new-id") < ops.calls.indexOf("sleep:5000"), true);
+  assertEquals(
+    ops.calls.indexOf("saved:new-id") < ops.calls.indexOf("fill:new-id"),
+    true,
+  );
+});
+Deno.test("modification distante détectée : aucune écriture avant confirmation", async () => {
+  const ops = fakeOps();
+  await assertRejects(
+    () =>
+      runExport(
+        {
+          ctx,
+          payload: payload(),
+          existingId: "old-id",
+          supabaseHost: "db.example.com",
+          beforeUpdate: () => Promise.reject(new Error("remote_changed")),
+        },
+        ops,
+        noSleep,
+      ),
+    Error,
+    "remote_changed",
+  );
+  assertEquals(
+    ops.calls.some((c) =>
+      c.startsWith("fill:") || c.startsWith("rename:") ||
+      c.startsWith("create:")
+    ),
+    false,
+  );
+});
+Deno.test("suppression distante : création interdite sans confirmation explicite", async () => {
+  const ops = fakeOps({
+    getRecipe: () => Promise.reject(new CookidooHttpError(404, "gone")),
+  });
+  await assertRejects(
+    () =>
+      runExport(
+        {
+          ctx,
+          payload: payload(),
+          existingId: "old-id",
+          supabaseHost: "db.example.com",
+          allowRecreate: false,
+        },
+        ops,
+        noSleep,
+      ),
+    Error,
+    "destination_missing",
+  );
+  assertEquals(ops.calls.some((c) => c.startsWith("create:")), false);
+});
+Deno.test("création avec réponse incertaine : jamais annoncée comme absence d'envoi", async () => {
+  const ops = fakeOps({
+    createRecipe: () => Promise.reject(new CookidooHttpError(500, "ambiguous")),
+  });
+  await assertRejects(
+    () =>
+      runExport(
+        {
+          ctx,
+          payload: payload(),
+          existingId: null,
+          supabaseHost: "db.example.com",
+        },
+        ops,
+        noSleep,
+      ),
+    Error,
+    "creation_unknown",
+  );
+  assertEquals(ops.calls.some((c) => c.startsWith("fill:")), false);
 });

@@ -12,7 +12,7 @@ const SCRIBE_TOKEN_TIMEOUT_MS = 10_000;
 const SCRIBE_CONNECTION_TIMEOUT_MS = 12_000;
 const SCRIBE_INACTIVITY_TIMEOUT_MS = 30_000;
 const TTS_TIMEOUT_MS = 20_000;
-const SCRIBE_KEYTERMS = ['Thermomix', 'Cookidoo', 'TM7', 'Varoma', 'mijotage', 'sens inverse'];
+const SCRIBE_KEYTERMS = ['recette', 'ingrédients', 'cuisson', 'pétrir', 'mijoter', 'enfourner'];
 
 export function useVoiceMode(onTranscript?: (text: string) => void) {
   const [isSpeaking, setIsSpeaking] = useState(false);

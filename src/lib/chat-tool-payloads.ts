@@ -21,19 +21,6 @@ const IngredientPayloadSchema = z.object({
   preparation: z.string().nullable().optional(),
 });
 
-// Paramètres machine TM7 d'une étape. Volontairement permissif : on valide la
-// STRUCTURE, pas les plages — la normalisation stricte (vitesses, températures)
-// est faite par le mapper Cookidoo via le référentiel TM7.
-const Tm7ParamsPayloadSchema = z.object({
-  mode: z.string().optional(),
-  seconds: z.number().nullable().optional(),
-  temperature: z.union([z.number(), z.string()]).nullable().optional(),
-  speed: z.union([z.string(), z.number()]).nullable().optional(),
-  reverse: z.boolean().nullable().optional(),
-  accessory: z.string().nullable().optional(),
-  power: z.string().nullable().optional(),
-});
-
 const StepPayloadSchema = z.object({
   order: z.number().optional(),
   text: z.string().min(1),
@@ -41,7 +28,6 @@ const StepPayloadSchema = z.object({
   ingredient_names: z.array(z.string().min(1)).optional(),
   duration_minutes: z.number().nullable().optional(),
   parallel_with: z.array(z.number()).optional(),
-  tm7: Tm7ParamsPayloadSchema.nullable().optional(),
 });
 
 const RecipePayloadSchema = z.object({

@@ -1,126 +1,65 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { Profiler } from 'react';
-
-// Vérifie expérimentalement le risque de boucle de rendu infinie soulevé
-// pendant la revue du plan : l'effet qui notifie le toast final appelle
-// `reset()` (non mémoïsé dans useCookidooExport), ce qui remet `exportId` à
-// null et fait donc changer `job` → le garde `!job` doit couper la boucle.
-// Ce test le prouve en comptant les rendus et les toasts après le succès.
-
-const maybeSingle = vi.fn();
-
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    functions: { invoke: vi.fn() },
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle,
-    })),
-  },
-}));
-
-vi.mock('@/hooks/useCookidooConnector', () => ({
-  useCookidooConnector: () => ({
-    status: { data: { configured: true }, isLoading: false },
-  }),
-}));
-
-vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-}));
-
-import { supabase } from '@/integrations/supabase/client';
+vi.mock('@/hooks/useCookidooConnector', () => ({ useCookidooConnector: () => ({ status: { data: { configured: true }, isLoading: false } }) }));
+const prepare = vi.fn(), send = vi.fn(), check = vi.fn(), refresh = vi.fn();
+const state = { adaptation: null, job: null, hasDestination: false, unavailable: false, isLoading: false, error: null, prepare: { mutateAsync: prepare }, send: { mutateAsync: send }, check: { mutateAsync: check }, acknowledgeAbsent: { mutateAsync: vi.fn() }, refresh } as Record<string, unknown>;
+vi.mock('@/hooks/useCookidooExport', () => ({ useCookidooExport: () => state, CookidooError: class extends Error {} }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 import { toast } from 'sonner';
 import { ExportToCookidooButton } from './ExportToCookidooButton';
-
-let renderCount = 0;
-
-function renderButton() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  renderCount = 0;
-  return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <Profiler id="export-btn" onRender={() => { renderCount += 1; }}>
-          <ExportToCookidooButton recipeId="recipe-1" open showTrigger={false} />
-        </Profiler>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
-}
-
-describe('ExportToCookidooButton — flux asynchrone', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("n'émet le toast final qu'une seule fois et ne boucle pas indéfiniment après le succès", async () => {
-    vi.mocked(supabase.functions.invoke).mockResolvedValueOnce({ data: { capabilities: ['tm7_preparation_v1'] }, error: null } as never).mockResolvedValueOnce({
-      data: { ok: true, prepared: { recipe: { title: 'Bao', ingredients: [], steps: [{ order: 1, text: 'Mélanger. Réglages TM7 : 30 s / vitesse 2.' }] }, notes: [], expires_at: Date.now() + 900000, signature: 'signed' }, ingredients: ['2 c. à soupe d’huile'], guided_steps: 1 }, error: null,
-    } as never).mockResolvedValue({
-      data: { ok: true, export_id: 'job-1', status: 'pending' },
-      error: null,
-    } as never);
-    maybeSingle
-      .mockResolvedValueOnce({ data: { id: 'job-1', status: 'pending' }, error: null })
-      .mockResolvedValue({
-        data: {
-          id: 'job-1',
-          status: 'success',
-          cookidoo_url: 'https://cookidoo.fr/r/1',
-          warnings: [],
-          updated: false,
-        },
-        error: null,
-      });
-
+const ready = { id: 'a1', status: 'ready', recipe: { title: 'Pain', steps: [{ order: 1, text: 'Pétrir 2 minutes.' }] }, ingredients: ['300 g de farine'], changes: ['Pétrissage dans le bol.'], notes: [], blockers: [], guided_steps: 1, reused: true };
+const renderButton = () => render(<MemoryRouter><ExportToCookidooButton recipeId="r1" open showTrigger={false} /></MemoryRouter>);
+describe('parcours Cookidoo', () => {
+  beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); Object.assign(state, { adaptation: null, job: null, hasDestination: false }); });
+  it('prépare une copie sans envoyer la recette ni annoncer un succès', async () => {
     renderButton();
-
-    fireEvent.click(screen.getByRole('button', { name: /préparer pour le tm7/i }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /confirmer l’envoi/i })).toBeInTheDocument());
-    expect(supabase.functions.invoke).toHaveBeenCalledTimes(2);
-    expect(toast.info).not.toHaveBeenCalled();
-    expect(screen.getByText(/Réglages TM7 : 30 s/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /confirmer l’envoi/i }));
-
-    // Accusé de réception synchrone.
-    await waitFor(() => expect(toast.info).toHaveBeenCalledTimes(1));
-
-    // Laisse le polling atteindre le statut final.
-    await act(async () => { await vi.advanceTimersByTimeAsync(2500); });
-    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
-
-    const renderCountAfterSuccess = renderCount;
-    const pollCallsAfterSuccess = maybeSingle.mock.calls.length;
-
-    // Si l'effet bouclait (reset() non mémoïsé relançant l'effet en boucle),
-    // on verrait ici des rendus et/ou des toasts supplémentaires en rafale.
-    await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
-
-    expect(toast.success).toHaveBeenCalledTimes(1);
-    expect(toast.error).not.toHaveBeenCalled();
-    expect(maybeSingle.mock.calls.length).toBe(pollCallsAfterSuccess); // pas de polling résiduel
-    // Tolérance faible pour les rendus de stabilisation React (jamais une
-    // rafale illimitée caractéristique d'une boucle).
-    expect(renderCount).toBeLessThanOrEqual(renderCountAfterSuccess + 2);
+    fireEvent.click(screen.getByRole('button', { name: 'Préparer la version Cookidoo' }));
+    await waitFor(() => expect(prepare).toHaveBeenCalledWith({}));
+    expect(send).not.toHaveBeenCalled(); expect(toast.success).not.toHaveBeenCalled();
+    expect(screen.getByText(/Votre recette dans le Livre reste inchangée/)).toBeInTheDocument();
+  });
+  it('réutilise une version prête et présente les changements avant confirmation', async () => {
+    Object.assign(state, { adaptation: ready, hasDestination: true });
+    renderButton();
+    expect(screen.getByText(/Aucune nouvelle adaptation/)).toBeInTheDocument();
+    expect(screen.getByText('Pétrissage dans le bol.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mettre à jour sur Cookidoo' }));
+    await waitFor(() => expect(send).toHaveBeenCalled()); expect(prepare).not.toHaveBeenCalled();
+  });
+  it('bloque l’envoi lorsque des précisions manquent et les applique uniquement à la copie', async () => {
+    Object.assign(state, { adaptation: { ...ready, status: 'needs_input', blockers: ['Préciser l’eau pour la vapeur.'] } });
+    renderButton();
+    expect(screen.queryByRole('button', { name: 'Envoyer cette version' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Eau dans le bol/), { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Compléter la version' }));
+    await waitFor(() => expect(prepare).toHaveBeenCalledWith({ technical_water_ml: 500, clarifications: '' }));
+  });
+  it('un résultat inconnu ne propose pas de renvoi aveugle', () => {
+    Object.assign(state, { adaptation: ready, job: { id: 'j1', status: 'unknown' } });
+    renderButton();
+    expect(screen.getByRole('button', { name: 'Vérifier l’envoi' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Envoyer cette version' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirmer l’absence d’envoi' })).toBeDisabled();
+    expect(toast.warning).toHaveBeenCalledTimes(1); expect(toast.success).not.toHaveBeenCalled();
+  });
+  it('ne notifie qu’une fois un succès déjà retrouvé après navigation', () => {
+    Object.assign(state, { job: { id: 'j1', status: 'success', warnings: [], updated: false } });
+    const view = renderButton();view.unmount();renderButton();
+    expect(toast.success).toHaveBeenCalledExactlyOnceWith('Recette disponible sur Cookidoo', expect.any(Object));
   });
 });
 
-it("un échec de préparation ne déclenche aucun envoi Cookidoo", async () => {
-  vi.clearAllMocks();
-  vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: { ok: false, message: 'Préparation impossible' }, error: null } as never);
-  renderButton();
-  fireEvent.click(screen.getByRole('button', { name: /préparer pour le tm7/i }));
-  await waitFor(() => expect(toast.error).toHaveBeenCalled());
-  expect(supabase.functions.invoke).toHaveBeenCalledTimes(1);
-  expect(screen.queryByRole('button', { name: /confirmer l’envoi/i })).not.toBeInTheDocument();
+
+it('un accord de remplacement ne s’applique pas à une tentative ultérieure', async () => {
+  vi.clearAllMocks();sessionStorage.clear();
+  Object.assign(state, { adaptation: ready, job: { id: 'conflict-1', status: 'failed', error_code: 'remote_changed' }, hasDestination: true });
+  const view = renderButton();
+  fireEvent.click(screen.getByLabelText(/Remplacer les modifications/));
+  fireEvent.click(screen.getByRole('button', { name: 'Mettre à jour sur Cookidoo' }));
+  await waitFor(() => expect(send).toHaveBeenCalledWith({ replace_remote: true, recreate_remote: false }));
+  Object.assign(state, { job: { id: 'conflict-2', status: 'failed', error_code: 'remote_changed' } });
+  view.rerender(<MemoryRouter><ExportToCookidooButton recipeId="r1" open showTrigger={false} /></MemoryRouter>);
+  expect(screen.getByLabelText(/Remplacer les modifications/)).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Mettre à jour sur Cookidoo' })).toBeDisabled();
 });
