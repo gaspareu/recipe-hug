@@ -48,6 +48,7 @@ const REASONS = new Map([
   ["Les quantités de la recette ont changé.", "quantities_changed"],
   ["Quantité inconnue utilisée plusieurs fois.", "unknown_quantity_repeated"],
   ["Quantité d'eau technique invalide.", "invalid_technical_water"],
+  ["invalid_ai_output", "invalid_ai_output"],
   ["service_unavailable", "service_unavailable"],
   ["preparation_rate_limited", "preparation_rate_limited"],
 ]);

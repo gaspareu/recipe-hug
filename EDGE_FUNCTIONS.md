@@ -175,3 +175,25 @@ identité utilisateur n'est incluse dans ces nouveaux événements. Le code
 public `adaptation_failed` et les contrôles de validation restent inchangés.
 Après déploiement, relancer une préparation pour obtenir ces diagnostics :
 ils ne peuvent pas reconstituer la réponse des anciennes tentatives.
+
+
+## Contrat IA et réparation Cookidoo
+
+L'adaptateur `cookidoo-classic-v2` exige une vitesse sous forme de chaîne et
+un tableau `uses` sur chaque étape, même sans ajout (`[]`). Seule une vitesse
+numérique exactement compatible avec le référentiel est convertie en chaîne :
+aucun arrondi, aucune quantité ni réglage manquant n'est déduit.
+
+Après une réponse invalide, une seule réparation IA est permise, avec les
+erreurs normalisées et la source initiale. Le JSON corrigé repasse l'ensemble
+des contrôles de schéma, ingrédients, quantités, actions manuelles et sécurité
+machine. Une erreur fournisseur n'est pas réessayée. Les deux appels partagent
+le même délai global de 60 secondes et une préparation consomme une seule
+unité du quota existant. L'aperçu et sa confirmation restent obligatoires.
+
+Les événements `generation`, `validation`, `normalized`, `validation_failed`
+et `repair_succeeded` portent `attempt` (1 ou 2). `normalized_speeds` est un
+compteur ; les diagnostics sont filtrés comme les logs d'échec existants.
+Aucun contenu de proposition IA n'est journalisé. Le changement de version
+invalide les adaptations mises en cache avec l'ancien contrat, sans modifier
+la recette du Livre ni les exports déjà envoyés.
