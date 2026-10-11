@@ -39,16 +39,14 @@ import {
   adaptationFailureDiagnostic,
   type AdaptationStage,
 } from "../_shared/cookidoo/adaptation-diagnostics.ts";
+import { generateAdaptation } from "../_shared/cookidoo/adaptation-generation.ts";
 import { ExportSourceSchema } from "../_shared/cookidoo/preparation.ts";
 import {
-  ADAPTATION_PROMPT,
   ADAPTER_VERSION,
-  applyAdaptation,
   remoteFingerprint,
   signConfirmation,
   sourceFingerprint,
   verifyConfirmation,
-  withTechnicalWater,
 } from "../_shared/cookidoo/adaptation.ts";
 import { boundedCookidooFetch } from "../_shared/cookidoo/operation.ts";
 import { verifyReadback } from "../_shared/cookidoo/readback.ts";
@@ -353,24 +351,27 @@ serve(async (req) => {
               agentType: "cookidoo_export",
               defaultModel: "claude-sonnet-5-5",
             });
-            stage = "generation";
-            const output = await callAINonStreaming(config, [{
-              role: "system",
-              content: ADAPTATION_PROMPT,
-            }, {
-              role: "user",
-              content: JSON.stringify({
-                recipe: withTechnicalWater(source, effectiveWater),
-                technical_water_ml: effectiveWater,
-                clarifications: effectiveClarifications,
-              }),
-            }], AbortSignal.timeout(60000));
-            stage = "validation";
-            const candidate = applyAdaptation(
+            const candidate = await generateAdaptation({
               source,
-              output,
-              effectiveWater,
-            );
+              technicalWaterMl: effectiveWater,
+              clarifications: effectiveClarifications,
+              signal: AbortSignal.timeout(60000),
+              generate: (messages, signal) =>
+                callAINonStreaming(config, messages, signal),
+              onEvent: (event) => {
+                stage = event.event === "generation"
+                  ? "generation"
+                  : "validation";
+                console.info(
+                  "[cookidoo-adaptation]",
+                  JSON.stringify({
+                    ...logContext,
+                    ...event,
+                    duration_ms: Date.now() - startedAt,
+                  }),
+                );
+              },
+            });
             stage = "mapping";
             const payload = mapRecipeToCookidoo(candidate.recipe);
             if (!validateCookidooPayload(payload).ok) {
