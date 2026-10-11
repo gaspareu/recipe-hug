@@ -23,8 +23,8 @@ export interface Step {
   duration_minutes?: number;
   parallel_with?: number[];
   /**
-   * Paramètres machine TM7 de l'étape. Présent sur les étapes « machine »
-   * (mixer, cuire, pétrir…), absent sur les étapes manuelles (éplucher, réserver).
+   * Compatibilité avec les recettes historiques et les copies Cookidoo.
+   * Les nouvelles recettes classiques du Livre ne génèrent pas ce champ.
    */
   tm7?: Tm7StepParams;
 }

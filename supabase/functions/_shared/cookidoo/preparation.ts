@@ -6,7 +6,7 @@ import { isExplicitlyManual } from "./quality.ts";
 import { formatExportSettings } from "./settings.ts";
 import type { Recipe } from "./types.ts";
 
-const MachineSchema = z.object({
+export const MachineSchema = z.object({
   mode: z.enum(["mix", "chop", "grate", "knead", "steam", "slow_cook", "high_temp", "warm", "emulsify", "thicken", "sauce", "cook"]),
   seconds: z.number().int().min(1).max(TM7_MAX_SECONDS),
   temperature: z.union([z.number().min(37).max(160), z.literal("Varoma")]).optional(),

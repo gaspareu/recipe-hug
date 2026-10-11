@@ -145,7 +145,7 @@ describe('useVoiceMode', () => {
       noVerbatim: true,
     });
     expect(capturedScribeOptions?.keyterms).toEqual(
-      expect.arrayContaining(['Thermomix', 'Cookidoo', 'TM7', 'Varoma']),
+      expect.arrayContaining(['recette', 'ingrédients', 'cuisson']),
     );
   });
 

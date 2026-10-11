@@ -6,7 +6,6 @@ import { captureEdgeException, initializeEdgeErrorMonitoring } from "../_shared/
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAIStreaming } from "../_shared/ai-providers.ts";
 import { formatPreferencesContext, formatFavoritesContext, formatRecipeContext, formatCompositionContext, formatCompositionsContext } from "../_shared/context-format.ts";
-import { TM7_MODES, TM7_ACCESSORY_LABELS, buildTm7ReferenceForPrompt } from "../_shared/thermomix/reference.ts";
 
 initializeEdgeErrorMonitoring();
 
@@ -136,11 +135,12 @@ Quand l'utilisateur veut créer une nouvelle recette :
 
 Format ingrédients : Catégories parmi "Légumes", "Viandes", "Poissons", "Épices", "Produits laitiers", "Féculents", "Fruits", "Condiments", "Huiles", "Autres". Quantité et unité séparées. Ajoute la préparation ("émincé", "en dés") quand c'est pertinent.
 
-Format étapes — TOUTES les recettes sont destinées au Thermomix TM7. Rédige comme un expert Cookidoo :
-- UNE action machine = UNE étape distincte (ne regroupe jamais deux opérations machine dans une même étape).
-- Pour chaque étape réalisée par l'appareil, renseigne l'objet "tm7" (mode, seconds, temperature, speed, reverse, accessory, power) ET rédige le texte au format Cookidoo, ex. "Mixer 8 min/100°C/vitesse 2".
-- Étapes manuelles (éplucher, réserver, dresser) : PAS d'objet "tm7" ; renseigne "duration_minutes" si un temps d'attente s'applique.
-- Respecte STRICTEMENT le RÉFÉRENTIEL THERMOMIX TM7 (fourni plus bas) : n'invente jamais une fonction, une vitesse ou une température absente du TM7. "Varoma" = cuisson vapeur (pas de °C) ; "sens inverse" pour mélanger sans hacher.
+Format étapes — recettes classiques, indépendantes du Thermomix :
+- Rédige une préparation réalisable avec des ustensiles classiques (saladier, casserole, poêle, four, mixeur).
+- Explique chaque action, ses mesures, sa durée et sa température quand elles sont utiles. Renseigne duration_minutes pour les cuissons et les attentes.
+- Ne génère aucun objet tm7 ni réglage de vitesse/mode Thermomix dans une nouvelle recette, même si cet appareil apparaît dans les préférences de matériel.
+- Pour une demande TM7 ou Cookidoo, propose d'abord la recette classique puis indique : « Enregistrez la recette, puis choisissez “Envoyer vers Cookidoo” depuis sa fiche. » L'adaptation et l'envoi se font uniquement depuis le détail de la recette.
+- Le mode cuisine Recipe Hug suit la recette classique. La version adaptée se suit dans Cookidoo.
 - Donne à CHAQUE étape un "title" court (2-4 mots) résumant l'action, en plus du "text" détaillé.
 - Donne à CHAQUE étape "ingredient_names" : les noms EXACTS des ingrédients de la liste utilisés pendant cette étape. Omet uniquement si aucun ingrédient n'est ajouté ou manipulé.
 
@@ -189,12 +189,6 @@ Quand l'utilisateur veut planifier ses repas de la semaine :
 2. Propose toujours une action après avoir répondu.
 3. N'hésite pas à utiliser tes outils directement sans demander confirmation quand l'intention est claire.`;
 
-// Clés du référentiel TM7 injectées dans les schémas d'outils (source unique).
-const TM7_MODE_KEYS = Object.keys(TM7_MODES);
-const TM7_ACCESSORY_KEYS = Object.keys(TM7_ACCESSORY_LABELS);
-const TM7_REFERENCE_BLOCK = buildTm7ReferenceForPrompt();
-
-// Schéma commun d'une étape, partagé par save_recipe / extract / create.
 const STEP_ITEMS_SCHEMA = {
   type: "object",
   properties: {
@@ -207,7 +201,7 @@ const STEP_ITEMS_SCHEMA = {
     text: {
       type: "string",
       description:
-        "Texte de l'étape. Pour une action machine : format Cookidoo, ex. « Mixer 8 min/100°C/vitesse 2 » ou « Cuire 15 min/Varoma/vitesse 1 ».",
+        "Texte détaillé de l’étape classique : actions, ustensiles, mesures et températures utiles.",
     },
     ingredient_names: {
       type: "array",
@@ -218,31 +212,9 @@ const STEP_ITEMS_SCHEMA = {
     duration_minutes: {
       type: "number",
       description:
-        "Durée en minutes d'une étape MANUELLE (repos, réfrigération, levée). Omettre pour une action machine (utiliser tm7.seconds).",
+        "Durée en minutes de la cuisson ou de l’attente (repos, réfrigération, levée).",
     },
-    tm7: {
-      type: "object",
-      description:
-        "Réglages Thermomix TM7 quand l'étape est réalisée par l'appareil. OMETTRE pour une étape manuelle (éplucher, réserver, dresser).",
-      properties: {
-        mode: { type: "string", enum: TM7_MODE_KEYS, description: "Mode TM7" },
-        seconds: { type: "number", description: "Durée de l'opération, en secondes" },
-        temperature: {
-          type: "number",
-          description: "Température en °C (37-160). Pour la vapeur : mode « steam » (Varoma) sans température.",
-        },
-        speed: { type: "string", description: "Vitesse : « 0.5 » à « 10 », « mijotage » ou « Turbo »" },
-        reverse: { type: "boolean", description: "Sens inverse : mélange sans hacher" },
-        accessory: { type: "string", enum: TM7_ACCESSORY_KEYS, description: "Accessoire utilisé" },
-        power: {
-          type: "string",
-          enum: ["Intense", "Gentle"],
-          description:
-            "Puissance du rissolage (mode « high_temp » uniquement) : « Intense » par défaut, « Gentle » pour un rissolage doux",
-        },
-      },
-      required: ["mode"],
-    },
+
   },
   required: ["order", "text"],
 };
@@ -352,7 +324,7 @@ const TOOLS = [
           },
           steps: {
             type: "array",
-            description: "Étapes de préparation (format machine TM7 quand applicable).",
+            description: "Étapes de préparation classique avec ustensiles, mesures et durées.",
             items: STEP_ITEMS_SCHEMA,
           },
           intro: {
@@ -628,8 +600,8 @@ serve(async (req) => {
     ]);
     console.log(`AI: ${aiConfig.provider}/${aiConfig.model}`);
 
-    // Build unified system prompt (référentiel TM7 injecté pour la génération d'étapes)
-    let systemPrompt = UNIFIED_PROMPT + "\n\n" + TM7_REFERENCE_BLOCK + SUGGESTIONS_INSTRUCTION;
+    // Recettes classiques : le référentiel machine est réservé à l’export.
+    let systemPrompt = UNIFIED_PROMPT + SUGGESTIONS_INSTRUCTION;
     systemPrompt += formatPreferencesContext(prefs);
 
     if (recipes && recipes.length > 0) {

@@ -295,3 +295,8 @@ describe('buildPendingRecipeFromToolCall — title d’étape', () => {
     expect(out?.steps[0].ingredient_names).toEqual(['Pois chiches']);
   });
 });
+
+it('une nouvelle recette issue du chat ignore les réglages TM7 même si le modèle en renvoie', () => {
+  const recipe = parseRecipePayload({ title: 'Pain', ingredients: [{ name: 'farine', quantity: 300, unit: 'g' }], steps: [{ order: 1, text: 'Pétrir la pâte.', tm7: { mode: 'knead', seconds: 120 } }] });
+  expect(recipe?.steps[0]).toEqual({ order: 1, text: 'Pétrir la pâte.' });
+});

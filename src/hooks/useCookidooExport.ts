@@ -1,141 +1,106 @@
-import { useEffect, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import type { Step, Ingredient } from '@/types/recipe';
 
-export interface CookidooPreparation {
-  prepared: {
-    recipe: { title: string; servings?: number | null; ingredients: Ingredient[]; steps: Step[] };
-    notes: string[];
-    expires_at: number;
-    signature: string;
-  };
+export interface CookidooAdaptation {
+  id: string;
+  status: 'preparing' | 'ready' | 'needs_input' | 'failed';
+  recipe: { title: string; servings?: number | null; ingredients: Ingredient[]; steps: Step[] } | null;
   ingredients: string[];
   guided_steps: number;
+  changes: string[];
+  notes: string[];
+  blockers: string[];
+  error_code: string | null;
+  reused: boolean;
+  request_context?: { technical_water_ml?: number; clarifications?: string[] };
+  confirmation: { token: string; expires_at: number } | null;
 }
-
-/** Intervalle d'interrogation de la ligne de journal, en millisecondes. */
-const POLL_INTERVAL_MS = 2000;
-
-/**
- * Au-delà de cette durée, on cesse d'attendre : un isolate tué avant la fin
- * laisse la ligne `pending` définitivement, et interroger sans fin ne
- * produirait qu'un spinner éternel.
- */
-const POLL_TIMEOUT_MS = 120_000;
-
-export type CookidooExportStatus = 'pending' | 'success' | 'failed';
-
 export interface CookidooExportJob {
   id: string;
-  status: CookidooExportStatus;
+  status: 'pending' | 'success' | 'failed' | 'unknown';
+  phase: string;
+  adaptation_id?: string | null;
   cookidoo_recipe_id: string | null;
   cookidoo_url: string | null;
   updated: boolean;
   error_code: string | null;
-  error_message: string | null;
   warnings: string[];
   unguided_steps: number[];
 }
-
-/** Réponse de la phase synchrone de l'edge function. */
-export interface StartExportResponse {
+interface CookidooState {
   ok: boolean;
-  export_id?: string;
-  status?: 'pending';
-  error?: string;
-  message?: string;
+  adaptation: CookidooAdaptation | null;
+  job: CookidooExportJob | null;
+  has_destination: boolean;
 }
-
-/**
- * Export d'une recette vers Cookidoo.
- *
- * L'edge function rend la main immédiatement ; le résultat réel arrive par
- * interrogation de la ligne de journal. Le hook expose donc deux choses
- * distinctes : le déclenchement (`startExport`, qui peut échouer tout de suite
- * si la recette n'est pas exportable) et l'issue finale (`job`).
- */
-export function useCookidooExport() {
-  const [exportId, setExportId] = useState<string | null>(null);
-  const [timedOut, setTimedOut] = useState(false);
-  const preparation = useMutation({
-    mutationFn: async (recipeId: string): Promise<CookidooPreparation> => {
-      const capability = await supabase.functions.invoke('export-recipe-cookidoo', { method: 'GET' });
-      if (capability.error || !Array.isArray(capability.data?.capabilities) || !capability.data.capabilities.includes('tm7_preparation_v1')) {
-        throw new Error('La préparation TM7 est en cours de mise à jour. Réessayez dans quelques instants. Aucun envoi effectué.');
-      }
-      const { data, error } = await supabase.functions.invoke('export-recipe-cookidoo', { body: { recipe_id: recipeId, action: 'prepare' } });
-      if (error) throw error;
-      if (!data?.ok || !data.prepared) throw new Error(data?.message ?? 'Préparation impossible. Aucun envoi effectué.');
-      return data as CookidooPreparation;
+interface OperationResponse { ok: boolean; error?: string; export_id?: string }
+export class CookidooError extends Error {
+  constructor(public readonly code: string) { super(code); }
+}
+/** Tous les accès passent par l'API : reprise depuis la base, sans copie locale périssable. */
+export function useCookidooExport(recipeId: string, enabled = true) {
+  const { user } = useAuth();
+  const cache = useQueryClient();
+  const key = ['cookidoo-recipe', user?.id, recipeId];
+  const capability = useQuery({
+    queryKey: ['cookidoo-capability', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('export-recipe-cookidoo', { method: 'GET' });
+      return !error && Array.isArray(data?.capabilities) && data.capabilities.includes('cookidoo_adaptation_v2');
     },
+    enabled: enabled && !!user,
+    staleTime: 30_000,
+    retry: false,
   });
-
-  const start = useMutation({
-    mutationFn: async ({ recipeId, prepared }: { recipeId: string; prepared?: CookidooPreparation['prepared'] }): Promise<StartExportResponse> => {
-      const response = await supabase.functions.invoke('export-recipe-cookidoo', {
-        body: { recipe_id: recipeId, tools: ['TM7'], ...(prepared ? { prepared } : {}) },
-      });
-      const data = response.data as StartExportResponse | null;
-      if (data) return data;
-      if (response.error) throw response.error;
-      return { ok: false, error: 'unknown', message: 'Réponse vide du serveur' };
-    },
+  async function request<T extends OperationResponse>(body: Record<string, unknown>): Promise<T> {
+    const { data, error } = await supabase.functions.invoke('export-recipe-cookidoo', { body: { recipe_id: recipeId, ...body } });
+    if (error || !data) throw new CookidooError('connection_unknown');
+    if (!data.ok) throw new CookidooError(data.error ?? 'service_unavailable');
+    return data as T;
+  }
+  const state = useQuery({
+    queryKey: key,
+    queryFn: () => request<CookidooState>({ action: 'status' }),
+    enabled: enabled && !!user && capability.data === true,
+    refetchInterval: query => query.state.data?.adaptation?.status === 'preparing' || query.state.data?.job?.status === 'pending' ? 2000 : false,
+    staleTime: 0,
+    retry: false,
   });
-
-  const job = useQuery({
-    queryKey: ['cookidoo-export', exportId],
-    queryFn: async (): Promise<CookidooExportJob | null> => {
-      const { data, error } = await supabase
-        .from('cookidoo_exports')
-        .select('id, status, cookidoo_recipe_id, cookidoo_url, updated, error_code, error_message, warnings, unguided_steps')
-        .eq('id', exportId!)
-        .maybeSingle();
-      if (error) throw error;
-      return (data as CookidooExportJob | null) ?? null;
+  const prepare = useMutation({
+    mutationFn: async (input: { technical_water_ml?: number; clarifications?: string } = {}) => {
+      if (capability.data !== true) throw new CookidooError('backend_updating');
+      return request<CookidooState>({ action: 'prepare', ...input });
     },
-    enabled: !!exportId && !timedOut,
-    // Simple fonction de cadence : on ré-interroge tant que le statut n'est pas
-    // final. La borne de temps est armée séparément (effet ci-dessous), pour ne
-    // pas mêler une décision de cadence à une mutation d'état.
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status && status !== 'pending' ? false : POLL_INTERVAL_MS;
-    },
+    onSuccess: value => cache.setQueryData(key, value),
+    onSettled: () => cache.invalidateQueries({ queryKey: key }),
   });
-
-  // Borne l'attente : un isolate tué avant la fin laisse la ligne `pending`
-  // définitivement, et interroger sans fin ne produirait qu'un spinner éternel.
-  // Le minuteur est réarmé à chaque nouvel export et nettoyé au démontage.
-  useEffect(() => {
-    if (!exportId) return;
-    const timer = setTimeout(() => setTimedOut(true), POLL_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [exportId]);
-
-  /** Lance l'export. Renvoie la réponse synchrone : un `ok: false` est définitif. */
-  const startExport = async (recipeId: string, prepared?: CookidooPreparation['prepared']): Promise<StartExportResponse> => {
-    setExportId(null);
-    setTimedOut(false);
-    const response = await start.mutateAsync({ recipeId, prepared });
-    if (response.ok && response.export_id) setExportId(response.export_id);
-    return response;
-  };
-
-  /** Remet le hook à zéro (fermeture du dialogue, nouvel export). */
-  const reset = () => {
-    setExportId(null);
-    setTimedOut(false);
-  };
-
+  const send = useMutation({
+    mutationFn: async (options: { replace_remote?: boolean; recreate_remote?: boolean } = {}) => {
+      const adaptation = state.data?.adaptation;
+      if (!adaptation?.confirmation) throw new CookidooError('preparation_required');
+      return request<OperationResponse>({ action: 'send', adaptation_id: adaptation.id, confirmation: adaptation.confirmation, ...options });
+    },
+    onSettled: () => cache.invalidateQueries({ queryKey: key }),
+  });
+  const check = useMutation({
+    mutationFn: () => request<OperationResponse>({ action: 'check' }),
+    onSettled: () => cache.invalidateQueries({ queryKey: key }),
+  });
+  const acknowledgeAbsent = useMutation({
+    mutationFn: () => request<OperationResponse>({ action: 'acknowledge_absent', confirmed_absent: true }),
+    onSettled: () => cache.invalidateQueries({ queryKey: key }),
+  });
   return {
-    startExport,
-    prepareExport: preparation.mutateAsync,
-    isPreparing: preparation.isPending,
-    reset,
-    exportId,
-    isStarting: start.isPending,
-    job: job.data ?? null,
-    timedOut,
+    adaptation: state.data?.adaptation ?? null,
+    job: state.data?.job ?? null,
+    hasDestination: state.data?.has_destination ?? false,
+    prepare, send, check, acknowledgeAbsent,
+    refresh: state.refetch,
+    isRefreshing: state.isFetching,
+    isLoading: capability.isLoading || (capability.data === true && state.isLoading),
+    unavailable: capability.isError || capability.data === false,
+    error: state.error,
   };
 }

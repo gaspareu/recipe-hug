@@ -18,6 +18,7 @@ vi.mock('framer-motion', () => ({
 vi.mock('@/components/layout/MainLayout', () => ({ MainLayout: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock('@/components/recipes/RecipeImageDisplay', () => ({ RecipeImageDisplay: () => <div data-testid="recipe-image" /> }));
 vi.mock('@/components/recipes/RecipeDetailHeader', () => ({ RecipeDetailHeader: ({ title }: { title: string }) => <h1>{title}</h1> }));
+vi.mock('@/components/recipes/ExportToCookidooButton', () => ({ ExportToCookidooButton: () => null }));
 vi.mock('@/components/recipes/RecipeActionsMenu', () => ({ RecipeActionsMenu: () => <button type="button">Actions</button> }));
 vi.mock('@/components/recipes/RecipeStepsList', () => ({ RecipeStepsList: () => <div>Étapes de la recette</div> }));
 vi.mock('@/components/recipes/RecipeVersionHistory', () => ({ RecipeVersionHistory: () => null }));

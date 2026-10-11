@@ -10,6 +10,7 @@ import { useDetailServings } from '@/hooks/useDetailServings';
 import { scaleIngredients } from '@/lib/recipe-scaling';
 import { RecipeDetailHeader } from '@/components/recipes/RecipeDetailHeader';
 import { RecipeActionsMenu } from '@/components/recipes/RecipeActionsMenu';
+import { ExportToCookidooButton } from '@/components/recipes/ExportToCookidooButton';
 import { RecipeStepsList } from '@/components/recipes/RecipeStepsList';
 import { RecipeVersionHistory } from '@/components/recipes/RecipeVersionHistory';
 import { Button } from '@/components/ui/button';
@@ -146,6 +147,7 @@ export default function RecipeDetail() {
     servings?: number;
   } | null>(null);
   const [assistantState, setAssistantState] = useState({ recipeId: id ?? '', open: false });
+  const [exportOpen, setExportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   // Valeurs dérivées calculées AVANT tout early return : les Hooks doivent être
@@ -226,7 +228,7 @@ export default function RecipeDetail() {
           <div className="flex items-center gap-1" data-testid="action-buttons">
             <TooltipProvider>
               <FavoriteToggle isFavorite={recipe.is_favorite} onToggle={handleToggleFavorite} disabled={toggleFavorite.isPending} tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} />
-              <RecipeActionsMenu recipeId={recipe.id} onAnalyzeAndGenerate={handleAnalyzeAndGenerate} isAnalyzing={isAnalyzing} onOpenHistory={() => setHistoryOpen(true)} />
+              <RecipeActionsMenu recipeId={recipe.id} onAnalyzeAndGenerate={handleAnalyzeAndGenerate} isAnalyzing={isAnalyzing} onOpenHistory={() => setHistoryOpen(true)} onExportCookidoo={() => setExportOpen(true)} />
             </TooltipProvider>
           </div>
         </nav>
@@ -235,6 +237,7 @@ export default function RecipeDetail() {
           <RecipeDetailHeader title={recipe.title} description={recipe.ai_summary} />
           <p className="text-sm text-muted-foreground">{totalSteps} étape{totalSteps > 1 ? 's' : ''} · {servings} portion{servings > 1 ? 's' : ''}</p>
         </header>
+        <ExportToCookidooButton key={recipe.id} recipeId={recipe.id} open={exportOpen} onOpenChange={setExportOpen} showTrigger={false} />
         <div className="max-w-xl">
           <RecipeImageDisplay recipeId={recipe.id} imageUrl={recipe.source_image_url} title={recipe.title} onImageChange={imageChange.run} onImageRemove={imageRemove.run} showTitleOverlay={false} showPlaceholder={false} />
         </div>

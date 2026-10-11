@@ -10,13 +10,16 @@
  * Le `login` reste volontairement en dehors : il dépend des identifiants
  * déchiffrés, qui n'ont rien à faire ici.
  */
-import { CookidooHttpError, type ClientCtx } from "./client.ts";
+import { type ClientCtx, CookidooHttpError } from "./client.ts";
 import type { CookidooRecipePayload } from "./types.ts";
 import { verifyReadback } from "./readback.ts";
 
 /** Recette créée sur Cookidoo mais ni remplie ni supprimable : nettoyage manuel requis. */
 export class PartialCreateError extends Error {
-  constructor(public readonly cookidooRecipeId: string, public override readonly cause: unknown) {
+  constructor(
+    public readonly cookidooRecipeId: string,
+    public override readonly cause: unknown,
+  ) {
     super(
       `Recette partiellement créée sur Cookidoo (id ${cookidooRecipeId}) : ` +
         `le remplissage a échoué et la suppression automatique aussi. ` +
@@ -29,11 +32,24 @@ export class PartialCreateError extends Error {
 export interface CookidooOps {
   getRecipe(ctx: ClientCtx, id: string): Promise<unknown>;
   createRecipe(ctx: ClientCtx, name: string): Promise<string>;
-  fillRecipe(ctx: ClientCtx, id: string, payload: CookidooRecipePayload): Promise<void>;
+  fillRecipe(
+    ctx: ClientCtx,
+    id: string,
+    payload: CookidooRecipePayload,
+  ): Promise<void>;
   renameRecipe(ctx: ClientCtx, id: string, name: string): Promise<unknown>;
   deleteRecipe(ctx: ClientCtx, id: string): Promise<unknown>;
-  uploadRecipeImage(ctx: ClientCtx, id: string, imageUrl: string, host: string): Promise<void>;
-  findUnguidedSteps(ctx: ClientCtx, id: string, expected: number[]): Promise<number[]>;
+  uploadRecipeImage(
+    ctx: ClientCtx,
+    id: string,
+    imageUrl: string,
+    host: string,
+  ): Promise<void>;
+  findUnguidedSteps(
+    ctx: ClientCtx,
+    id: string,
+    expected: number[],
+  ): Promise<number[]>;
   recipeWebUrl(ctx: ClientCtx, id: string): string;
 }
 
@@ -49,6 +65,11 @@ export interface RunExportInput {
   imageUrl?: string;
   /** Hôte Supabase, pour la validation anti-SSRF de l'URL d'image. */
   supabaseHost: string;
+  /** Réservé au parcours persistant : sauvegarder l'id avant tout remplissage. */
+  onDestination?: (id: string) => Promise<void>;
+  beforeUpdate?: (remote: unknown) => Promise<void>;
+  allowRecreate?: boolean;
+  onVerifying?: () => Promise<void>;
 }
 
 export interface ExportOutcome {
@@ -78,7 +99,9 @@ async function resolveExistingId(
     await ops.getRecipe(ctx, existingId);
     return existingId;
   } catch (lookupErr) {
-    if (lookupErr instanceof CookidooHttpError && lookupErr.status === 404) return null;
+    if (lookupErr instanceof CookidooHttpError && lookupErr.status === 404) {
+      return null;
+    }
     throw lookupErr;
   }
 }
@@ -92,10 +115,17 @@ export async function runExport(
   const warnings: string[] = [];
 
   const existingId = await resolveExistingId(ctx, input.existingId, ops);
+  if (input.existingId && !existingId && input.allowRecreate === false) {
+    throw new Error("destination_missing");
+  }
+  if (existingId && input.beforeUpdate) {
+    await input.beforeUpdate(await ops.getRecipe(ctx, existingId));
+  }
 
   let id: string;
   if (existingId) {
     id = existingId;
+    await input.onDestination?.(id);
     // Le champ de renommage en PATCH n'est pas confirmé (endpoints
     // non-officiels) → best-effort : un échec ne doit pas empêcher la mise à
     // jour du contenu.
@@ -108,9 +138,17 @@ export async function runExport(
     }
     await ops.fillRecipe(ctx, id, payload);
   } else {
-    id = await ops.createRecipe(ctx, payload.name);
-    await sleep(5000); // Cookidoo exige un délai avant les PATCH de remplissage
     try {
+      id = await ops.createRecipe(ctx, payload.name);
+    } catch (error) {
+      if (!(error instanceof CookidooHttpError) || error.status >= 500) {
+        throw new Error("creation_unknown", { cause: error });
+      }
+      throw error;
+    }
+    try {
+      await input.onDestination?.(id);
+      await sleep(5000); // L’identifiant est enregistré avant cette attente.
       await ops.fillRecipe(ctx, id, payload);
     } catch (fillErr) {
       // Rollback best-effort : ne pas laisser une recette vide sur Cookidoo.
@@ -136,6 +174,8 @@ export async function runExport(
     warnings.push("no_image");
   }
 
+  await input.onVerifying?.();
+
   // Contrôle du guided cooking : l'API accepte des annotations qu'elle dégrade
   // ensuite en simple texte, sans erreur HTTP (cf. docs/COOKIDOO-CONTRAT.md §8).
   // La vue « appareil » est le seul endroit où ce silence devient visible.
@@ -147,14 +187,21 @@ export async function runExport(
     warnings.push("content_not_verified");
   }
   const expectedGuided = payload.instructions
-    .map((step, i) => (step.annotations.some((a) => a.type !== "INGREDIENT") ? i : -1))
+    .map((
+      step,
+      i,
+    ) => (step.annotations.some((a) => a.type !== "INGREDIENT") ? i : -1))
     .filter((i) => i >= 0);
   if (expectedGuided.length > 0) {
     try {
       await sleep(2000);
       unguided = await ops.findUnguidedSteps(ctx, id, expectedGuided);
       if (unguided.length > 0) {
-        console.error(`[run-export] étapes non guidées sur l'appareil : ${unguided.join(", ")}`);
+        console.error(
+          `[run-export] étapes non guidées sur l'appareil : ${
+            unguided.join(", ")
+          }`,
+        );
         warnings.push("steps_not_guided");
       }
     } catch (checkErr) {
