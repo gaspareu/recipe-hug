@@ -151,3 +151,27 @@ Les deux fonctions lisent `ELEVENLABS_ZERO_RETENTION_MODE`. La valeur par défau
 intacte. Les migrations du 10 octobre 2026 doivent précéder le déploiement des fonctions.
 Le frontend vérifie la capacité du backend avant toute préparation ou tout envoi.
 Voir le guide opérationnel `supabase/functions/AGENTS.md` pour les reprises et confirmations.
+
+
+## Diagnostic des adaptations Cookidoo
+
+Les logs Supabase de `export-recipe-cookidoo` préfixés `[cookidoo-adaptation]`
+sont des événements JSON : `started`, `completed`, `failed` et
+`failure_journal_failed`. `attempt_id` relie les traces à la tentative stockée
+sur `recipe_cookidoo_adaptations` ; `adapter_version` identifie le contrat.
+`duration_ms` mesure le temps depuis le début de la tâche de fond.
+
+En cas d'échec, `stage` distingue quota, configuration IA, génération,
+validation de l'adaptation, mapping Cookidoo et persistance. `reason` est un
+code fermé (par exemple `invalid_json`, `manual_instruction_changed` ou
+`quantities_changed`). Pour un schéma invalide, seuls les codes et les chemins
+de cinq erreurs maximum sont inclus, avec le nombre total d'erreurs ; les
+clés inconnues sont masquées. Pour un refus HTTP du fournisseur IA, seul le
+statut numérique est ajouté. Sentry reçoit un code normalisé incluant étape
+et cause, sans identifiant de tentative.
+
+Aucune recette, réponse IA, exception brute, clé API, information Cookidoo ou
+identité utilisateur n'est incluse dans ces nouveaux événements. Le code
+public `adaptation_failed` et les contrôles de validation restent inchangés.
+Après déploiement, relancer une préparation pour obtenir ces diagnostics :
+ils ne peuvent pas reconstituer la réponse des anciennes tentatives.

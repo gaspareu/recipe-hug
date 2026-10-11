@@ -35,6 +35,10 @@ import type {
 } from "../_shared/cookidoo/types.ts";
 import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAINonStreaming } from "../_shared/ai-providers.ts";
+import {
+  adaptationFailureDiagnostic,
+  type AdaptationStage,
+} from "../_shared/cookidoo/adaptation-diagnostics.ts";
 import { ExportSourceSchema } from "../_shared/cookidoo/preparation.ts";
 import {
   ADAPTATION_PROMPT,
@@ -324,6 +328,16 @@ serve(async (req) => {
       const effectiveClarifications = adaptation.request_context.clarifications;
       if (claim.acquired) {
         background((async () => {
+          const startedAt = Date.now();
+          let stage: AdaptationStage = "quota";
+          const logContext = {
+            attempt_id: adaptation.attempt_id,
+            adapter_version: ADAPTER_VERSION,
+          };
+          console.info(
+            "[cookidoo-adaptation]",
+            JSON.stringify({ event: "started", ...logContext }),
+          );
           try {
             const { data: allowed, error: quotaError } = await admin.rpc(
               "consume_cookidoo_preparation_quota",
@@ -334,10 +348,12 @@ serve(async (req) => {
                 quotaError ? "service_unavailable" : "preparation_rate_limited",
               );
             }
+            stage = "configuration";
             const config = await resolveAIConfig(client, user.id, {
               agentType: "cookidoo_export",
               defaultModel: "claude-sonnet-5-5",
             });
+            stage = "generation";
             const output = await callAINonStreaming(config, [{
               role: "system",
               content: ADAPTATION_PROMPT,
@@ -349,15 +365,18 @@ serve(async (req) => {
                 clarifications: effectiveClarifications,
               }),
             }], AbortSignal.timeout(60000));
+            stage = "validation";
             const candidate = applyAdaptation(
               source,
               output,
               effectiveWater,
             );
+            stage = "mapping";
             const payload = mapRecipeToCookidoo(candidate.recipe);
             if (!validateCookidooPayload(payload).ok) {
               throw new Error("adaptation_failed");
             }
+            stage = "persistence";
             const { error: writeError } = await admin.from(
               "recipe_cookidoo_adaptations",
             ).update({
@@ -370,6 +389,15 @@ serve(async (req) => {
             }).eq("id", adaptation.id).eq("attempt_id", adaptation.attempt_id)
               .eq("status", "preparing");
             if (writeError) throw new Error("service_unavailable");
+            console.info(
+              "[cookidoo-adaptation]",
+              JSON.stringify({
+                event: "completed",
+                ...logContext,
+                status: candidate.blockers.length ? "needs_input" : "ready",
+                duration_ms: Date.now() - startedAt,
+              }),
+            );
           } catch (error) {
             const code = error instanceof Error &&
                 ["preparation_rate_limited", "service_unavailable"].includes(
@@ -377,7 +405,21 @@ serve(async (req) => {
                 )
               ? error.message
               : "adaptation_failed";
-            await captureEdgeException("export-recipe-cookidoo", code);
+            const diagnostic = adaptationFailureDiagnostic(error, stage);
+            console.error(
+              "[cookidoo-adaptation]",
+              JSON.stringify({
+                event: "failed",
+                ...logContext,
+                error_code: code,
+                duration_ms: Date.now() - startedAt,
+                ...diagnostic,
+              }),
+            );
+            await captureEdgeException(
+              "export-recipe-cookidoo",
+              `${code}:${stage}:${diagnostic.reason}`,
+            );
             const { error: writeError } = await admin.from(
               "recipe_cookidoo_adaptations",
             ).update({
@@ -387,6 +429,14 @@ serve(async (req) => {
             }).eq("id", adaptation.id).eq("attempt_id", adaptation.attempt_id)
               .eq("status", "preparing");
             if (writeError) {
+              console.error(
+                "[cookidoo-adaptation]",
+                JSON.stringify({
+                  event: "failure_journal_failed",
+                  ...logContext,
+                  duration_ms: Date.now() - startedAt,
+                }),
+              );
               await captureEdgeException(
                 "export-recipe-cookidoo",
                 "adaptation_journal_failed",
