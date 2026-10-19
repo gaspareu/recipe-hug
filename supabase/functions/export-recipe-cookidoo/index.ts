@@ -21,6 +21,7 @@ import {
   sleep,
   uploadRecipeImage,
 } from "../_shared/cookidoo/client.ts";
+import { ADAPTATION_JSON_SCHEMA } from "../_shared/cookidoo/adaptation-format.ts";
 import { mapRecipeToCookidoo } from "../_shared/cookidoo/mapper.ts";
 import { validateCookidooPayload } from "../_shared/cookidoo/validate.ts";
 import { buildExportDiagnostics } from "../_shared/cookidoo/diagnostics.ts";
@@ -357,7 +358,7 @@ serve(async (req) => {
               clarifications: effectiveClarifications,
               signal: AbortSignal.timeout(60000),
               generate: (messages, signal) =>
-                callAINonStreaming(config, messages, signal),
+                callAINonStreaming(config, messages, signal, { jsonSchema: ADAPTATION_JSON_SCHEMA }),
               onEvent: (event) => {
                 stage = event.event === "generation"
                   ? "generation"
@@ -508,7 +509,7 @@ serve(async (req) => {
           s.annotations.some((a) => a.type !== "INGREDIENT") ? [i] : []
         );
         const unguided = expected.length
-          ? await findUnguidedSteps(ctx, job.cookidoo_recipe_id, expected)
+          ? await findUnguidedSteps(ctx, job.cookidoo_recipe_id, expected, job.expected_payload.instructions)
           : [];
         const { error } = await admin.from("cookidoo_exports").update({
           status: "success",

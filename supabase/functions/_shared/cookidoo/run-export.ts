@@ -49,6 +49,7 @@ export interface CookidooOps {
     ctx: ClientCtx,
     id: string,
     expected: number[],
+    instructions?: CookidooRecipePayload["instructions"],
   ): Promise<number[]>;
   recipeWebUrl(ctx: ClientCtx, id: string): string;
 }
@@ -195,7 +196,7 @@ export async function runExport(
   if (expectedGuided.length > 0) {
     try {
       await sleep(2000);
-      unguided = await ops.findUnguidedSteps(ctx, id, expectedGuided);
+      unguided = await ops.findUnguidedSteps(ctx, id, expectedGuided, payload.instructions);
       if (unguided.length > 0) {
         console.error(
           `[run-export] étapes non guidées sur l'appareil : ${

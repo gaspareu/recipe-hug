@@ -4,7 +4,7 @@ import { createTestUserClient, deleteRecipesByTitle } from './helpers/supabase';
 // Auth et source réels sur Supabase dev. Adaptation/envoi simulés : aucun appel
 // IA ni écriture Cookidoo ; SQL/RLS et adaptateur sont testés séparément.
 for (const width of [1280, 390]) {
-  test(`Cookidoo : aperçu, envoi, reprise sans réadaptation (${width}px)`, async ({ page }) => {
+  test(`Cookidoo : aperçu, envoi, reprise sans réadaptation (${width}px)`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     const client = await createTestUserClient();
     const { data: { user } } = await client.auth.getUser();
@@ -43,7 +43,7 @@ for (const width of [1280, 390]) {
       const { data: unchanged } = await client.from('recipes').select('steps,ingredients').eq('id', recipe!.id).single();
       expect(unchanged?.steps).toEqual(source.steps);expect(unchanged?.ingredients).toEqual(source.ingredients);
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
-      await page.screenshot({ path: `/private/tmp/cookidoo-adaptation-${width}.png`, fullPage: true });
+      await page.screenshot({ path: testInfo.outputPath(`cookidoo-adaptation-${width}.png`), fullPage: true });
     } finally { await deleteRecipesByTitle(client, title); }
   });
 }

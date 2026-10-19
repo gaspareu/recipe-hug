@@ -1,6 +1,8 @@
 /** Diagnostic fermé : ne jamais journaliser l'exception ou la sortie IA brute. */
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
+import { MACHINE_RULES } from "./machine-contract.ts";
+
 export type AdaptationStage =
   | "quota"
   | "configuration"
@@ -55,6 +57,9 @@ const REASONS = new Map([
 const FIELDS = new Set([
   "steps",
   "source_orders",
+  "source_parts",
+  "order",
+  "part",
   "text",
   "manual_action",
   "duration_minutes",
@@ -85,6 +90,8 @@ export function adaptationFailureDiagnostic(
       issue_count: error.issues.length,
       issues: error.issues.slice(0, 5).map((issue) => ({
         code: issue.code,
+        ...(issue.code === "custom" && typeof issue.params?.rule === "string" && Object.hasOwn(MACHINE_RULES, issue.params.rule)
+          ? { rule: issue.params.rule as keyof typeof MACHINE_RULES } : {}),
         // Les noms de clés inconnues et les messages Zod peuvent contenir la réponse IA.
         path: issue.path.map((part) =>
           typeof part === "number" ? part : FIELDS.has(part) ? part : "*"
