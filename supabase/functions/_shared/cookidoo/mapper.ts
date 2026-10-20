@@ -285,7 +285,14 @@ function modeFromTm7(text: string, tm7: Tm7StepParams, span: Span | null): Annot
   if (tm7.mode === "high_temp") data.power = tm7.power ?? "Intense";
 
   if (Object.keys(data).length === 0) return null;
-  return { type: "MODE", name, data, position: span ?? { offset: 0, length: text.length } };
+  // Inclure le libellé du mode : une durée seule rend le lien trompeur dans l'éditeur.
+  const labels = [...text.matchAll(tm7.mode === "knead" ? /pétrin/giu : /rissoler/giu)];
+  const label = labels.at(-1);
+  const position = label?.index !== undefined
+    ? { offset: Math.min(label.index, span?.offset ?? label.index),
+      length: Math.max(label.index + label[0].length, span ? span.offset + span.length : 0) - Math.min(label.index, span?.offset ?? label.index) }
+    : span ?? { offset: 0, length: text.length };
+  return { type: "MODE", name, data, position };
 }
 
 // ── Annotations INGREDIENT (liaison texte ↔ ingrédient) ──────────────────────

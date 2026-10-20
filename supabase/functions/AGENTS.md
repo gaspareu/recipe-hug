@@ -215,6 +215,22 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
     ajoutée seule après vidage du bol et réservée à la vapeur. L'aperçu reste à vérifier par
     l'utilisateur : les contrôles structurels ne prouvent pas la réussite culinaire.
 
+    **Contrat compact v3** : les étapes manuelles peuvent référencer `source_parts`
+    (numéro source + index de fragment), recopiés par le serveur. Un ingrédient ajouté
+    une seule fois peut omettre sa quantité ; plusieurs ajouts exigent une répartition
+    explicite et une somme exacte. `machine-contract.ts` porte le schéma, les règles
+    fermées et leur description pour le prompt, distincts des conseils TM7 généraux.
+    L'API Anthropic reçoit `ADAPTATION_JSON_SCHEMA` ; les autres fournisseurs gardent
+    le contrat JSON demandé dans le prompt et la même validation serveur.
+
+    Le contrôle appareil reçoit les instructions attendues et compare l'intention
+    (notamment `cooking-mode/Dough`) et la durée, en plus de la présence du guidage.
+    La vitesse et la température appareil ne sont pas encore comparées. Un écart
+    produit `steps_not_guided`, rendu comme avertissement dans le résultat. L'empan
+    d'un mode inclut son libellé lorsqu'il existe ; le rendu Cookidoo réel reste à
+    vérifier. Le banc d'essai des modèles est décrit dans
+    `scripts/verification/COOKIDOO-BENCHMARK.md` et ne change pas la production.
+
     **Envoi** : RPC `begin_cookidoo_export` verrouille la recette, vérifie sa révision et réutilise
     tout envoi `pending`/`unknown`. Le journal contient l'adaptation, la phase et le payload
     attendu. Le front interroge `status` toutes les deux secondes pendant la préparation/envoi.

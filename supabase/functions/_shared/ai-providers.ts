@@ -53,10 +53,15 @@ function parseInlineImageData(url: string): InlineImageData {
 // NON-STREAMING CALLS
 // ============================================================
 
+export interface NonStreamingOptions {
+  jsonSchema?: Record<string, unknown>;
+  onUsage?: (usage: { input_tokens: number; output_tokens: number }) => void;
+}
+
 /** Call AI (non-streaming) and return the text content */
-export async function callAINonStreaming(config: AIConfig, messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
+export async function callAINonStreaming(config: AIConfig, messages: ChatMessage[], signal?: AbortSignal, options?: NonStreamingOptions): Promise<string> {
   if (config.provider === "anthropic") {
-    return callAnthropicNonStreaming(config, messages, signal);
+    return callAnthropicNonStreaming(config, messages, signal, options);
   }
 
   // OpenAI-compatible format (OpenAI, Gemini OpenAI-compat)
@@ -82,7 +87,7 @@ function applyAnthropicThinking(body: Record<string, unknown>, model: string): v
   }
 }
 
-async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
+async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage[], signal?: AbortSignal, options?: NonStreamingOptions): Promise<string> {
   const systemMessage = messages.find((m) => m.role === "system")?.content || "";
   const chatMessages = messages
     .filter((m) => m.role !== "system")
@@ -90,6 +95,9 @@ async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage
 
   const body: Record<string, unknown> = { model: config.model, max_tokens: 8192, messages: chatMessages };
   applyAnthropicThinking(body, config.model);
+  if (options?.jsonSchema) {
+    body.output_config = { ...(body.output_config as Record<string, unknown> ?? {}), format: { type: "json_schema", schema: options.jsonSchema } };
+  }
   if (systemMessage) body.system = systemMessage;
 
   const response = await fetch(config.endpoint, {
@@ -101,6 +109,9 @@ async function callAnthropicNonStreaming(config: AIConfig, messages: ChatMessage
 
   if (!response.ok) throw new Error(`Anthropic error: ${response.status}`);
   const data = await response.json();
+  if (Number.isFinite(data.usage?.input_tokens) && Number.isFinite(data.usage?.output_tokens)) {
+    options?.onUsage?.({ input_tokens: data.usage.input_tokens, output_tokens: data.usage.output_tokens });
+  }
   return extractContentFromResponse(config, data) ?? "";
 }
 

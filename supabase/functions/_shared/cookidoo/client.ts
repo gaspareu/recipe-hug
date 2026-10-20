@@ -10,7 +10,7 @@
  * (backoff exponentiel), sauf le POST de création sur 5xx (réponse ambiguë →
  * risque de doublon). `fetch`/`sleep` sont injectables (tests) via ClientCtx.
  */
-import type { CookidooRecipePayload } from "./types.ts";
+import type { CookidooRecipePayload, CookidooStep } from "./types.ts";
 
 const API_BASE = "https://cookidoo.fr";
 
@@ -282,7 +282,7 @@ export function getRecipe(ctx: ClientCtx, id: string): Promise<unknown> {
 interface DevicePrompt {
   Type?: string;
   PreparationStepIndex?: number;
-  Annotations?: { IntentId?: string }[];
+  Annotations?: { IntentId?: string; Parameters?: { Name?: string; Value?: string }[] }[];
 }
 
 interface DeviceRecipe {
@@ -310,6 +310,7 @@ export async function findUnguidedSteps(
   ctx: ClientCtx,
   id: string,
   expectedGuidedIndexes: number[],
+  instructions?: CookidooStep[],
 ): Promise<number[]> {
   const device = await getDeviceRecipe(ctx, id);
   const prompts = device.PromptDetails?.Prompts ?? [];
@@ -318,7 +319,24 @@ export async function findUnguidedSteps(
       .filter((p) => p.Type === "CustomerAnnotations" && p.Annotations?.some((a) => a.IntentId?.startsWith("cooking-mode/")))
       .map((p) => p.PreparationStepIndex),
   );
-  return expectedGuidedIndexes.filter((i) => !guided.has(i));
+  return expectedGuidedIndexes.filter((i) => {
+    if (!guided.has(i)) return true;
+    // Sans payload, le CLI historique ne peut contrôler que la présence du guidage.
+    const expected = instructions?.[i]?.annotations.filter((a) => a.type !== "INGREDIENT");
+    if (!expected) return false;
+    return expected.some((a) => {
+      const intent = a.type === "MODE"
+        ? a.name === "dough" ? "cooking-mode/Dough"
+          : a.name === "browning" ? `cooking-mode/HighTemperature_${a.data.power === "Gentle" ? "MediumPower" : "FullPower"}` : null
+        : (a.data.temperature as { value?: string } | undefined)?.value === "varoma"
+        ? "cooking-mode/Steaming" : "cooking-mode/ManualValues";
+      if (!intent) return true; // Un mode inconnu ne constitue jamais une preuve.
+      return !prompts.some((p) => p.Type === "CustomerAnnotations" && p.PreparationStepIndex === i &&
+        p.Annotations?.some((actual) => actual.IntentId === intent &&
+          (a.data.time === undefined || actual.Parameters?.some((parameter) =>
+            parameter.Name === "Time" && Number(parameter.Value) === a.data.time))));
+    });
+  });
 }
 
 export function deleteRecipe(ctx: ClientCtx, id: string): Promise<unknown> {

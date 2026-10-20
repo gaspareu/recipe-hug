@@ -1,30 +1,12 @@
 /** Préparation réversible : seule la copie exportée reçoit les réglages proposés. */
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-import { buildTm7ReferenceForPrompt, normalizeSpeed, TM7_MAX_SECONDS } from "../thermomix/reference.ts";
 import { parseStepAnnotations } from "./mapper.ts";
 import { isExplicitlyManual } from "./quality.ts";
 import { formatExportSettings } from "./settings.ts";
 import type { Recipe } from "./types.ts";
 
-export const MachineSchema = z.object({
-  mode: z.enum(["mix", "chop", "grate", "knead", "steam", "slow_cook", "high_temp", "warm", "emulsify", "thicken", "sauce", "cook"]),
-  seconds: z.number().int().min(1).max(TM7_MAX_SECONDS),
-  temperature: z.union([z.number().min(37).max(160), z.literal("Varoma")]).optional(),
-  speed: z.string().refine((s) => normalizeSpeed(s) === s && s !== "Turbo", "Vitesse invalide").optional(),
-  reverse: z.boolean().optional(),
-  accessory: z.enum(["blade", "butterfly", "basket", "varoma", "spatula", "measuring_cup"]).optional(),
-  power: z.enum(["Intense", "Gentle"]).optional(),
-}).strict().superRefine((p, ctx) => {
-  const invalid = (message: string) => ctx.addIssue({ code: "custom", message });
-  if (p.mode === "knead" && (p.speed || p.temperature !== undefined || p.reverse)) invalid("Pétrin : durée seule");
-  if (!["knead", "high_temp"].includes(p.mode) && !p.speed) invalid("Vitesse requise");
-  if ((p.mode === "steam" || p.temperature === "Varoma" || p.accessory === "varoma") &&
-    p.speed && Number(p.speed) > 5) invalid("Vapeur : vitesse maximale 5");
-  if (p.accessory === "butterfly" && p.speed && Number(p.speed) > 4) invalid("Fouet : vitesse maximale 4");
-  if (p.mode === "high_temp" && (typeof p.temperature !== "number" || p.temperature < 140)) invalid("Rissolage : 140 à 160°C");
-  if (p.mode === "high_temp" && p.speed) invalid("Rissoler ne porte pas de vitesse manuelle");
-  if (p.power && p.mode !== "high_temp") invalid("Puissance réservée au rissolage");
-});
+import { MachineSchema, buildCookidooMachinePrompt } from "./machine-contract.ts";
+export { MachineSchema } from "./machine-contract.ts";
 
 /** Vérifie les données JSON de la base avant de les mapper ou de les envoyer à l'IA. */
 export const ExportSourceSchema = z.object({
@@ -70,7 +52,7 @@ N'invente pas d'ingrédient, de quantité ni de conversion en grammes. Toute amb
 Modes permis : mix, chop, grate, knead, steam, slow_cook, high_temp, warm, emulsify, thicken, sauce, cook.
 Pétrin : mode knead, seconds seulement. Rissoler : high_temp, 140 à 160°C, power Intense ou Gentle. Autres actions : durée et vitesse requises, sans Turbo. Fouet : vitesse <=4. Vapeur : vitesse <=5.
 Les réglages sont des PROPOSITIONS que l'utilisateur vérifiera avant l'envoi, jamais une promesse de recette officielle Vorwerk.
-${buildTm7ReferenceForPrompt()}`;
+${buildCookidooMachinePrompt()}`;
 
 /** Préserve tous les faits de la source ; l'IA ne peut que ajouter des paramètres bornés. */
 export function applyPreparation(source: Recipe, output: string): { recipe: Recipe; notes: string[] } {
