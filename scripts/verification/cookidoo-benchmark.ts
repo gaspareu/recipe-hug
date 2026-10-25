@@ -4,7 +4,7 @@ import {
   type ChatMessage,
 } from "../../supabase/functions/_shared/ai-providers.ts";
 import { generateAdaptation } from "../../supabase/functions/_shared/cookidoo/adaptation-generation.ts";
-import { ADAPTATION_JSON_SCHEMA } from "../../supabase/functions/_shared/cookidoo/adaptation-format.ts";
+import { ADAPTATION_JSON_SCHEMA, ADAPTATION_REPAIR_JSON_SCHEMA } from "../../supabase/functions/_shared/cookidoo/adaptation-format.ts";
 import { adaptationFailureDiagnostic } from "../../supabase/functions/_shared/cookidoo/adaptation-diagnostics.ts";
 import {
   type BenchmarkSample,
@@ -183,7 +183,7 @@ for (let round = 0; round < rounds; round++) {
         | ReturnType<typeof adaptationFailureDiagnostic>
         | undefined;
       const generate =
-        (model: string) => (messages: ChatMessage[], signal: AbortSignal) => {
+        (model: string) => (messages: ChatMessage[], signal: AbortSignal, phase: "generate" | "repair") => {
           sample.calls++;
           return callAINonStreaming(
             {
@@ -195,7 +195,7 @@ for (let round = 0; round < rounds; round++) {
             messages,
             signal,
             {
-              jsonSchema: ADAPTATION_JSON_SCHEMA,
+              jsonSchema: phase === "repair" ? ADAPTATION_REPAIR_JSON_SCHEMA : ADAPTATION_JSON_SCHEMA,
               onUsage: (usage) => {
                 sample.input_tokens += usage.input_tokens;
                 sample.output_tokens += usage.output_tokens;
@@ -214,8 +214,8 @@ for (let round = 0; round < rounds; round++) {
           },
         });
         needsInput = result.blockers.length > 0;
-        const payload = mapRecipeToCookidoo(result.recipe);
-        sample.ok = !needsInput && validateCookidooPayload(payload).ok &&
+        const payload = result.recipe ? mapRecipeToCookidoo(result.recipe) : null;
+        sample.ok = !!payload && !needsInput && validateCookidooPayload(payload).ok &&
           payload.instructions.some((s) =>
             s.annotations.some((a) => a.type !== "INGREDIENT")
           );

@@ -2,7 +2,7 @@
 
 Le script `cookidoo-benchmark.ts` utilise cinq recettes **synthétiques** (pizza,
 salade, crêpes, buns, vapeur). Il ne lit pas la production, n'écrit pas dans
-Supabase et ne contacte jamais Cookidoo. Il utilise le contrat compact v3 et les
+Supabase et ne contacte jamais Cookidoo. Il utilise le contrat compact v4 et les
 mêmes contrôles de génération, quantités, mapping et validation que le parcours
 applicatif. La revue culinaire et le contrôle appareil restent indispensables.
 
@@ -29,7 +29,10 @@ sur chaque compte. Aucun paramètre de modèle n'est changé dans l'application.
 
 Chaque politique dispose du même délai de 60 secondes et d'au plus deux appels :
 Sonnet → réparation Sonnet, ou Haiku → réparation Sonnet. Une erreur fournisseur
-ne déclenche pas de réparation ; une proposition invalide ne devient jamais un
+ne déclenche pas de réparation. Le second appel renvoie uniquement un patch des
+étapes signalées, suivi d'une validation globale. Un JSON inexploitable ou une
+erreur sans périmètre fiable ne déclenche pas de régénération complète. Un patch
+refusé demande une précision, sans recette exécutable ; il ne compte jamais comme
 résultat réussi. L'ordre des politiques alterne entre les passages.
 
 Le résumé donne le nombre de résultats valides, les succès au premier appel,

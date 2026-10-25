@@ -28,6 +28,8 @@ export interface Step {
   parallel_with?: number[];
   /** Paramètres machine TM7 (miroir de src/types/recipe.ts). */
   tm7?: Tm7StepParams;
+  /** Décision manuelle validée pour la copie Cookidoo : aucun repli regex machine. */
+  manual_only?: boolean;
 }
 
 export interface Recipe {
