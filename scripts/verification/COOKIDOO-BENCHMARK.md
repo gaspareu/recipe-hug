@@ -2,7 +2,7 @@
 
 Le script `cookidoo-benchmark.ts` utilise cinq recettes **synthétiques** (pizza,
 salade, crêpes, buns, vapeur). Il ne lit pas la production, n'écrit pas dans
-Supabase et ne contacte jamais Cookidoo. Il utilise le contrat compact v4 et les
+Supabase et ne contacte jamais Cookidoo. Il utilise le contrat compact v5 et les
 mêmes contrôles de génération, quantités, mapping et validation que le parcours
 applicatif. La revue culinaire et le contrôle appareil restent indispensables.
 
@@ -15,7 +15,7 @@ deno run --config supabase/functions/deno.json --frozen scripts/verification/coo
 ```
 
 Avec une clé Anthropic déjà injectée dans l'environnement (ne jamais la mettre en
-argument de commande ni dans le dépôt), première passe bornée à vingt appels :
+argument de commande ni dans le dépôt), première passe bornée à quarante appels :
 
 ```sh
 deno run --config supabase/functions/deno.json --frozen --allow-env=ANTHROPIC_API_KEY --allow-net=api.anthropic.com scripts/verification/cookidoo-benchmark.ts --live --rounds 1
@@ -27,13 +27,14 @@ sont `claude-haiku-5-5` et `claude-sonnet-5-5`, listées dans la documentation
 Anthropic consultée le 19 octobre 2026. Cela ne vérifie pas leur disponibilité
 sur chaque compte. Aucun paramètre de modèle n'est changé dans l'application.
 
-Chaque politique dispose du même délai de 60 secondes et d'au plus deux appels :
-Sonnet → réparation Sonnet, ou Haiku → réparation Sonnet. Une erreur fournisseur
-ne déclenche pas de réparation. Le second appel renvoie uniquement un patch des
-étapes signalées, suivi d'une validation globale. Un JSON inexploitable ou une
-erreur sans périmètre fiable ne déclenche pas de régénération complète. Un patch
-refusé demande une précision, sans recette exécutable ; il ne compte jamais comme
-résultat réussi. L'ordre des politiques alterne entre les passages.
+Chaque politique dispose du même délai de 60 secondes et d'au plus quatre appels :
+une génération Sonnet ou Haiku, puis jusqu'à trois corrections Sonnet. Une erreur
+fournisseur ne déclenche pas de retry. Chaque correction est un patch des étapes
+signalées du candidat courant, suivi d'une validation globale. Un JSON inexploitable,
+un patch interdit, une répétition ou une erreur sans périmètre fiable arrêtent la
+boucle. Un échec technique retourne `failed`, sans recette exécutable et sans
+précision culinaire imposée ; il ne compte jamais comme résultat réussi.
+L'ordre des politiques alterne entre les passages.
 
 Le résumé donne le nombre de résultats valides, les succès au premier appel,
 la fréquence du second appel, la médiane et le p95 des **résultats valides**, les

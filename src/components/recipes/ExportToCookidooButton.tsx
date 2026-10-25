@@ -110,7 +110,7 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
             {adaptation.request_context?.clarifications?.map((text, i) => <p key={i}>Précision conservée : {text}</p>)}
             <Button disabled={busy || (!water && !clarifications.trim())} onClick={() => void perform(() => flow.prepare.mutateAsync({ ...(water ? { technical_water_ml: Number(water) } : {}), clarifications: clarifications.trim() }), 'Adaptation impossible pour le moment')}>Compléter la version</Button>
           </div>}
-          {adaptation?.status === 'failed' && <p role="alert">{cookidooErrorMessage(adaptation.error_code)}</p>}
+          {adaptation?.status === 'failed' && <div role="alert" className="space-y-2"><p className="font-medium">L’adaptation n’a pas abouti</p>{adaptation.blockers.length ? <ul className="list-disc pl-5">{adaptation.blockers.map((text, i) => <li key={i}>{text}</li>)}</ul> : <p>{cookidooErrorMessage(adaptation.error_code)}</p>}</div>}
           {job?.status === 'failed' && <div role="alert" className="space-y-2"><p>{cookidooErrorMessage(job.error_code)}</p>
             {job.error_code === 'remote_changed' && <Label className="flex items-start gap-2"><input type="checkbox" checked={replaceRemote} onChange={e => setReplaceJob(e.target.checked ? job.id : null)} />Remplacer les modifications faites dans Cookidoo par cette version.</Label>}
             {['destination_missing', 'partial_created'].includes(job.error_code ?? '') && <Label className="flex items-start gap-2"><input type="checkbox" checked={recreateRemote} onChange={e => setRecreateJob(e.target.checked ? job.id : null)} />J’ai vérifié que la recette précédente est supprimée. Créer une nouvelle recette dans Cookidoo.</Label>}

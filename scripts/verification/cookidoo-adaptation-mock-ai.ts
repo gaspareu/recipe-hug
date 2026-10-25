@@ -1,4 +1,4 @@
-/** Bootstrap de test local : Supabase dev réel, fournisseur IA simulé, Cookidoo bloqué. */
+/** Test local : DB/auth dev réels, quota et IA simulés, Cookidoo bloqué. */
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
   const target = typeof input === "string"
@@ -9,9 +9,17 @@ globalThis.fetch = async (input, init) => {
   if (/cookidoo\.fr|vorwerk|cloudinary/.test(target)) {
     throw new Error("Le test interdit tout accès Cookidoo.");
   }
+  // Les régressions ne consomment pas le quota quotidien du compte de test.
+  // Ce bootstrap est exclusivement local ; la fonction déployée garde sa RPC réelle.
+  if (target.endsWith("/rest/v1/rpc/consume_cookidoo_preparation_quota")) {
+    return new Response("true", { headers: { "Content-Type": "application/json" } });
+  }
   if (target === "https://api.anthropic.com/v1/messages") {
     const body = JSON.parse(String(init?.body));
     const request = JSON.parse(body.messages[0].content);
+    if (request.clarifications?.includes("VERIFY_PROVIDER_FAILURE")) {
+      return new Response(JSON.stringify({ error: { type: "overloaded_error", message: "Simulation" } }), { status: 503 });
+    }
     const recipe = request.recipe;
     const uses = recipe.ingredients.map((
       ingredient: { quantity: number },
@@ -103,7 +111,7 @@ globalThis.fetch = async (input, init) => {
             steps,
             changes: ["Pétrissage dans le bol."],
             notes: [],
-            blockers: [],
+            blockers: request.clarifications?.includes("VERIFY_NEEDS_INPUT") ? ["Souhaitez-vous conserver le façonnage manuel ?"] : [],
           }),
         }],
       }),

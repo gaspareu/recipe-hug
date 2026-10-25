@@ -40,7 +40,7 @@ import {
   adaptationFailureDiagnostic,
   type AdaptationStage,
 } from "../_shared/cookidoo/adaptation-diagnostics.ts";
-import { generateAdaptation } from "../_shared/cookidoo/adaptation-generation.ts";
+import { generateAdaptation, ADAPTATION_TIMEOUT_MS } from "../_shared/cookidoo/adaptation-generation.ts";
 import { ExportSourceSchema } from "../_shared/cookidoo/preparation.ts";
 import {
   ADAPTER_VERSION,
@@ -59,6 +59,11 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 const fail = (error: string) => json({ ok: false, error });
+/** Une tentative échouée ne conserve jamais l'aperçu ni les questions précédents. */
+function failedPreparation(code: string, blockers: string[] = []) {
+  return { status: "failed" as const, error_code: code, adapted_recipe: null,
+    changes: [], notes: [], blockers, updated_at: new Date().toISOString() };
+}
 const ops: CookidooOps = {
   getRecipe,
   createRecipe,
@@ -233,16 +238,13 @@ serve(async (req) => {
       stored?.status === "preparing" &&
       Date.parse(stored.lease_until) < Date.now()
     ) {
-      const { error } = await admin.from("recipe_cookidoo_adaptations").update({
-        status: "failed",
-        error_code: "adaptation_failed",
-        updated_at: new Date().toISOString(),
-      }).eq("id", stored.id).eq("attempt_id", stored.attempt_id).eq(
+      const expired = failedPreparation("adaptation_failed", ["L’adaptation a expiré. Vous pouvez la relancer ; aucun envoi n’a été effectué."]);
+      const { error } = await admin.from("recipe_cookidoo_adaptations").update(expired).eq("id", stored.id).eq("attempt_id", stored.attempt_id).eq(
         "status",
         "preparing",
       );
       if (error) return fail("service_unavailable");
-      stored = { ...stored, status: "failed", error_code: "adaptation_failed" };
+      stored = { ...stored, ...expired };
     }
     async function preview(value: AdaptationRow | null, reused = true) {
       if (!value) return { ok: true, adaptation: null, job: safeJob(job) };
@@ -356,7 +358,7 @@ serve(async (req) => {
               source,
               technicalWaterMl: effectiveWater,
               clarifications: effectiveClarifications,
-              signal: AbortSignal.timeout(60000),
+              signal: AbortSignal.timeout(ADAPTATION_TIMEOUT_MS),
               generate: (messages, signal, phase) =>
                 callAINonStreaming(config, messages, signal, { jsonSchema: phase === "repair" ? ADAPTATION_REPAIR_JSON_SCHEMA : ADAPTATION_JSON_SCHEMA }),
               onEvent: (event) => {
@@ -377,7 +379,8 @@ serve(async (req) => {
             const { error: writeError } = await admin.from(
               "recipe_cookidoo_adaptations",
             ).update({
-              status: candidate.blockers.length ? "needs_input" : "ready",
+              status: candidate.status,
+              error_code: candidate.status === "failed" ? "adaptation_failed" : null,
               adapted_recipe: candidate.recipe,
               changes: candidate.changes,
               notes: candidate.notes,
@@ -391,7 +394,7 @@ serve(async (req) => {
               JSON.stringify({
                 event: "completed",
                 ...logContext,
-                status: candidate.blockers.length ? "needs_input" : "ready",
+                status: candidate.status,
                 duration_ms: Date.now() - startedAt,
               }),
             );
@@ -419,11 +422,13 @@ serve(async (req) => {
             );
             const { error: writeError } = await admin.from(
               "recipe_cookidoo_adaptations",
-            ).update({
-              status: "failed",
-              error_code: code,
-              updated_at: new Date().toISOString(),
-            }).eq("id", adaptation.id).eq("attempt_id", adaptation.attempt_id)
+            ).update(failedPreparation(code,
+              error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)
+                ? ["Le service d’adaptation n’a pas terminé dans le délai prévu. Aucun envoi n’a été effectué."]
+                : diagnostic.reason === "provider_http_error"
+                ? ["Le service d’adaptation est momentanément indisponible. Vous pouvez réessayer sans ajouter de précision."]
+                : []
+            )).eq("id", adaptation.id).eq("attempt_id", adaptation.attempt_id)
               .eq("status", "preparing");
             if (writeError) {
               console.error(

@@ -3,7 +3,7 @@ import {
   callAINonStreaming,
   type ChatMessage,
 } from "../../supabase/functions/_shared/ai-providers.ts";
-import { generateAdaptation } from "../../supabase/functions/_shared/cookidoo/adaptation-generation.ts";
+import { generateAdaptation, ADAPTATION_TIMEOUT_MS } from "../../supabase/functions/_shared/cookidoo/adaptation-generation.ts";
 import { ADAPTATION_JSON_SCHEMA, ADAPTATION_REPAIR_JSON_SCHEMA } from "../../supabase/functions/_shared/cookidoo/adaptation-format.ts";
 import { adaptationFailureDiagnostic } from "../../supabase/functions/_shared/cookidoo/adaptation-diagnostics.ts";
 import {
@@ -206,7 +206,7 @@ for (let round = 0; round < rounds; round++) {
       try {
         const result = await generateAdaptation({
           ...fixture,
-          signal: AbortSignal.timeout(60000),
+          signal: AbortSignal.timeout(ADAPTATION_TIMEOUT_MS),
           generate: generate(policy.first),
           repair: generate(policy.repair),
           onEvent: (e) => {
