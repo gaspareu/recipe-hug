@@ -1,6 +1,7 @@
 /** Diagnostic fermé : ne jamais journaliser l'exception ou la sortie IA brute. */
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
+import { PlanError, PLAN_REASONS } from "./plan-errors.ts";
 import { MACHINE_RULES } from "./machine-contract.ts";
 
 export type AdaptationStage =
@@ -56,6 +57,10 @@ const REASONS = new Map([
 ]);
 const FIELDS = new Set([
   "steps",
+  "kind",
+  "preparation_from",
+  "edits",
+  "index",
   "source_orders",
   "source_parts",
   "order",
@@ -83,6 +88,13 @@ export function adaptationFailureDiagnostic(
   error: unknown,
   stage: AdaptationStage,
 ) {
+  if (stage === "validation" && error instanceof PlanError && PLAN_REASONS.includes(error.reason)) {
+    return { stage, reason: error.reason,
+      step_indexes: error.step_indexes.filter((i) => Number.isInteger(i) && i >= 0 && i <= 100).slice(0, 100),
+      source_parts: error.source_parts.filter((r) => Number.isInteger(r.order) && r.order > 0 && Number.isInteger(r.part) && r.part >= 0).slice(0, 10),
+      ingredient_indexes: error.ingredient_indexes.filter((i) => Number.isInteger(i) && i >= 0 && i < 200).slice(0, 20),
+    };
+  }
   if (stage === "validation" && error instanceof z.ZodError) {
     return {
       stage,

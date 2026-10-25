@@ -165,7 +165,7 @@ Deno.test("ingrédient partagé : omission de quantité refusée, jamais une ré
   assertThrows(
     () => applyAdaptation(source, JSON.stringify(shared)),
     Error,
-    "Mesure manquante",
+    "ingredient_mismatch",
   );
 });
 
@@ -258,19 +258,24 @@ Deno.test("vue appareil : texte seul, autre mode ou autre durée ne prouvent pas
 Deno.test("banc d'essai : le repli n'intervient qu'une fois après une réponse invalide", async () => {
   let smallCalls = 0;
   let largeCalls = 0;
+  const valid = { ...output(), steps: output().steps.map((s, index) => ({ ...s,
+    kind: index === 0 ? "replace" : "keep",
+    source_parts: index === 0 ? [{ order: 1, part: 0 }] : s.source_parts,
+  })) };
+  const invalid = { ...valid, steps: [{ ...valid.steps[0], tm7: { mode: "knead", seconds: -1 } }, valid.steps[1]] };
   const result = await generateAdaptation({
     source,
     signal: new AbortController().signal,
     generate: () => {
       smallCalls++;
-      return Promise.resolve("{}");
+      return Promise.resolve(JSON.stringify(invalid));
     },
     repair: () => {
       largeCalls++;
-      return Promise.resolve(JSON.stringify(output()));
+      return Promise.resolve(JSON.stringify({ edits: [{ index: 0, steps: [valid.steps[0]] }] }));
     },
   });
-  assertEquals(result.recipe.steps[0].tm7?.mode, "knead");
+  assertEquals(result.recipe!.steps[0].tm7?.mode, "knead");
   assertEquals([smallCalls, largeCalls], [1, 1]);
 });
 

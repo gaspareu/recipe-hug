@@ -1,3 +1,4 @@
+import { isSteamAction } from "./settings.ts";
 /**
  * Transformation recette recipe-hug → payload Cookidoo (/created-recipes).
  *
@@ -230,8 +231,7 @@ function ttsFromTm7(text: string, tm7: Tm7StepParams, span: Span | null): Annota
   }
 
   // Varoma : mode vapeur, température « Varoma » explicite, ou accessoire Varoma.
-  const usesVaroma =
-    tm7.mode === "steam" || tm7.temperature === VAROMA || tm7.accessory === "varoma";
+  const usesVaroma = isSteamAction(tm7);
 
   const speed = normalizeSpeed(tm7.speed);
   if (speed) {
@@ -364,6 +364,7 @@ function ingredientAnnotations(text: string, ingredients: Ingredient[], steps: S
  */
 function buildStepAnnotations(step: Step, ingredients: Ingredient[], steps: Step[]): Annotation[] {
   const text = step.text.trim();
+  if (step.manual_only) return ingredientAnnotations(text, ingredients, steps);
   // Les champs structurés gardent leurs empans d'origine : masquer une durée
   // de pétrissage ferait couvrir toute la phrase à MODE, y compris l'ingrédient.
   const suffix = step.tm7 ? text.lastIndexOf("\nRéglages TM7 :") : -1;

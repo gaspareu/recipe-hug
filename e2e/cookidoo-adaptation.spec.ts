@@ -47,3 +47,35 @@ for (const width of [1280, 390]) {
     } finally { await deleteRecipesByTitle(client, title); }
   });
 }
+
+test('Cookidoo : une autocorrection refusée demande une précision sans proposer d’envoi', async ({ page }) => {
+  const client = await createTestUserClient();
+  const { data: { user } } = await client.auth.getUser();
+  const title = `E2E Cookidoo correction ${Date.now()}`;
+  const { data: recipe, error } = await client.from('recipes').insert({ title, user_id: user!.id, servings: 4, ingredients: [{ name: 'farine', quantity: 300, unit: 'g' }], steps: [{ order: 1, text: 'Mélanger la farine dans un saladier.' }] }).select('id').single();
+  expect(error).toBeNull();
+  let prepared = false, clarified = false, sends = 0;
+  const blocker = 'La correction automatique n’a pas permis de valider cette adaptation. Précisez les actions à conserver manuelles.';
+  const state = () => ({ ok: true, has_destination: false, job: null, adaptation: prepared ? { id: 'correction-a1', status: clarified ? 'ready' : 'needs_input', recipe: clarified ? { title, ingredients: [{ name: 'farine', quantity: 300, unit: 'g' }], steps: [{ order: 1, text: 'Mélanger la farine dans un saladier.' }] } : null, ingredients: [], guided_steps: 0, changes: [], notes: [], blockers: clarified ? [] : [blocker], confirmation: clarified ? { token: 'test', expires_at: Date.now() + 900000 } : null, error_code: null, reused: false } : null });
+  await page.route('**/functions/v1/manage-cookidoo-credentials', route => route.fulfill({ json: { configured: true } }));
+  await page.route('**/functions/v1/export-recipe-cookidoo', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { capabilities: ['cookidoo_adaptation_v2'] } });
+    const body = route.request().postDataJSON();
+    if (body.action === 'prepare') { prepared = true; clarified = body.clarifications === 'Conserver le mélange au saladier.'; }
+    if (body.action === 'send') sends++;
+    return route.fulfill({ json: state() });
+  });
+  try {
+    await page.goto(`/recipes/${recipe!.id}`);
+    await page.getByRole('button', { name: "Plus d'actions" }).click();
+    await page.getByRole('menuitem', { name: 'Envoyer vers Cookidoo' }).click();
+    await page.getByRole('button', { name: 'Préparer la version Cookidoo' }).click();
+    await expect(page.getByText(blocker)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Envoyer cette version' })).toHaveCount(0);
+    expect(sends).toBe(0);
+    await page.getByLabel('Précisions pour cette version Cookidoo').fill('Conserver le mélange au saladier.');
+    await page.getByRole('button', { name: 'Compléter la version' }).click();
+    await expect(page.getByRole('button', { name: 'Envoyer cette version' })).toBeVisible();
+    expect(sends).toBe(0);
+  } finally { await deleteRecipesByTitle(client, title); }
+});

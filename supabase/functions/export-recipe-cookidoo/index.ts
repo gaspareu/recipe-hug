@@ -21,7 +21,7 @@ import {
   sleep,
   uploadRecipeImage,
 } from "../_shared/cookidoo/client.ts";
-import { ADAPTATION_JSON_SCHEMA } from "../_shared/cookidoo/adaptation-format.ts";
+import { ADAPTATION_JSON_SCHEMA, ADAPTATION_REPAIR_JSON_SCHEMA } from "../_shared/cookidoo/adaptation-format.ts";
 import { mapRecipeToCookidoo } from "../_shared/cookidoo/mapper.ts";
 import { validateCookidooPayload } from "../_shared/cookidoo/validate.ts";
 import { buildExportDiagnostics } from "../_shared/cookidoo/diagnostics.ts";
@@ -357,8 +357,8 @@ serve(async (req) => {
               technicalWaterMl: effectiveWater,
               clarifications: effectiveClarifications,
               signal: AbortSignal.timeout(60000),
-              generate: (messages, signal) =>
-                callAINonStreaming(config, messages, signal, { jsonSchema: ADAPTATION_JSON_SCHEMA }),
+              generate: (messages, signal, phase) =>
+                callAINonStreaming(config, messages, signal, { jsonSchema: phase === "repair" ? ADAPTATION_REPAIR_JSON_SCHEMA : ADAPTATION_JSON_SCHEMA }),
               onEvent: (event) => {
                 stage = event.event === "generation"
                   ? "generation"
@@ -373,11 +373,6 @@ serve(async (req) => {
                 );
               },
             });
-            stage = "mapping";
-            const payload = mapRecipeToCookidoo(candidate.recipe);
-            if (!validateCookidooPayload(payload).ok) {
-              throw new Error("adaptation_failed");
-            }
             stage = "persistence";
             const { error: writeError } = await admin.from(
               "recipe_cookidoo_adaptations",

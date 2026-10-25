@@ -77,14 +77,14 @@ Deno.test("rejette une quantité changée, un ingrédient ou une action omis", (
   assertThrows(
     () => applyAdaptation(source, JSON.stringify(changed)),
     Error,
-    "quantités",
+    "ingredient_mismatch",
   );
   const missing = output();
   missing.steps[0].uses.pop();
   assertThrows(
     () => applyAdaptation(source, JSON.stringify(missing)),
     Error,
-    "ingrédient",
+    "ingredient_mismatch",
   );
   const action = output();
   action.steps = action.steps.slice(0, 1);

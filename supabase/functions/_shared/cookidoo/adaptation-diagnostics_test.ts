@@ -71,7 +71,10 @@ Deno.test("diagnostic : les contraintes métier identifient la cause réelle", (
   );
   assertEquals(adaptationFailureDiagnostic(error, "validation"), {
     stage: "validation",
-    reason: "quantities_changed",
+    reason: "ingredient_mismatch",
+    step_indexes: [0],
+    source_parts: [],
+    ingredient_indexes: [0],
   });
   output.steps[0].uses[0].quantity = 300;
   output.steps[0].text = "Reformulation manuelle.";
