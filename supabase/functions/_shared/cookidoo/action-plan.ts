@@ -245,6 +245,9 @@ export function validateActionPlan(
           [...new Set([index, ...related])],
           step.source_parts,
           [ingredient_index],
+          related.some((i) => i < index)
+            ? "preparation_reference_required"
+            : "ingredient_missing",
         );
       });
     }

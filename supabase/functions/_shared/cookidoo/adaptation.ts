@@ -10,7 +10,7 @@ import { resolveIngredientUses } from "./ingredient-uses.ts";
 import { formatExportSettings, isSteamAction } from "./settings.ts";
 import type { Recipe } from "./types.ts";
 
-export const ADAPTER_VERSION = "cookidoo-classic-v4";
+export const ADAPTER_VERSION = "cookidoo-classic-v5";
 export interface Adaptation {
   recipe: Recipe;
   changes: string[];
@@ -42,7 +42,7 @@ uses indique les ingrédients NOUVELLEMENT AJOUTÉS, y compris dans les actions 
 preparation_from:[{"order":1,"part":0}] reprend le résultat d'une action antérieure, sans recompter ses ingrédients. Une reprise dans un autre récipient nécessite d'abord kind:"transfer", preparation_from, source_orders, source_parts:[], tm7:null, uses:[], manual_action:"transfer_to_bowl" (préparation réservée vers bol), "empty_bowl" (tout le bol vers récipient) ou "transfer_to_varoma". Aucun transfert de préparation future ou déjà au même endroit. Les actions manuelles sont hors bol ; les actions machine hors vapeur sont dans le bol. Réserve et vide le bol avant lavage ou eau technique.
 kind:"technical" est réservé au lavage (manual_action:"wash_bowl", uses:[]) ou à l'eau technique (manual_action:"add_steam_water", uses avec le seul dernier ingrédient eau), avec source_parts:[], source_orders et tm7:null.
 Four, repos, façonnage, refroidissement et dressage restent manuels. N'introduis pas de vapeur si technical_water_ml manque : conserve la cuisson source manuelle. Si une vapeur a été explicitement précisée, l'eau technique est le dernier ingrédient ; elle va seule dans le bol vidé, avant vapeur, jamais dans la pâte. Ne réutilise pas ce bol pour un autre mode sans le vider.
-Ne choisis pas de réglage ni de capacité incertains. Conserve la partie manuelle fidèle ou indique le besoin dans blockers. duration_minutes est facultatif. changes et notes sont courts. Proposition à confirmer, pas recette officielle Vorwerk.
+Ne choisis pas de réglage ni de capacité incertains. Conserve la partie manuelle fidèle ou indique le besoin dans blockers. Un blocker pose une question concrète sur une information culinaire réellement manquante ; les erreurs de format, références et calculs se corrigent dans le plan, sans demander à l'utilisateur de les résoudre. duration_minutes est facultatif. changes et notes sont courts. Proposition à confirmer, pas recette officielle Vorwerk.
 ${buildCookidooMachinePrompt()}`;
 
 function canonical(value: unknown): unknown {

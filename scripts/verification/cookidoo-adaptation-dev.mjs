@@ -67,4 +67,29 @@ for (const [index, source] of recipes.entries()) {
   }
 }
 
+if (localMock) {
+  const { data: row, error } = await client.from('recipes').insert({ ...recipes[0], title: `VERIFY reprise ${Date.now()}`, user_id: auth.user.id }).select('id').single();
+  assert.ifError(error);
+  try {
+    await invoke({ action: 'prepare', recipe_id: row.id, clarifications: 'VERIFY_NEEDS_INPUT' });
+    const blocked = await finish(row.id);
+    assert.equal(blocked.adaptation.status, 'needs_input');
+    assert(blocked.adaptation.recipe);
+    assert(blocked.adaptation.blockers[0].includes('façonnage'));
+    await invoke({ action: 'prepare', recipe_id: row.id, clarifications: 'VERIFY_PROVIDER_FAILURE' });
+    const failed = await finish(row.id);
+    assert.equal(failed.adaptation.status, 'failed');
+    assert.equal(failed.adaptation.recipe, null);
+    assert.equal(failed.adaptation.confirmation, null);
+    assert.deepEqual(failed.adaptation.changes, []);
+    assert.deepEqual(failed.adaptation.notes, []);
+    assert(failed.adaptation.blockers.some(text => text.includes('momentanément indisponible')));
+    assert(!failed.adaptation.blockers.some(text => text.includes('façonnage')));
+    assert(failed.adaptation.request_context.clarifications.includes('VERIFY_PROVIDER_FAILURE'));
+    console.log('OK Reprise après précision puis erreur fournisseur : ancien aperçu et questions effacés, contexte conservé, aucun envoi.');
+  } finally {
+    const { error: cleanupError } = await client.from('recipes').delete().eq('id', row.id);
+    assert.ifError(cleanupError);
+  }
+}
 server?.kill();

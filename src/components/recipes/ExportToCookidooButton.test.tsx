@@ -63,3 +63,16 @@ it('un accord de remplacement ne s’applique pas à une tentative ultérieure',
   expect(screen.getByLabelText(/Remplacer les modifications/)).not.toBeChecked();
   expect(screen.getByRole('button', { name: 'Mettre à jour sur Cookidoo' })).toBeDisabled();
 });
+
+it('un échec technique explique le blocage et permet de relancer sans eau ni commentaire', async () => {
+  vi.clearAllMocks(); sessionStorage.clear();
+  Object.assign(state, { adaptation: { ...ready, recipe: null, status: 'failed', error_code: 'adaptation_failed', blockers: ['Un ingrédient partagé n’a pas de répartition complète. Ingrédient : sel.'] }, job: null, hasDestination: false });
+  renderButton();
+  expect(screen.getByRole('alert')).toHaveTextContent('Ingrédient : sel');
+  expect(screen.queryByLabelText(/Eau dans le bol/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/Précisions pour/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Envoyer cette version' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Réessayer l’adaptation' }));
+  await waitFor(() => expect(prepare).toHaveBeenCalledWith({}));
+  expect(send).not.toHaveBeenCalled();
+});

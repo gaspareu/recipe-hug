@@ -16,6 +16,17 @@ export const PLAN_REASONS = [
   "invalid_repair",
 ] as const;
 export type PlanReason = typeof PLAN_REASONS[number];
+export const INGREDIENT_RULES = [
+  "preparation_reference_required",
+  "ingredient_missing",
+  "invalid_ingredient",
+  "duplicate_use",
+  "missing_quantity",
+  "unknown_quantity",
+  "non_positive_quantity",
+  "total_quantity_changed",
+] as const;
+export type IngredientRule = typeof INGREDIENT_RULES[number];
 export interface SourcePart {
   order: number;
   part: number;
@@ -26,6 +37,7 @@ export class PlanError extends Error {
     readonly step_indexes: number[],
     readonly source_parts: SourcePart[] = [],
     readonly ingredient_indexes: number[] = [],
+    readonly rule?: IngredientRule,
   ) {
     super(reason);
     this.name = "PlanError";

@@ -72,6 +72,7 @@ Deno.test("diagnostic : les contraintes métier identifient la cause réelle", (
   assertEquals(adaptationFailureDiagnostic(error, "validation"), {
     stage: "validation",
     reason: "ingredient_mismatch",
+    rule: "total_quantity_changed",
     step_indexes: [0],
     source_parts: [],
     ingredient_indexes: [0],
