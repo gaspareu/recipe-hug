@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { UtensilsCrossed, Loader2, ExternalLink } from 'lucide-react';
+import { UtensilsCrossed, Loader2, ExternalLink, Check, ArrowRight } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCookidooConnector } from '@/hooks/useCookidooConnector';
 import { useCookidooExport, CookidooError } from '@/hooks/useCookidooExport';
+import { CookidooActivity } from './CookidooActivity';
+import { useCookidooClock } from '@/hooks/useCookidooClock';
 import { cookidooErrorMessage, COOKIDOO_WARNINGS } from '@/lib/cookidoo-messages';
 
 interface Props { recipeId: string; open?: boolean; onOpenChange?: (open: boolean) => void; showTrigger?: boolean }
@@ -31,6 +33,11 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
   const open = controlledOpen ?? internalOpen;
   const setOpen = (value: boolean) => { if (value) void flow.refresh(); if (controlledOpen === undefined) setInternalOpen(value); onOpenChange?.(value); };
   const busy = flow.prepare.isPending || flow.send.isPending || adaptation?.status === 'preparing' || job?.status === 'pending';
+
+  const adapting = flow.prepare.isPending || adaptation?.status === 'preparing';
+  const sending = flow.send.isPending || job?.status === 'pending';
+  const now = useCookidooClock(open && !!adaptation?.retry_at);
+  const cooldown = adaptation?.error_code === 'preparation_rate_limited' && !!adaptation.retry_at && Date.parse(adaptation.retry_at) > now;
 
   useEffect(() => { if (open) void refresh(); }, [open, refresh]);
 
@@ -81,19 +88,34 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
           {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <UtensilsCrossed className="h-4 w-4" />}
         </Button>
       </DialogTrigger></TooltipTrigger><TooltipContent><p>{summary ?? 'Envoyer vers Cookidoo'}</p></TooltipContent></Tooltip>}
-      <DialogContent className="max-h-[85dvh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Envoyer vers Cookidoo</DialogTitle><DialogDescription>
+      <DialogContent className="w-[calc(100%-2rem)] max-w-xl max-h-[85dvh] overflow-y-auto rounded-2xl border-border bg-background p-0 gap-0">
+        <DialogHeader className="border-b border-border p-6 pr-10 text-left">
+          <p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-primary"><UtensilsCrossed className="size-4" aria-hidden="true" /> Du Livre au Thermomix</p>
+          <DialogTitle className="font-serif text-2xl leading-tight">Envoyer vers Cookidoo</DialogTitle><DialogDescription className="leading-relaxed pt-2">
           Nous adaptons une copie de cette recette pour votre Thermomix TM7. Votre recette dans le Livre reste inchangée. Vous pourrez ensuite la suivre dans Cookidoo.
-        </DialogDescription></DialogHeader>
-        {status.isLoading || flow.isLoading ? <p role="status">Chargement…</p> : !status.data?.configured ? <div className="space-y-3 text-sm">
+        </DialogDescription>
+          <ol aria-label="Étapes de l’envoi" className="flex items-center gap-2 pt-5 text-xs sm:text-sm">
+            {['Adapter', 'Vérifier', 'Envoyer'].map((label, index) => {
+              const current = sending || (job?.status === 'success' && !!adaptation && job.adaptation_id === adaptation.id) ? 2 : adaptation?.status === 'ready' ? 1 : 0;
+              return <li key={label} aria-current={index === current ? 'step' : undefined} className={`flex items-center gap-2 ${index <= current ? 'text-primary' : 'text-muted-foreground'}`}>
+                {index > 0 && <ArrowRight className="size-3 shrink-0" aria-hidden="true" />}
+                <span className={`flex size-6 items-center justify-center rounded-full border ${index <= current ? 'border-primary/30 bg-primary/10' : 'border-border'}`}>
+                  {index < current ? <Check className="size-3" aria-hidden="true" /> : index + 1}
+                </span>{label}
+              </li>;
+            })}
+          </ol>
+        </DialogHeader>
+        {status.isLoading || flow.isLoading ? <p role="status" className="p-6 text-muted-foreground">Chargement…</p> : !status.data?.configured ? <div className="space-y-3 p-6 text-sm">
           <p>Connectez votre compte Cookidoo pour envoyer cette recette.</p><Button asChild variant="outline"><Link to="/profile">Connecter Cookidoo</Link></Button>
-        </div> : <div className="space-y-4 text-sm">
-          {summary && <p role="status" aria-live="polite" className="font-medium">{summary}</p>}
+        </div> : <div className="space-y-5 p-6 text-sm leading-relaxed">
+          {(adapting || sending) && <CookidooActivity key={sending ? `send-${job?.id ?? "starting"}` : `prepare-${adaptation?.id ?? "starting"}`} sending={sending} verifying={job?.phase === 'verifying'} startedAt={adapting ? adaptation?.started_at : undefined} />}
+          {summary && !adapting && !sending && <p role="status" aria-live="polite" className="font-medium">{summary}</p>}
           {flow.unavailable && <p role="alert">{cookidooErrorMessage('backend_updating')}</p>}
           {(lastError || flow.error) && <div role="alert" className="space-y-2"><p>{lastError ?? cookidooErrorMessage('connection_unknown')}</p><Button variant="outline" onClick={() => void flow.refresh()}>Actualiser l’état</Button></div>}
           {adaptation?.status === 'ready' && <p className="text-muted-foreground">Cette version est conservée pour vos prochains envois. {adaptation.reused ? 'Aucune nouvelle adaptation n’est nécessaire.' : ''}</p>}
-          {adaptation?.recipe && <div className="space-y-3">
-            <p className="font-medium">Version pour Cookidoo</p>
+          {adaptation?.recipe && <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+            <p className="font-serif text-xl">Version pour Cookidoo</p>
             <p>{adaptation.guided_steps} étape(s) avec commandes TM7 sur {adaptation.recipe.steps.length}.</p>
             {adaptation.changes.length > 0 && <details open><summary className="cursor-pointer py-2">Ce qui a été adapté</summary><ul className="list-disc space-y-1 pl-5">{adaptation.changes.map((s, i) => <li key={i}>{s}</li>)}</ul></details>}
             <details><summary className="cursor-pointer py-2">Ingrédients et mesures</summary><ul className="list-disc space-y-1 pl-5">{adaptation.ingredients.map((s, i) => <li key={i}>{s}</li>)}</ul></details>
@@ -108,9 +130,13 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
             <p>Ces précisions concernent uniquement la copie Cookidoo.</p>
             {adaptation.request_context?.technical_water_ml && <p>Eau déjà précisée : {adaptation.request_context.technical_water_ml} ml.</p>}
             {adaptation.request_context?.clarifications?.map((text, i) => <p key={i}>Précision conservée : {text}</p>)}
-            <Button disabled={busy || (!water && !clarifications.trim())} onClick={() => void perform(() => flow.prepare.mutateAsync({ ...(water ? { technical_water_ml: Number(water) } : {}), clarifications: clarifications.trim() }), 'Adaptation impossible pour le moment')}>Compléter la version</Button>
+            <Button disabled={busy || cooldown || (!water && !clarifications.trim())} onClick={() => void perform(() => flow.prepare.mutateAsync({ ...(water ? { technical_water_ml: Number(water) } : {}), clarifications: clarifications.trim() }), 'Adaptation impossible pour le moment')}>Compléter la version</Button>
           </div>}
-          {adaptation?.status === 'failed' && <div role="alert" className="space-y-2"><p className="font-medium">L’adaptation n’a pas abouti</p>{adaptation.blockers.length ? <ul className="list-disc pl-5">{adaptation.blockers.map((text, i) => <li key={i}>{text}</li>)}</ul> : <p>{cookidooErrorMessage(adaptation.error_code)}</p>}</div>}
+          {adaptation?.status === 'failed' && (adaptation.error_code === 'preparation_rate_limited' ? <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
+            <p role="alert" className="font-medium">Le quota d’adaptation a été atteint.</p>
+            <p aria-live="off">{cookidooErrorMessage(adaptation.error_code, adaptation.retry_at, now)}</p>
+            {adaptation.retry_at && !cooldown && <p role="status" className="sr-only">Le délai est écoulé. Vous pouvez relancer l’adaptation.</p>}
+          </div> : <div role="alert" className="space-y-2"><p className="font-medium">L’adaptation n’a pas abouti</p>{adaptation.blockers.length ? <ul className="list-disc pl-5">{adaptation.blockers.map((text, i) => <li key={i}>{text}</li>)}</ul> : <p>{cookidooErrorMessage(adaptation.error_code)}</p>}</div>)}
           {job?.status === 'failed' && <div role="alert" className="space-y-2"><p>{cookidooErrorMessage(job.error_code)}</p>
             {job.error_code === 'remote_changed' && <Label className="flex items-start gap-2"><input type="checkbox" checked={replaceRemote} onChange={e => setReplaceJob(e.target.checked ? job.id : null)} />Remplacer les modifications faites dans Cookidoo par cette version.</Label>}
             {['destination_missing', 'partial_created'].includes(job.error_code ?? '') && <Label className="flex items-start gap-2"><input type="checkbox" checked={recreateRemote} onChange={e => setRecreateJob(e.target.checked ? job.id : null)} />J’ai vérifié que la recette précédente est supprimée. Créer une nouvelle recette dans Cookidoo.</Label>}
@@ -121,10 +147,10 @@ export function ExportToCookidooButton({ recipeId, open: controlledOpen, onOpenC
             <p>{cookidooErrorMessage('result_unknown')}</p><Button variant="outline" disabled={flow.check.isPending} onClick={() => void perform(() => flow.check.mutateAsync(), 'Envoi encore à vérifier')}>Vérifier l’envoi</Button>
             <Label className="flex items-start gap-2"><input type="checkbox" checked={confirmedAbsent} onChange={e => setAbsentJob(e.target.checked ? job.id : null)} />J’ai vérifié dans Cookidoo : cette tentative n’a créé ni modifié de recette.</Label>
             <Button variant="outline" disabled={!confirmedAbsent || flow.acknowledgeAbsent.isPending} onClick={() => void perform(() => flow.acknowledgeAbsent.mutateAsync(), 'Vérification impossible')}>Confirmer l’absence d’envoi</Button>
-          </div> : adaptation?.status === 'ready' ? <Button className="w-full" disabled={busy || flow.isRefreshing || flow.unavailable || (job?.error_code === 'remote_changed' && !replaceRemote) || (['destination_missing', 'partial_created'].includes(job?.error_code ?? '') && !recreateRemote)} onClick={() => void perform(() => flow.send.mutateAsync({ replace_remote: replaceRemote, recreate_remote: recreateRemote }), 'L’envoi n’a pas pu être confirmé')}>
+          </div> : adaptation?.status === 'ready' ? <Button className="min-h-11 w-full" disabled={busy || flow.isRefreshing || flow.unavailable || (job?.error_code === 'remote_changed' && !replaceRemote) || (['destination_missing', 'partial_created'].includes(job?.error_code ?? '') && !recreateRemote)} onClick={() => void perform(() => flow.send.mutateAsync({ replace_remote: replaceRemote, recreate_remote: recreateRemote }), 'L’envoi n’a pas pu être confirmé')}>
             {busy ? 'Envoi en cours…' : flow.hasDestination && !recreateRemote ? 'Mettre à jour sur Cookidoo' : 'Envoyer cette version'}
-          </Button> : adaptation?.status !== 'needs_input' && <Button className="w-full" disabled={busy || flow.unavailable} onClick={() => void perform(() => flow.prepare.mutateAsync({}), 'Adaptation impossible pour le moment')}>
-            {busy ? 'Adaptation pour votre TM7…' : adaptation?.status === 'failed' ? 'Réessayer l’adaptation' : 'Préparer la version Cookidoo'}
+          </Button> : adaptation?.status !== 'needs_input' && <Button className="min-h-11 w-full" disabled={busy || cooldown || flow.unavailable} onClick={() => void perform(() => flow.prepare.mutateAsync({}), 'Adaptation impossible pour le moment')}>
+            {cooldown ? 'Adaptation bientôt disponible' : busy ? 'Adaptation pour votre TM7…' : adaptation?.status === 'failed' ? 'Réessayer l’adaptation' : 'Préparer la version Cookidoo'}
           </Button>}
           {adaptation?.status === 'ready' && <Button variant="ghost" disabled={busy} onClick={() => void flow.refresh()}>Actualiser l’aperçu</Button>}
         </div>}

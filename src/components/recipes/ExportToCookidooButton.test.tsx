@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 vi.mock('@/hooks/useCookidooConnector', () => ({ useCookidooConnector: () => ({ status: { data: { configured: true }, isLoading: false } }) }));
 const prepare = vi.fn(), send = vi.fn(), check = vi.fn(), refresh = vi.fn();
@@ -11,6 +11,7 @@ import { ExportToCookidooButton } from './ExportToCookidooButton';
 const ready = { id: 'a1', status: 'ready', recipe: { title: 'Pain', steps: [{ order: 1, text: 'Pétrir 2 minutes.' }] }, ingredients: ['300 g de farine'], changes: ['Pétrissage dans le bol.'], notes: [], blockers: [], guided_steps: 1, reused: true };
 const renderButton = () => render(<MemoryRouter><ExportToCookidooButton recipeId="r1" open showTrigger={false} /></MemoryRouter>);
 describe('parcours Cookidoo', () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); Object.assign(state, { adaptation: null, job: null, hasDestination: false }); });
   it('prépare une copie sans envoyer la recette ni annoncer un succès', async () => {
     renderButton();
@@ -75,4 +76,35 @@ it('un échec technique explique le blocage et permet de relancer sans eau ni co
   fireEvent.click(screen.getByRole('button', { name: 'Réessayer l’adaptation' }));
   await waitFor(() => expect(prepare).toHaveBeenCalledWith({}));
   expect(send).not.toHaveBeenCalled();
+});
+
+it('affiche une attente active sans pourcentage inventé et conserve le bouton désactivé', () => {
+  Object.assign(state, { adaptation: { status: 'preparing', started_at: new Date().toISOString() }, job: null });
+  renderButton();
+  expect(screen.getByText(/Temps écoulé/)).toBeInTheDocument();
+  expect(screen.getByText(/Vous pouvez fermer cette fenêtre/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Adaptation pour votre TM7…' })).toBeDisabled();
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+});
+
+it('compte le délai réel puis permet une nouvelle adaptation sans la lancer automatiquement', async () => {
+  vi.clearAllMocks();
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-10-25T10:00:00Z'));
+  Object.assign(state, { adaptation: { status: 'failed', error_code: 'preparation_rate_limited', retry_at: '2026-10-25T10:00:02Z' }, job: null });
+  renderButton();
+  expect(screen.getByText(/Nouvelle tentative dans 2 s/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Adaptation bientôt disponible' })).toBeDisabled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(screen.getByText(/Vous pouvez réessayer l’adaptation maintenant/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Réessayer l’adaptation' })).toBeEnabled();
+  expect(prepare).not.toHaveBeenCalled();
+  vi.useRealTimers();
+});
+
+it('un ancien envoi réussi ne valide pas la nouvelle adaptation', () => {
+  Object.assign(state, { adaptation: { id: 'new', status: 'preparing' }, job: { id: 'old-job', status: 'success', adaptation_id: 'old', warnings: [] } });
+  renderButton();
+  expect(screen.getByText('Adapter').closest('li')).toHaveAttribute('aria-current', 'step');
+  expect(screen.getByText('Envoyer').closest('li')).not.toHaveAttribute('aria-current');
 });
