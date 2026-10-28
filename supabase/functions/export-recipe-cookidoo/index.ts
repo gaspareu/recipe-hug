@@ -41,6 +41,7 @@ import {
   type AdaptationStage,
 } from "../_shared/cookidoo/adaptation-diagnostics.ts";
 import { generateAdaptation, ADAPTATION_TIMEOUT_MS } from "../_shared/cookidoo/adaptation-generation.ts";
+import { preparationRetryAt } from "../_shared/cookidoo/preparation-retry.ts";
 import { ExportSourceSchema } from "../_shared/cookidoo/preparation.ts";
 import {
   ADAPTER_VERSION,
@@ -248,6 +249,14 @@ serve(async (req) => {
     }
     async function preview(value: AdaptationRow | null, reused = true) {
       if (!value) return { ok: true, adaptation: null, job: safeJob(job) };
+      // Seul le serveur lit les quotas globaux ; le client reçoit uniquement la date de reprise.
+      let retryAt: string | null = null;
+      if (value.error_code === "preparation_rate_limited") {
+        const { data: buckets, error: retryError } = await admin.from("cookidoo_preparation_rate_limit_buckets")
+          .select("bucket_key,scope,window_started_at,request_count")
+          .in("bucket_key", ["global", `user:${user!.id}`]);
+        if (!retryError && buckets) retryAt = preparationRetryAt(buckets) ?? new Date().toISOString();
+      }
       const binding = {
         userId: user!.id,
         recipeId: recipeId as string,
@@ -268,6 +277,8 @@ serve(async (req) => {
           notes: value.notes,
           blockers: value.blockers,
           error_code: value.error_code,
+          retry_at: retryAt,
+          started_at: value.updated_at,
           reused,
           request_context: value.request_context,
           recipe: recipe
