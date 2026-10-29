@@ -1,7 +1,6 @@
-import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, User, CalendarDays, Menu } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -23,20 +22,12 @@ export default function Home() {
     sendMessage, resetChat, createProposedRecipe, regenerateResponse, stopGeneration,
     cookingRecipeId, cookingServings, startCooking, stopCooking,
   } = useHomeChat();
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   const { handlers: swipeHandlers, style: swipeStyle } = useSwipeNavigation({
     targetRoute: '/dashboard', direction: 'left', threshold: 80,
   });
   useViewportHeight();
-
-  useEffect(() => {
-    const isMobile = window.innerWidth < 768;
-    if (isMobile && inputRef.current) {
-      const timer = setTimeout(() => inputRef.current?.focus(), 300);
-      return () => clearTimeout(timer);
-    }
-  }, []);
 
   const defaultSuggestions = ['Planifier ma semaine', 'Chercher une recette de poulet', 'Créer une recette de tarte', 'Voir toutes mes recettes'];
 
@@ -103,9 +94,9 @@ export default function Home() {
           welcomeContent={
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4">
               <motion.div
-                initial={{ opacity: 0, y: 12 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
+                transition={{ duration: prefersReducedMotion ? 0 : 0.5, ease: 'easeOut' }}
                 className="flex flex-col items-center"
               >
                 <img src="/brand/recipe-book-logo.png" alt="" className="mb-[18px] h-[72px] w-[72px] object-contain opacity-95" />
