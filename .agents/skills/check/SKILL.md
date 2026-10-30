@@ -14,13 +14,13 @@ une PR, utiliser plutôt le skill **pre-pr**.
 
 ## Baseline de non-régression
 
-Baseline vérifié au **2026-10-29** :
+Baseline vérifié au **2026-10-30** :
 
 | Commande | Baseline (dette préexistante) |
 |----------|-------------------------------|
 | `npm run test:run` | **0 échec** (613 tests) |
 | `npm run typecheck` | **0 erreur** |
-| `npm run lint` | **0 erreur** (26 avertissements `react-refresh` attendus dans les primitives UI) |
+| `npm run lint` | **0 erreur, 0 avertissement** (`eslint-plugin-react-refresh` 0.5.7) |
 | `npm run lint:dead-code` | **0 résultat** |
 
 > Ces chiffres évoluent avec la dette. Si tu résorbes ou ajoutes de la dette
