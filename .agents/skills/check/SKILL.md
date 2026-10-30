@@ -20,7 +20,7 @@ Baseline vérifié au **2026-10-30** :
 |----------|-------------------------------|
 | `npm run test:run` | **0 échec** (624 tests, dont 11 tests du garde-fou Git) |
 | `npm run typecheck` | **0 erreur** |
-| `npm run lint` | **0 erreur** (26 avertissements `react-refresh` attendus dans les primitives UI) |
+| `npm run lint` | **0 erreur, 0 avertissement** (`eslint-plugin-react-refresh` 0.5.7) |
 | `npm run lint:dead-code` | **0 résultat** |
 
 > Ces chiffres évoluent avec la dette. Si tu résorbes ou ajoutes de la dette
