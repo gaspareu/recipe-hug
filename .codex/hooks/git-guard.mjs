@@ -18,13 +18,45 @@ function currentBranch() {
   try {
     // Les hooks reçoivent la commande mais pas le workdir de l'outil.
     // Une commande lancée depuis un worktree peut préciser son chemin avec cd.
-    const commandWorkdir = command.match(/^\s*cd\s+([^\s;&]+)\s*&&\s*git\s+(?:commit|push)\b/)?.[1];
-    return execFileSync("git", ["-C", commandWorkdir ?? process.cwd(), "branch", "--show-current"], {
+    let commandWorkdir;
+    if (/^\s*cd\s+/.test(command)) {
+      const token = command.match(/^\s*cd\s+(?:--\s+)?("(?:[^"\\]|\\.)*"|'[^']*'|(?:\\.|[^\s"'\\;&|])+)\s*&&\s*git\s+(?:commit|push)\b/)?.[1];
+      if (!token) throw new Error("Chemin shell non pris en charge");
+      commandWorkdir = literalShellPath(token);
+    }
+    const branch = execFileSync("git", ["-C", commandWorkdir ?? process.cwd(), "branch", "--show-current"], {
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
     }).trim();
+    if (!branch) throw new Error("Branche absente");
+    return branch;
   } catch {
-    return "";
+    block("⛔ Impossible de déterminer la branche Git. Utiliser un chemin littéral vers une branche de travail avant de committer ou pousser.");
   }
+}
+
+// Décoder les formes littérales usuelles sans jamais évaluer une commande shell.
+function literalShellPath(token) {
+  if (token.startsWith("'")) return token.slice(1, -1);
+  const quoted = token.startsWith('"');
+  const value = quoted ? token.slice(1, -1) : token;
+  let result = "";
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (char === "\\") {
+      const next = value[++i];
+      if (next === undefined || next === "\n") throw new Error("Échappement invalide");
+      // Entre guillemets doubles, seuls ces caractères perdent l'antislash.
+      if (quoted && !['$', '`', '"', "\\"].includes(next)) result += "\\";
+      result += next;
+    } else {
+      if (char === "$" || char === "`" || (!quoted && /[~*?()[\]{}]/.test(char))) {
+        throw new Error("Expansion shell non prise en charge");
+      }
+      result += char;
+    }
+  }
+  return result;
 }
 
 function editedPaths(patch) {
@@ -42,7 +74,8 @@ if (event === "PreToolUse" && toolName === "Bash") {
     }
     // Push visant main/master explicitement, ou depuis main sans destination explicite.
     const targetsMain = /git\s+push\b[^|;&]*\s(origin\s+)?(main|master)(\s|:|$)/.test(command);
-    const implicitFromMain = !/git\s+push\b[^|;&]*\s\S+\s+\S+/.test(command) && ["main", "master"].includes(currentBranch());
+    const branch = currentBranch();
+    const implicitFromMain = !/git\s+push\b[^|;&]*\s\S+\s+\S+/.test(command) && ["main", "master"].includes(branch);
     if (targetsMain || implicitFromMain) {
       block("⛔ Push sur main interdit (auto-déployé sur Vercel). Pousser sur une branche et passer par une PR.");
     }
