@@ -30,7 +30,7 @@ npm run build        # build Vite seulement : ne vérifie pas les types
 npm run test:edge    # tests Deno des modules Edge partagés
 ```
 
-`npm run build` ne remplace jamais `npm run typecheck`. Baseline au 2026-10-29 : typecheck 0 erreur, lint 0 erreur (26 avertissements `react-refresh` attendus dans les primitives UI), `lint:dead-code` 0 résultat, `test:run` 613 tests sans échec. Mettre ce baseline à jour ici et dans le skill `check` si la suite évolue.
+`npm run build` ne remplace jamais `npm run typecheck`. Baseline au 2026-10-30 : typecheck 0 erreur, lint 0 erreur et 0 avertissement (plugin `react-refresh` 0.5.7), `lint:dead-code` 0 résultat, `test:run` 613 tests sans échec. Mettre ce baseline à jour ici et dans le skill `check` si la suite évolue.
 
 ## Routage du contexte
 
