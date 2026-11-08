@@ -60,3 +60,23 @@ lors de la vérification du 4 octobre. Après fusion, le workflow modifié relan
 l’application des migrations manquantes puis déploie toutes les fonctions de `main`.
 Vérifier la réussite des deux étapes dans GitHub Actions ; les checks de PR
 n’exécutent pas ce déploiement ni les E2E authentifiés.
+
+## 8 novembre 2026 — intégrité des dépendances Edge
+
+Les jobs Edge des PR #202, #206, #207 et #208 ont échoué sur des empreintes
+variables de fichiers transformés par esm.sh : `tslib@2.8.1` puis
+`@supabase/auth-js@2.89.0`. Les jobs frontend et certaines exécutions Edge
+restaient verts. Ne pas supprimer la vérification d’intégrité ni recopier
+l’empreinte du CDN sans vérifier sa provenance.
+
+Les imports explicites de Supabase JS 2.89.0 utilisent désormais
+`npm:@supabase/supabase-js@2.89.0`, à version identique, avec les intégrités npm
+dans le lockfile Edge. Le lockfile frontend reste inchangé. Le guide officiel
+[Managing dependencies](https://supabase.com/docs/guides/functions/dependencies)
+décrit ce mode d’import supporté par les Edge Functions. Les anciens imports
+non versionnés des autres fonctions ne font pas partie de ce correctif.
+
+La validation des 288 tests Edge a été faite avec un cache Deno vide, puis le
+lockfile est conservé en mode `--frozen`. Tous les entrypoints modifiés sont
+aussi contrôlés par `deno check`. Le déploiement reste celui de la CI après
+fusion sur main.
