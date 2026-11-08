@@ -7,6 +7,8 @@ import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAIStreaming } from "../_shared/ai-providers.ts";
 import { formatPreferencesContext, formatFavoritesContext, formatRecipeContext, formatCompositionContext, formatCompositionsContext } from "../_shared/context-format.ts";
 
+import { RECIPE_METADATA_PROPERTIES, RECIPE_METADATA_PROMPT } from "../_shared/recipe-metadata.ts";
+
 initializeEdgeErrorMonitoring();
 
 // Input validation schema
@@ -71,6 +73,7 @@ const StepSchema = z.object({
 });
 
 const ActiveRecipeSchema = z.object({
+  entry_kind: z.enum(["preparation", "complete_dish"]).nullable().optional(),
   id: z.string(),
   title: z.string(),
   servings: z.number().optional().nullable(),
@@ -110,6 +113,8 @@ const RequestSchema = z.object({
 
 // ===== UNIFIED SYSTEM PROMPT =====
 const UNIFIED_PROMPT = `Tu es Chef, l'assistant culinaire de cette application. Tu gères toutes les interactions culinaires dans une seule conversation.
+
+${RECIPE_METADATA_PROMPT}
 
 ## TON STYLE
 - Direct et efficace, sans bavardage inutile
@@ -207,7 +212,7 @@ const STEP_ITEMS_SCHEMA = {
       type: "array",
       items: { type: "string" },
       description:
-        "Noms EXACTS, tels qu'ils apparaissent dans ingredients, des ingrédients utilisés pendant cette étape. Omettre si aucun ingrédient n'est concerné.",
+        "Noms EXACTS, tels qu'ils apparaissent dans ingredients, des ingrédients utilisés pendant cette étape. Tableau vide si aucun ingrédient n'est concerné.",
     },
     duration_minutes: {
       type: "number",
@@ -216,7 +221,7 @@ const STEP_ITEMS_SCHEMA = {
     },
 
   },
-  required: ["order", "text"],
+  required: ["order", "title", "text", "ingredient_names"],
 };
 
 // ===== ALL TOOLS =====
@@ -305,6 +310,7 @@ const TOOLS = [
       parameters: {
         type: "object",
         properties: {
+          ...RECIPE_METADATA_PROPERTIES,
           title: { type: "string", description: "Titre de la recette" },
           servings: { type: "number", description: "Nombre de portions" },
           ingredients: {
@@ -341,7 +347,7 @@ const TOOLS = [
             description: "Une astuce de chef pour réussir la recette",
           },
         },
-        required: ["title", "servings", "ingredients", "steps"],
+        required: ["title", "servings", "ingredients", "steps", ...Object.keys(RECIPE_METADATA_PROPERTIES)],
       },
     },
   },
@@ -353,6 +359,7 @@ const TOOLS = [
       parameters: {
         type: "object",
         properties: {
+          ...RECIPE_METADATA_PROPERTIES,
           title: { type: "string" },
           servings: { type: "number" },
           ingredients: {
@@ -374,7 +381,7 @@ const TOOLS = [
             items: STEP_ITEMS_SCHEMA,
           },
         },
-        required: ["title", "servings", "ingredients", "steps"],
+        required: ["title", "servings", "ingredients", "steps", ...Object.keys(RECIPE_METADATA_PROPERTIES)],
       },
     },
   },
@@ -386,6 +393,7 @@ const TOOLS = [
       parameters: {
         type: "object",
         properties: {
+          ...RECIPE_METADATA_PROPERTIES,
           title: { type: "string" },
           servings: { type: "number" },
           ingredients: {
@@ -407,7 +415,7 @@ const TOOLS = [
             items: STEP_ITEMS_SCHEMA,
           },
         },
-        required: ["title", "servings", "ingredients", "steps"],
+        required: ["title", "servings", "ingredients", "steps", ...Object.keys(RECIPE_METADATA_PROPERTIES)],
       },
     },
   },
@@ -419,6 +427,7 @@ const TOOLS = [
       parameters: {
         type: "object",
         properties: {
+          ...RECIPE_METADATA_PROPERTIES,
           title: { type: "string" },
           servings: { type: "number" },
           ingredients: {
@@ -441,7 +450,7 @@ const TOOLS = [
           },
           relation_to_original: { type: "string" },
         },
-        required: ["title", "servings", "ingredients", "steps"],
+        required: ["title", "servings", "ingredients", "steps", ...Object.keys(RECIPE_METADATA_PROPERTIES)],
       },
     },
   },

@@ -747,3 +747,26 @@ describe("useHomeChat — planning de repas", () => {
     });
   });
 });
+
+it('crée une fiche classée avec toutes ses métadonnées dès la proposition', async () => {
+  installSupabase({ resultsByTable: { recipes: { data: { id: 'new-full' }, error: null } } });
+  const { result } = renderHook(() => useHomeChat());
+  const metadata = { entry_kind: 'preparation', ai_summary: 'Une base douce.', season: 'hiver', calorie_score: 3, nutrition_tags: ['végétarien'], pairing_profile: { roles: ['base'], flavors: ['doux'], textures: ['crémeux'], equipment: ['casserole'], allergens: ['lait'], dietary_compatibilities: ['végétarien'], dietary_exclusions: ['végan'], active_minutes: 15, make_ahead: true } };
+  await sendToolCall(result, 'propose_recipe', { ...PENDING_RECIPE, ...metadata });
+  const msgId = lastMessage(result.current.messages).id;
+  await act(() => result.current.createProposedRecipe(msgId, { servings: 6, ingredients: PENDING_RECIPE.ingredients }));
+  const recipeBuilder = mockSupabase.from.mock.results.find((_: unknown, index: number) => mockSupabase.from.mock.calls[index][0] === 'recipes')?.value;
+  expect(recipeBuilder.insert).toHaveBeenCalledWith(expect.objectContaining({ entry_kind: 'preparation', ai_summary: metadata.ai_summary, season: 'hiver', calorie_score: 3, nutrition_tags: ['végétarien'] }));
+  expect(triggerRecipeCompletion).toHaveBeenCalledWith('new-full', expect.objectContaining(metadata), expect.any(Function));
+  expect(lastMessage(result.current.messages).recipeCard?.status).toBe('saved');
+});
+
+it('bloque la modification depuis l’accueil si l’invalidation des revues échoue', async () => {
+  installSupabase({ resultsByTable: { recipe_pairing_profiles: { data: null, error: { message: 'indisponible' } } } });
+  const { result } = renderHook(() => useHomeChat());
+  await sendToolCall(result, 'save_recipe', { ...PENDING_RECIPE, isUpdate: true, originalRecipeId: 'r1' });
+  const msgId = lastMessage(result.current.messages).id;
+  await act(() => result.current.createProposedRecipe(msgId, { servings: 6, ingredients: PENDING_RECIPE.ingredients }));
+  expect(buildersFor('recipes')).toHaveLength(0);
+  expect(lastMessage(result.current.messages).content).toContain("Je n'ai pas pu enregistrer");
+});

@@ -36,9 +36,9 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
 
   const initialActiveRecipe = useMemo<ActiveRecipeData>(() => activeRecipeOverride ?? ({
     id: recipe.id, title: recipe.title, servings: recipe.servings,
-    season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
+    entry_kind: recipe.entry_kind, season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
     completedSteps: completedStepsSnapshot,
-  }), [activeRecipeOverride, recipe.id, recipe.title, recipe.servings, recipe.season, recipe.ingredients, recipe.steps, completedStepsSnapshot]);
+  }), [activeRecipeOverride, recipe.id, recipe.title, recipe.servings, recipe.entry_kind, recipe.season, recipe.ingredients, recipe.steps, completedStepsSnapshot]);
 
   const handleToolCall = useCallback(async (action: ToolCallAction, activeRecipe: ActiveRecipeData | null): Promise<unknown> => {
     console.log('Recipe chat tool call:', action.type, action.data);
@@ -71,7 +71,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
         if (!recipe) return null;
         return {
           id: recipe.id, title: recipe.title, servings: recipe.servings,
-          season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
+          entry_kind: recipe.entry_kind, season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
         };
       }
 
@@ -174,6 +174,7 @@ export function useRecipeChat({ recipe, completedSteps, onRecipeUpdate, onRecipe
       id: nextRecipe.id,
       title: nextRecipe.title,
       servings: nextRecipe.servings,
+      entry_kind: nextRecipe.entry_kind,
       season: nextRecipe.season,
       ingredients: nextRecipe.ingredients,
       steps: nextRecipe.steps,

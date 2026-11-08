@@ -59,6 +59,7 @@ vi.mock('@/hooks/useRecipes', () => ({
   useToggleFavorite: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateRecipe: () => ({ mutateAsync: mockUpdateRecipe }),
   useCreateRecipe: () => ({ mutateAsync: mockCreateRecipe }),
+  useAnalyzeRecipe: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@/hooks/useGenerateRecipeImage', () => ({ useGenerateRecipeImage: () => ({ mutate: vi.fn(), isPending: false }) }));
 vi.mock('@/hooks/useAsyncAction', () => ({ useAsyncAction: () => ({ run: vi.fn(), showLoader: false }) }));
