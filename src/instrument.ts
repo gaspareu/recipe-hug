@@ -40,9 +40,11 @@ function safeNavigationName(name: string): string {
 function redactSentrySpan(span: Parameters<NonNullable<Parameters<typeof Sentry.init>[0]['beforeSendSpan']>>[0]) {
   return {
     ...span,
-    // Les descriptions et attributs HTTP peuvent inclure URL, paramètres ou identifiants.
-    data: {},
-    description: 'Span masqué par recipe-hug',
+    // Sentry v11 utilise name/attributes pour les traces racines et enfants.
+    // Les liens peuvent aussi porter leurs propres attributs sensibles.
+    attributes: {},
+    links: undefined,
+    name: 'Span masqué par recipe-hug',
   };
 }
 
@@ -84,15 +86,6 @@ if (dsn) {
     beforeBreadcrumb: () => null,
     beforeSend: redactSentryEvent,
     beforeSendSpan: redactSentrySpan,
-    beforeSendTransaction: (event) => {
-      event.transaction = safeNavigationName(event.transaction ?? '');
-      event.user = undefined;
-      event.request = undefined;
-      event.contexts = undefined;
-      event.extra = undefined;
-      event.breadcrumbs = undefined;
-      return event;
-    },
   });
   setErrorMonitoringInitialized(true);
 }
