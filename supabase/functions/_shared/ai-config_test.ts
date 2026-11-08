@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.89.0";
 import { getApiKeyForProvider, resolveAIConfig } from "./ai-config.ts";
 import type { AISettings } from "./ai-types.ts";
 

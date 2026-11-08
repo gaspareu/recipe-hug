@@ -1,6 +1,6 @@
 // ===== Shared AI Configuration Resolution =====
 
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.89.0";
 import {
   AIConfig,
   AISettings,
