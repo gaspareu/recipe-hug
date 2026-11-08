@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
 import type { Recipe, RecipeFormData, Ingredient, Step } from '@/types/recipe';
 import type { Json, Database } from '@/integrations/supabase/types';
+import { invalidatePairingProfileReview, recipeMetadataPatch, saveGeneratedPairingProfile } from '@/lib/recipe-metadata';
+import type { GeneratedPairingProfile } from '../../supabase/functions/_shared/recipe-metadata';
 import { triggerRecipeCompletion } from '@/lib/recipe-completion';
 import { generateRecipeImageInBackground } from '@/lib/recipe-image';
 
@@ -56,7 +58,7 @@ export function useCreateRecipe() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (recipe: RecipeFormData & { skipImageGeneration?: boolean }) => {
+    mutationFn: async (recipe: RecipeFormData & { skipImageGeneration?: boolean; pairing_profile?: GeneratedPairingProfile }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       
@@ -84,6 +86,9 @@ export function useCreateRecipe() {
       if (error) throw error;
       
       const createdRecipe = parseRecipe(data);
+      try { await saveGeneratedPairingProfile(createdRecipe.id, recipe.pairing_profile); }
+      catch (error) { console.warn('Profil généré non enregistré :', error); }
+      queryClient.invalidateQueries({ queryKey: ['pairing-profile', createdRecipe.id] });
       
       // Trigger image generation in background unless explicitly skipped or image already exists.
       // onSuccess invalide les queries pour que l'image générée remplace le placeholder
@@ -99,7 +104,9 @@ export function useCreateRecipe() {
       }
 
       // Complétion description/tags en arrière-plan (best-effort, non bloquant)
-      triggerRecipeCompletion(createdRecipe.id, createdRecipe, () => {
+      triggerRecipeCompletion(createdRecipe.id, { ...createdRecipe, pairing_profile: recipe.pairing_profile }, () => {
+        queryClient.invalidateQueries({ queryKey: ['pairing-profile', createdRecipe.id] });
+        queryClient.invalidateQueries({ queryKey: ['pairings'] });
         queryClient.invalidateQueries({ queryKey: ['recipe', createdRecipe.id] });
         queryClient.invalidateQueries({ queryKey: ['recipes'] });
       });
@@ -119,7 +126,10 @@ export function useUpdateRecipe() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, ...recipe }: Partial<Recipe> & { id: string }) => {
+    mutationFn: async ({ id, pairing_profile, expectedUpdatedAt, ...recipe }: Partial<Recipe> & { id: string; pairing_profile?: GeneratedPairingProfile; expectedUpdatedAt?: string }) => {
+      if (recipe.ingredients !== undefined || recipe.steps !== undefined) {
+        await invalidatePairingProfileReview(id);
+      }
       const updateData: Record<string, unknown> = { ...recipe };
       if (recipe.ingredients) {
         updateData.ingredients = recipe.ingredients as unknown as Json;
@@ -128,19 +138,21 @@ export function useUpdateRecipe() {
         updateData.steps = recipe.steps as unknown as Json;
       }
       
-      const { data, error } = await supabase
-        .from('recipes')
-        .update(updateData as Database['public']['Tables']['recipes']['Update'])
-        .eq('id', id)
-        .select()
-        .single();
+      let query = supabase.from('recipes')
+        .update(updateData as Database['public']['Tables']['recipes']['Update']).eq('id', id);
+      if (expectedUpdatedAt) query = query.eq('updated_at', expectedUpdatedAt);
+      const { data, error } = await query.select().single();
       
       if (error) throw error;
+      try { await saveGeneratedPairingProfile(id, pairing_profile, true); }
+      catch (error) { console.warn('Profil généré non enregistré :', error); }
       return parseRecipe(data);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
       queryClient.invalidateQueries({ queryKey: ['recipe', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['pairing-profile', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['pairings'] });
     },
     // Pas de onError global : updateRecipe est utilisé via .mutate (statut) et
     // .mutateAsync (actions impératives) ; le toast est géré au point d'appel
@@ -223,6 +235,28 @@ export function useToggleFavorite() {
     onSettled: (_data, _error, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
       queryClient.invalidateQueries({ queryKey: ['recipe', id] });
+    },
+  });
+}
+
+/** Analyse explicite d'une fiche existante, avec classement des anciennes fiches. */
+export function useAnalyzeRecipe() {
+  const queryClient = useQueryClient();
+  const updateRecipe = useUpdateRecipe();
+  return useMutation({
+    mutationFn: async (recipe: Recipe) => {
+      const { data, error } = await supabase.functions.invoke('analyze-recipe', {
+        body: { title: recipe.title, ingredients: recipe.ingredients, steps: recipe.steps },
+      });
+      if (error || !data) throw error ?? new Error('Analyse indisponible');
+      const metadata = recipeMetadataPatch(data);
+      await updateRecipe.mutateAsync({
+        ...metadata, id: recipe.id, expectedUpdatedAt: recipe.updated_at,
+        entry_kind: recipe.entry_kind ?? metadata.entry_kind,
+      });
+      await saveGeneratedPairingProfile(recipe.id, data.pairing_profile);
+      queryClient.invalidateQueries({ queryKey: ['pairing-profile', recipe.id] });
+      queryClient.invalidateQueries({ queryKey: ['pairings'] });
     },
   });
 }

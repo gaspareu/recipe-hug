@@ -58,6 +58,12 @@ export interface SearchResult {
 }
 
 export interface PendingRecipe {
+  entry_kind?: 'preparation' | 'complete_dish';
+  ai_summary?: string;
+  season?: string;
+  nutrition_tags?: string[];
+  calorie_score?: number;
+  pairing_profile?: import('../../supabase/functions/_shared/recipe-metadata').GeneratedPairingProfile;
   title: string;
   servings: number;
   ingredients: Ingredient[];
@@ -71,6 +77,7 @@ export interface PendingRecipe {
 }
 
 export interface ActiveRecipeData {
+  entry_kind?: 'preparation' | 'complete_dish' | null;
   id: string;
   title: string;
   servings?: number | null;

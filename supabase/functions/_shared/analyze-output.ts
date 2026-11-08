@@ -6,7 +6,18 @@
 
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
+import { parseGeneratedPairingProfile } from "./recipe-metadata.ts";
+
 export const AnalysisSchema = z.object({
+  entry_kind: z.enum(["preparation", "complete_dish"]),
+  pairing_profile: z.unknown().transform((value, ctx) => {
+    const profile = parseGeneratedPairingProfile(value);
+    if (!profile) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Profil d’accord incomplet ou invalide" });
+      return z.NEVER;
+    }
+    return profile;
+  }),
   ai_summary: z.string().min(1).max(2000),
   nutrition_tags: z.array(z.string().min(1).max(50)).max(5).default([]),
   calorie_score: z.number().int().min(1).max(5).nullable().default(null),

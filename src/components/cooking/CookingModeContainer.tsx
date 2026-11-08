@@ -1,3 +1,4 @@
+import { recipeMetadataPatch } from '@/lib/recipe-metadata';
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
@@ -27,7 +28,7 @@ export function CookingModeContainer({ recipeId, onClose, initialServings, chatS
 
   const handleRecipeUpdate = useCallback(
     async (data: PendingRecipe) => {
-      await updateRecipe.mutateAsync({ id: data.originalRecipeId ?? recipeId, title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps });
+      await updateRecipe.mutateAsync({ ...recipeMetadataPatch(data), pairing_profile: data.pairing_profile, id: data.originalRecipeId ?? recipeId, title: data.title, servings: data.servings, ingredients: data.ingredients, steps: data.steps });
       await refetch();
     },
     [updateRecipe, recipeId, refetch],
@@ -40,6 +41,7 @@ export function CookingModeContainer({ recipeId, onClose, initialServings, chatS
         status: 'draft', is_favorite: false, source_type: 'ai',
         ai_summary: data.relationToOriginal ? `Inspiré de "${recipe?.title ?? ''}". ${data.relationToOriginal}` : null,
         season: null, nutrition_tags: null, calorie_score: null, source_image_url: null,
+        ...recipeMetadataPatch(data), pairing_profile: data.pairing_profile,
       });
       onClose();
       navigate(`/recipes/${newRecipe.id}`);

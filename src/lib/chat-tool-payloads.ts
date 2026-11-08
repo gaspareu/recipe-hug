@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseGeneratedPairingProfile } from '../../supabase/functions/_shared/recipe-metadata';
 
 import type { PendingRecipe, ToolCallAction, ActiveRecipeData } from '@/hooks/useChatEngine';
 import type { PreferenceOperation } from '@/lib/preference-operations';
@@ -31,6 +32,12 @@ const StepPayloadSchema = z.object({
 });
 
 const RecipePayloadSchema = z.object({
+  entry_kind: z.enum(['preparation', 'complete_dish']).optional(),
+  ai_summary: z.string().min(1).max(2000).optional(),
+  season: z.string().min(1).max(50).optional(),
+  nutrition_tags: z.array(z.string().min(1).max(50)).max(5).optional(),
+  calorie_score: z.number().int().min(1).max(5).optional(),
+  pairing_profile: z.unknown().optional(),
   title: z.string().min(1),
   servings: z.number().nullable().optional(),
   ingredients: z.array(IngredientPayloadSchema),
@@ -77,6 +84,7 @@ export function parseRecipePayload(data: unknown): PendingRecipe | null {
   const { intro_closing, ...rest } = result.data;
   return {
     ...rest,
+    pairing_profile: parseGeneratedPairingProfile(rest.pairing_profile) ?? undefined,
     introClosing: rest.introClosing ?? intro_closing,
     ingredients: rest.ingredients.map(ing => ({
       ...ing,

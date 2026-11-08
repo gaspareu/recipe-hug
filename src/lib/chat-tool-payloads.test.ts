@@ -300,3 +300,10 @@ it('une nouvelle recette issue du chat ignore les réglages TM7 même si le mod�
   const recipe = parseRecipePayload({ title: 'Pain', ingredients: [{ name: 'farine', quantity: 300, unit: 'g' }], steps: [{ order: 1, text: 'Pétrir la pâte.', tm7: { mode: 'knead', seconds: 120 } }] });
   expect(recipe?.steps[0]).toEqual({ order: 1, text: 'Pétrir la pâte.' });
 });
+
+it('transmet les métadonnées complètes de la proposition sans états de revue IA', () => {
+  const profile = { roles: ['base'], flavors: ['doux'], textures: ['crémeux'], equipment: ['casserole'], allergens: ['lait'], dietary_compatibilities: ['végétarien'], dietary_exclusions: ['végan'], active_minutes: 15, make_ahead: true };
+  const recipe = parseRecipePayload({ title: 'Riz crémeux', servings: 2, ingredients: [], steps: [], entry_kind: 'preparation', ai_summary: 'Une base douce.', season: 'hiver', nutrition_tags: ['végétarien'], calorie_score: 3, pairing_profile: { ...profile, allergen_review_state: 'reviewed' } });
+  expect(recipe).toMatchObject({ entry_kind: 'preparation', ai_summary: 'Une base douce.', season: 'hiver', calorie_score: 3, nutrition_tags: ['végétarien'], pairing_profile: profile });
+  expect(recipe?.pairing_profile).not.toHaveProperty('allergen_review_state');
+});

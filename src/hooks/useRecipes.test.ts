@@ -21,6 +21,7 @@ vi.mock("@/lib/recipe-completion", () => ({
 import {
   parseRecipe,
   useRecipes,
+  useAnalyzeRecipe,
   useRecipe,
   useCreateRecipe,
   useUpdateRecipe,
@@ -324,5 +325,41 @@ describe("useToggleFavorite", () => {
     const list = client.getQueryData(["recipes"]) as Array<{ id: string; is_favorite: boolean }>;
     expect(list[0].is_favorite).toBe(false);
     expect(client.getQueryData(["recipe", "r1"])).toMatchObject({ is_favorite: false });
+  });
+});
+
+describe('useAnalyzeRecipe', () => {
+  it('complète une fiche historique et enregistre un profil non revu', async () => {
+    const profile = { roles: ['base'], flavors: [], textures: [], equipment: [], allergens: [], dietary_compatibilities: [], dietary_exclusions: [], active_minutes: 10, make_ahead: true };
+    const sb = installSupabase({
+      user: { id: 'u1' },
+      result: { data: { id: 'r1', title: 'Riz' }, error: null },
+      functionResult: { data: { ai_summary: 'Une base.', entry_kind: 'preparation', pairing_profile: profile }, error: null },
+    });
+    // Le mock expose les fonctions pour ce hook d'analyse.
+    Object.assign(mockSupabase, { functions: sb.functions });
+    const { result } = renderHook(() => useAnalyzeRecipe(), { wrapper: createQueryWrapper() });
+    await result.current.mutateAsync(parseRecipe({ id: 'r1', title: 'Riz', entry_kind: null, ingredients: [], steps: [] }));
+    const calls = sb.from.mock.results.map(item => item.value);
+    expect(calls.some(builder => builder.update.mock.calls.some(([patch]: [Record<string, unknown>]) => patch.entry_kind === 'preparation'))).toBe(true);
+    expect(calls.some(builder => builder.upsert.mock.calls.some(([patch]: [Record<string, unknown>]) => patch.allergen_review_state === 'unknown' && patch.dietary_review_state === 'unknown'))).toBe(true);
+  });
+});
+
+describe('useUpdateRecipe — revue alimentaire', () => {
+  it('invalide les revues avant de modifier les ingrédients même sans profil IA', async () => {
+    const sb = installSupabase({ result: { data: { id: 'r1', ingredients: [], steps: [] }, error: null } });
+    const { result } = renderHook(() => useUpdateRecipe(), { wrapper: createQueryWrapper() });
+    await result.current.mutateAsync({ id: 'r1', ingredients: [{ name: 'Lait', quantity: 100, unit: 'ml' }] });
+    expect(sb.from.mock.calls[0][0]).toBe('recipe_pairing_profiles');
+    const profileQuery = sb.from.mock.results[0].value;
+    expect(profileQuery.update).toHaveBeenCalledWith({ allergen_review_state: 'unknown', dietary_review_state: 'unknown' });
+    expect(sb.from.mock.calls[1][0]).toBe('recipes');
+  });
+  it('bloque la modification si les revues anciennes ne peuvent pas être invalidées', async () => {
+    const sb = installSupabase({ resultsByTable: { recipe_pairing_profiles: { data: null, error: new Error('indisponible') } } });
+    const { result } = renderHook(() => useUpdateRecipe(), { wrapper: createQueryWrapper() });
+    await expect(result.current.mutateAsync({ id: 'r1', ingredients: [] })).rejects.toThrow('indisponible');
+    expect(sb.from.mock.calls.some(([table]) => table === 'recipes')).toBe(false);
   });
 });

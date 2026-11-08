@@ -7,6 +7,8 @@ import { resolveAIConfig } from "../_shared/ai-config.ts";
 import { callAINonStreaming } from "../_shared/ai-providers.ts";
 import { parseAnalysis } from "../_shared/analyze-output.ts";
 
+import { RECIPE_METADATA_PROMPT } from "../_shared/recipe-metadata.ts";
+
 const IngredientSchema = z.object({
   name: z.string(),
   quantity: z.union([z.string(), z.number()]).optional(),
@@ -75,12 +77,20 @@ Recette: ${title}
 Ingrédients: ${ingredientsList}
 Préparation: ${stepsList}
 
-Réponds en JSON avec ce format exact:
+${RECIPE_METADATA_PROMPT}
+
+Réponds en JSON avec les métadonnées ci-dessus et ces champs descriptifs :
 {
   "ai_summary": "Description courte et générique de la recette en 1-2 phrases",
   "nutrition_tags": ["tag1", "tag2"],
   "calorie_score": 3,
-  "season": "Saison de la recette en fonction des ingrédients"
+  "season": "Saison de la recette en fonction des ingrédients",
+  "entry_kind": "preparation ou complete_dish",
+  "pairing_profile": {
+    "roles": [], "flavors": [], "textures": [], "equipment": [], "allergens": [],
+    "dietary_compatibilities": [], "dietary_exclusions": [],
+    "active_minutes": 15, "make_ahead": false
+  }
 }
 
 Pour ai_summary: Une description courte et générique du plat (type de cuisine, caractéristiques principales).

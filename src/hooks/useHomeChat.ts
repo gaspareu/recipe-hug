@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useChatEngine, ActiveRecipeData, ChatEngineConfig, ToolCallAction, RecipeCard } from './useChatEngine';
 import type { Ingredient } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
+import { invalidatePairingProfileReview, recipeMetadataPatch, saveGeneratedPairingProfile } from '@/lib/recipe-metadata';
 import { triggerRecipeCompletion } from '@/lib/recipe-completion';
 import { generateRecipeImageInBackground } from '@/lib/recipe-image';
 import { applyPreferenceOperations } from '@/lib/preference-operations';
@@ -71,7 +72,7 @@ export function useHomeChat() {
         if (!recipe) return null;
         const details: ActiveRecipeData = {
           id: recipe.id, title: recipe.title, servings: recipe.servings,
-          season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
+          entry_kind: recipe.entry_kind, season: recipe.season, ingredients: recipe.ingredients, steps: recipe.steps,
         };
         return details;
       }
@@ -228,36 +229,50 @@ export function useHomeChat() {
       // RLS can make an UPDATE affect zero rows without returning an error.
       // Selecting the updated id lets the UI confirm that persistence happened.
       if (toSave.isUpdate && toSave.originalRecipeId) {
+        await invalidatePairingProfileReview(toSave.originalRecipeId);
         const { data: updatedRecipe, error } = await supabase.from('recipes').update({
+          ...recipeMetadataPatch(toSave),
           title: toSave.title, servings: toSave.servings,
           ingredients: toSave.ingredients as unknown as Json, steps: toSave.steps as unknown as Json,
           updated_at: new Date().toISOString(),
         }).eq('id', toSave.originalRecipeId).select('id').maybeSingle();
         if (error) throw error;
         if (!updatedRecipe) throw new Error("La recette n'a pas pu être mise à jour.");
+        try { await saveGeneratedPairingProfile(recipeId, toSave.pairing_profile, true); }
+        catch (error) { console.warn('Profil généré non enregistré :', error); }
       } else {
         const { data: newRecipe, error } = await supabase.from('recipes').insert({
+          ...recipeMetadataPatch(toSave),
           user_id: session.user.id, title: toSave.title, servings: toSave.servings,
           ingredients: toSave.ingredients as unknown as Json, steps: toSave.steps as unknown as Json,
           source_type: 'ai', status: 'draft',
-        }).select('id').single();
+        }).select('id, updated_at').single();
         if (error) throw error;
         recipeId = newRecipe?.id ?? '';
         if (recipeId) {
+          try { await saveGeneratedPairingProfile(recipeId, toSave.pairing_profile); }
+          catch (error) { console.warn('Profil généré non enregistré :', error); }
           generateRecipeImageInBackground({
             recipeId, title: toSave.title, ingredients: toSave.ingredients,
             accessToken: session.access_token, onSuccess: refetchRecipes,
           });
           triggerRecipeCompletion(
             recipeId,
-            { title: toSave.title, ingredients: toSave.ingredients, steps: toSave.steps,
-              ai_summary: null, calorie_score: null, nutrition_tags: null, season: null },
-            refetchRecipes,
+            { title: toSave.title, ingredients: toSave.ingredients, steps: toSave.steps, updated_at: newRecipe.updated_at,
+              ai_summary: null, calorie_score: null, nutrition_tags: null, season: null,
+              ...recipeMetadataPatch(toSave), pairing_profile: toSave.pairing_profile },
+            async () => {
+              await refetchRecipes();
+              queryClient.invalidateQueries({ queryKey: ['pairing-profile', recipeId] });
+              queryClient.invalidateQueries({ queryKey: ['pairings'] });
+            },
           );
         }
       }
 
       await refetchRecipes();
+      queryClient.invalidateQueries({ queryKey: ['pairing-profile', recipeId] });
+      queryClient.invalidateQueries({ queryKey: ['pairings'] });
       if (recipeId) queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
       engine.updateMessageCard(messageId, {
         status: 'saved', id: recipeId,

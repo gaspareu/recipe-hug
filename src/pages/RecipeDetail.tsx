@@ -1,3 +1,4 @@
+import { recipeMetadataPatch } from '@/lib/recipe-metadata';
 import { useCallback, useState, useMemo } from 'react';
 import { toast } from '@/components/ui/sonner';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -24,7 +25,7 @@ import { CookingModeContainer } from '@/components/cooking/CookingModeContainer'
 import { RecipePairings } from '@/components/recipes/RecipePairings';
 import { PairingProfileEditor } from '@/components/recipes/PairingProfileEditor';
 import { CookingChatSheet } from '@/components/cooking/CookingChatSheet';
-import { useRecipe, useToggleFavorite, useUpdateRecipe, useCreateRecipe } from '@/hooks/useRecipes';
+import { useRecipe, useToggleFavorite, useUpdateRecipe, useCreateRecipe, useAnalyzeRecipe } from '@/hooks/useRecipes';
 import { useRecipeChat } from '@/hooks/useRecipeChat';
 import { useGenerateRecipeImage } from '@/hooks/useGenerateRecipeImage';
 import { useAsyncAction } from '@/hooks/useAsyncAction';
@@ -61,6 +62,8 @@ function RecipeDetailAssistant({
 
   const handleRecipeUpdate = useCallback(async (data: PendingRecipe) => {
     await updateRecipe.mutateAsync({
+      ...recipeMetadataPatch(data),
+      pairing_profile: data.pairing_profile,
       id: data.originalRecipeId ?? recipe.id,
       title: data.title,
       servings: data.servings,
@@ -85,6 +88,8 @@ function RecipeDetailAssistant({
       nutrition_tags: null,
       calorie_score: null,
       source_image_url: null,
+      ...recipeMetadataPatch(data),
+      pairing_profile: data.pairing_profile,
     });
     return created.id;
   }, [createRecipe, recipe.title]);
@@ -141,6 +146,7 @@ export default function RecipeDetail() {
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
   const generateImage = useGenerateRecipeImage();
+  const analyzeRecipe = useAnalyzeRecipe();
   const [cookingTarget, setCookingTarget] = useState<{
     sourceRecipeId: string;
     recipeId: string;
@@ -191,14 +197,7 @@ export default function RecipeDetail() {
   const analyze = useAsyncAction(
     async () => {
       if (!recipe) return;
-      const { data, error } = await supabase.functions.invoke('analyze-recipe', {
-        body: { title: recipe.title, ingredients: recipe.ingredients, steps: recipe.steps },
-      });
-      if (error) throw error;
-      await updateRecipe.mutateAsync({
-        id: recipe.id, ai_summary: data.ai_summary,
-        nutrition_tags: data.nutrition_tags, calorie_score: data.calorie_score, season: data.season,
-      });
+      await analyzeRecipe.mutateAsync(recipe);
     },
     { errorMessage: "L'analyse a échoué" },
   );
