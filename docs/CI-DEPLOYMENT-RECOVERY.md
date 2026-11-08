@@ -87,3 +87,10 @@ officielle `deno@2.9.5`, dans un préfixe temporaire séparé du frontend, avec
 `--ignore-scripts`. Le lanceur trouve le binaire fourni par le paquet de sa
 plateforme ; aucun script postinstall ni téléchargement GitHub supplémentaire
 n'est nécessaire. Cette version est celle des validations locales.
+
+Le déploiement déclenché par #202 a rencontré la même panne HTTP 504 dans
+`supabase/setup-cli`, lors du téléchargement de Bun. Le workflow de déploiement
+utilise désormais la distribution npm officielle `supabase@2.122.0`, alignée sur
+le CLI du dépôt, sans scripts d’installation, dans un préfixe temporaire isolé.
+La condition `main`, l’environnement `Production`, les permissions, les étapes
+link → migrations → fonctions et leurs secrets restent identiques.
