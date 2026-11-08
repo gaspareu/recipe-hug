@@ -80,3 +80,10 @@ La validation des 288 tests Edge a été faite avec un cache Deno vide, puis le
 lockfile est conservé en mode `--frozen`. Tous les entrypoints modifiés sont
 aussi contrôlés par `deno check`. Le déploiement reste celui de la CI après
 fusion sur main.
+
+Le 8 novembre, les assets GitHub Releases de Deno renvoyaient aussi HTTP 504
+avant le lancement des tests. Le job CI installe désormais la distribution npm
+officielle `deno@2.9.5`, dans un préfixe temporaire séparé du frontend, avec
+`--ignore-scripts`. Le lanceur trouve le binaire fourni par le paquet de sa
+plateforme ; aucun script postinstall ni téléchargement GitHub supplémentaire
+n'est nécessaire. Cette version est celle des validations locales.
