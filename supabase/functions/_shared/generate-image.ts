@@ -5,7 +5,7 @@
 // ⚠️ Gemini : utiliser l'API NATIVE (`:generateContent` + responseModalities),
 // PAS l'endpoint OpenAI-compat — voir supabase/functions/AGENTS.md.
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.89.0";
 import { AIConfig } from "./ai-types.ts";
 
 export function buildRecipeImagePrompt(title: string, ingredients: unknown): string {

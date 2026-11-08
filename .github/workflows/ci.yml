@@ -65,10 +65,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+      - name: Setup Node.js pour la distribution officielle de Deno
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          deno-version: v2.x
+          node-version-file: .nvmrc
+
+      # Le paquet officiel embarque le binaire par plateforme : aucun accès aux
+      # assets GitHub Releases ni script postinstall n'est nécessaire.
+      - name: Installer Deno 2.9.5 depuis npm
+        run: |
+          npm install --prefix "$RUNNER_TEMP/deno-cli" --ignore-scripts --no-audit --no-fund deno@2.9.5
+          echo "$RUNNER_TEMP/deno-cli/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Vérifier la version de Deno
+        run: deno --version
 
       # La configuration Deno des fonctions est isolée sous `supabase/functions/` :
       # son lockfile ne résout que les imports Edge, indépendamment du package.json
