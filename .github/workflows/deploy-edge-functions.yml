@@ -54,9 +54,20 @@ jobs:
             exit 1
           fi
 
-      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+      - name: Setup Node.js pour le CLI Supabase
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          version: 2.115.0
+          node-version-file: .nvmrc
+
+      # Distribution officielle avec binaire par plateforme ; aucun script
+      # d'installation ni téléchargement de Bun depuis GitHub n'est nécessaire.
+      - name: Installer le CLI Supabase 2.122.0
+        run: |
+          npm install --prefix "$RUNNER_TEMP/supabase-cli" --ignore-scripts --no-audit --no-fund supabase@2.122.0
+          echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Vérifier le CLI Supabase
+        run: supabase --version
 
       - name: Lier le projet de production
         env:

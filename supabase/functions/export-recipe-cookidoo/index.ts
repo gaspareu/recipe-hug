@@ -1,6 +1,6 @@
 /** Recette classique → adaptation privée persistée → confirmation → envoi relu. */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { createClient } from "npm:@supabase/supabase-js@2.89.0";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptValue } from "../_shared/decrypt-keys.ts";
 import {
@@ -21,7 +21,7 @@ import {
   sleep,
   uploadRecipeImage,
 } from "../_shared/cookidoo/client.ts";
-import { ADAPTATION_JSON_SCHEMA } from "../_shared/cookidoo/adaptation-format.ts";
+import { ADAPTATION_JSON_SCHEMA, ADAPTATION_REPAIR_JSON_SCHEMA } from "../_shared/cookidoo/adaptation-format.ts";
 import { mapRecipeToCookidoo } from "../_shared/cookidoo/mapper.ts";
 import { validateCookidooPayload } from "../_shared/cookidoo/validate.ts";
 import { buildExportDiagnostics } from "../_shared/cookidoo/diagnostics.ts";
@@ -40,7 +40,8 @@ import {
   adaptationFailureDiagnostic,
   type AdaptationStage,
 } from "../_shared/cookidoo/adaptation-diagnostics.ts";
-import { generateAdaptation } from "../_shared/cookidoo/adaptation-generation.ts";
+import { generateAdaptation, ADAPTATION_TIMEOUT_MS } from "../_shared/cookidoo/adaptation-generation.ts";
+import { preparationRetryAt } from "../_shared/cookidoo/preparation-retry.ts";
 import { ExportSourceSchema } from "../_shared/cookidoo/preparation.ts";
 import {
   ADAPTER_VERSION,
@@ -59,6 +60,11 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 const fail = (error: string) => json({ ok: false, error });
+/** Une tentative échouée ne conserve jamais l'aperçu ni les questions précédents. */
+function failedPreparation(code: string, blockers: string[] = []) {
+  return { status: "failed" as const, error_code: code, adapted_recipe: null,
+    changes: [], notes: [], blockers, updated_at: new Date().toISOString() };
+}
 const ops: CookidooOps = {
   getRecipe,
   createRecipe,
@@ -233,19 +239,24 @@ serve(async (req) => {
       stored?.status === "preparing" &&
       Date.parse(stored.lease_until) < Date.now()
     ) {
-      const { error } = await admin.from("recipe_cookidoo_adaptations").update({
-        status: "failed",
-        error_code: "adaptation_failed",
-        updated_at: new Date().toISOString(),
-      }).eq("id", stored.id).eq("attempt_id", stored.attempt_id).eq(
+      const expired = failedPreparation("adaptation_failed", ["L’adaptation a expiré. Vous pouvez la relancer ; aucun envoi n’a été effectué."]);
+      const { error } = await admin.from("recipe_cookidoo_adaptations").update(expired).eq("id", stored.id).eq("attempt_id", stored.attempt_id).eq(
         "status",
         "preparing",
       );
       if (error) return fail("service_unavailable");
-      stored = { ...stored, status: "failed", error_code: "adaptation_failed" };
+      stored = { ...stored, ...expired };
     }
     async function preview(value: AdaptationRow | null, reused = true) {
       if (!value) return { ok: true, adaptation: null, job: safeJob(job) };
+      // Seul le serveur lit les quotas globaux ; le client reçoit uniquement la date de reprise.
+      let retryAt: string | null = null;
+      if (value.error_code === "preparation_rate_limited") {
+        const { data: buckets, error: retryError } = await admin.from("cookidoo_preparation_rate_limit_buckets")
+          .select("bucket_key,scope,window_started_at,request_count")
+          .in("bucket_key", ["global", `user:${user!.id}`]);
+        if (!retryError && buckets) retryAt = preparationRetryAt(buckets) ?? new Date().toISOString();
+      }
       const binding = {
         userId: user!.id,
         recipeId: recipeId as string,
@@ -266,6 +277,8 @@ serve(async (req) => {
           notes: value.notes,
           blockers: value.blockers,
           error_code: value.error_code,
+          retry_at: retryAt,
+          started_at: value.updated_at,
           reused,
           request_context: value.request_context,
           recipe: recipe
@@ -356,9 +369,9 @@ serve(async (req) => {
               source,
               technicalWaterMl: effectiveWater,
               clarifications: effectiveClarifications,
-              signal: AbortSignal.timeout(60000),
-              generate: (messages, signal) =>
-                callAINonStreaming(config, messages, signal, { jsonSchema: ADAPTATION_JSON_SCHEMA }),
+              signal: AbortSignal.timeout(ADAPTATION_TIMEOUT_MS),
+              generate: (messages, signal, phase) =>
+                callAINonStreaming(config, messages, signal, { jsonSchema: phase === "repair" ? ADAPTATION_REPAIR_JSON_SCHEMA : ADAPTATION_JSON_SCHEMA }),
               onEvent: (event) => {
                 stage = event.event === "generation"
                   ? "generation"
@@ -373,16 +386,12 @@ serve(async (req) => {
                 );
               },
             });
-            stage = "mapping";
-            const payload = mapRecipeToCookidoo(candidate.recipe);
-            if (!validateCookidooPayload(payload).ok) {
-              throw new Error("adaptation_failed");
-            }
             stage = "persistence";
             const { error: writeError } = await admin.from(
               "recipe_cookidoo_adaptations",
             ).update({
-              status: candidate.blockers.length ? "needs_input" : "ready",
+              status: candidate.status,
+              error_code: candidate.status === "failed" ? "adaptation_failed" : null,
               adapted_recipe: candidate.recipe,
               changes: candidate.changes,
               notes: candidate.notes,
@@ -396,7 +405,7 @@ serve(async (req) => {
               JSON.stringify({
                 event: "completed",
                 ...logContext,
-                status: candidate.blockers.length ? "needs_input" : "ready",
+                status: candidate.status,
                 duration_ms: Date.now() - startedAt,
               }),
             );
@@ -424,11 +433,13 @@ serve(async (req) => {
             );
             const { error: writeError } = await admin.from(
               "recipe_cookidoo_adaptations",
-            ).update({
-              status: "failed",
-              error_code: code,
-              updated_at: new Date().toISOString(),
-            }).eq("id", adaptation.id).eq("attempt_id", adaptation.attempt_id)
+            ).update(failedPreparation(code,
+              error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)
+                ? ["Le service d’adaptation n’a pas terminé dans le délai prévu. Aucun envoi n’a été effectué."]
+                : diagnostic.reason === "provider_http_error"
+                ? ["Le service d’adaptation est momentanément indisponible. Vous pouvez réessayer sans ajouter de précision."]
+                : []
+            )).eq("id", adaptation.id).eq("attempt_id", adaptation.attempt_id)
               .eq("status", "preparing");
             if (writeError) {
               console.error(

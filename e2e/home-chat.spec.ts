@@ -34,18 +34,18 @@ test.use({
 });
 
 test.describe('chat Home — mobile', () => {
-  test('masque les suggestions pendant la saisie puis les réaffiche lorsque le composeur est vide', async ({ page }) => {
+  test('retire les suggestions à l’entrée en saisie jusqu’à une nouvelle conversation', async ({ page }) => {
     await page.goto('/home');
 
     const input = page.getByRole('textbox', { name: 'Poser une question' });
-    const suggestions = page.getByTestId('suggestions-scroll');
+    const suggestions = page.getByRole('group', { name: 'Suggestions' });
     await expect(suggestions).toBeVisible();
 
     await input.fill('Je cherche une tarte aux pommes');
     await expect(suggestions).toBeHidden();
 
     await input.fill('');
-    await expect(suggestions).toBeVisible();
+    await expect(suggestions).toBeHidden();
   });
 
   test('affiche un retour contextualisé pendant la préparation d’une recette', async ({ page }) => {
@@ -56,7 +56,7 @@ test.describe('chat Home — mobile', () => {
 
     const input = page.getByRole('textbox', { name: 'Poser une question' });
     await input.fill('Crée-moi une tarte');
-    await input.press('Enter');
+    await page.getByRole('button', { name: 'Envoyer le message' }).click();
 
     await expect(page.getByRole('status', { name: 'Préparation de votre recette' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Créer la recette' })).toBeVisible();

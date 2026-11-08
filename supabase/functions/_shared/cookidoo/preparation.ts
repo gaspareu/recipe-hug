@@ -1,3 +1,4 @@
+import { isSteamAction } from "./settings.ts";
 /** Préparation réversible : seule la copie exportée reçoit les réglages proposés. */
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { parseStepAnnotations } from "./mapper.ts";
@@ -71,7 +72,7 @@ export function applyPreparation(source: Recipe, output: string): { recipe: Reci
       parsed.notes.push(`Étape ${s.order} : action manuelle conservée sans commande machine.`);
       return { ...s };
     }
-    if (tm7.mode === "steam" || tm7.temperature === "Varoma" || tm7.accessory === "varoma") {
+    if (isSteamAction(tm7)) {
       parsed.notes.push(`Étape ${s.order} : précisez et validez la quantité d'eau et les réglages vapeur dans la recette avant d'automatiser cette cuisson.`);
       return { ...s };
     }

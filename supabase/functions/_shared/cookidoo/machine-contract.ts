@@ -1,5 +1,6 @@
 /** Contrat d'export : distinct des conseils culinaires généraux du TM7. */
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { isSteamAction } from "./settings.ts";
 import { normalizeSpeed, TM7_MAX_SECONDS } from "../thermomix/reference.ts";
 
 export const MACHINE_RULES = {
@@ -80,8 +81,7 @@ export const MachineSchema = z.object({
     invalid("speed_required");
   }
   if (
-    (p.mode === "steam" || p.temperature === "Varoma" ||
-      p.accessory === "varoma") && p.speed && Number(p.speed) > 5
+    isSteamAction(p) && p.speed && Number(p.speed) > 5
   ) invalid("steam_speed_exceeded");
   if (p.accessory === "butterfly" && p.speed && Number(p.speed) > 4) {
     invalid("butterfly_speed_exceeded");

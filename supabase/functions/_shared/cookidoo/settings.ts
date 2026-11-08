@@ -1,5 +1,10 @@
 import type { Tm7StepParams } from "../thermomix/reference.ts";
 
+/** Même intention vapeur pour le validateur, le rendu et le mapping. */
+export function isSteamAction(tm7: Tm7StepParams | null | undefined): boolean {
+  return !!tm7 && (tm7.mode === "steam" || tm7.temperature === "Varoma" || tm7.accessory === "varoma");
+}
+
 /** Texte explicite : les accessoires restent visibles même sans commande Cookidoo dédiée. */
 export function formatExportSettings(tm7: Tm7StepParams): string {
   const accessories: Record<string, string> = { butterfly: "fouet", basket: "panier cuisson", varoma: "Varoma", spatula: "spatule", measuring_cup: "gobelet doseur", blade: "couteaux" };

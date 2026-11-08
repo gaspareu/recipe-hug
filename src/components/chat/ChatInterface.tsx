@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { memo, useState, useRef, useEffect, useCallback, useMemo, useId } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { Plus, Mic, MicOff, ArrowUp, X, Camera, Image, Copy, RotateCw, Square } from 'lucide-react';
@@ -10,6 +10,7 @@ import { TextShimmer } from '@/components/ui/text-shimmer';
 import { toast } from '@/components/ui/sonner';
 import { SoundWaveIndicator } from '@/components/voice/SoundWaveIndicator';
 import { RecipeChatCard } from './RecipeChatCard';
+import { useIsMobileInput } from '@/hooks/use-mobile';
 import { useVoiceMode } from '@/hooks/useVoiceMode';
 import { shouldSpeakMessage } from './shouldSpeakMessage';
 import { stripAssistantMetadata } from '@/lib/assistant-content';
@@ -40,14 +41,15 @@ const TOOL_ACTIVITY_LABELS: Record<string, string> = {
 // Only the streaming message changes on each token. Memoizing Markdown prevents
 // the full history from being parsed again while a response is arriving.
 const AssistantMarkdown = memo(function AssistantMarkdown({ content, showCaret }: { content: string; showCaret: boolean }) {
+  const prefersReducedMotion = useReducedMotion();
   return (
     <div className="prose prose-base max-w-none wrap-break-word text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:text-foreground prose-li:text-foreground first:prose-p:mt-0 last:prose-p:mb-0">
       <ReactMarkdown>{content}</ReactMarkdown>
       {showCaret && (
         <motion.span
           className="ml-0.5 inline-block h-[1.05em] w-[2px] mb-[-0.15em] rounded-full bg-foreground/70 align-middle"
-          animate={{ opacity: [1, 0, 1] }}
-          transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+          animate={{ opacity: prefersReducedMotion ? 1 : [1, 0, 1] }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.9, repeat: prefersReducedMotion ? 0 : Infinity, ease: 'easeInOut' }}
         />
       )}
     </div>
@@ -100,6 +102,9 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const navigate = useNavigate();
   const [input, setInput] = useState('');
+  const [welcomeSuggestionsDismissed, setWelcomeSuggestionsDismissed] = useState(false);
+  const isMobileInput = useIsMobileInput();
+  const keyboardHelpId = useId();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -107,7 +112,21 @@ export function ChatInterface({
   const lastMessageRef = useRef<string>('');
   const shouldAutoScrollRef = useRef(true);
   const hasConversation = messages.length > 1;
+  const [previousHasConversation, setPreviousHasConversation] = useState(hasConversation);
   const prefersReducedMotion = useReducedMotion();
+
+  // Réinitialiser pendant le rendu évite de peindre l'ancien brouillon au retour à l'accueil.
+  if (previousHasConversation !== hasConversation) {
+    setPreviousHasConversation(hasConversation);
+    if (!hasConversation) {
+      setWelcomeSuggestionsDismissed(false);
+      setInput('');
+      setSelectedImage(null);
+    }
+  }
+  useEffect(() => {
+    if (!hasConversation && inputRef.current) inputRef.current.style.height = 'auto';
+  }, [hasConversation]);
 
   // Voice mode
   const handleVoiceTranscript = useCallback((text: string) => {
@@ -208,20 +227,28 @@ export function ChatInterface({
   const handleOpenRecipe = useCallback((recipeId: string) => navigate(`/recipes/${recipeId}`), [navigate]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+    // Entrée reste une nouvelle ligne sur mobile et pendant une composition IME.
+    if (e.key !== 'Enter' || e.shiftKey || isMobileInput || e.nativeEvent.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    handleSubmit();
   };
 
   // Suggestions dynamiques extraites du dernier message assistant (SUGGESTIONS_REGEX = constante module-level)
   const activeSuggestions = useMemo(() => {
-    const lastAssistantMessage = [...messages].reverse().find(m => m.role === 'assistant' && m.content);
-    if (lastAssistantMessage?.content) {
-      const match = lastAssistantMessage.content.match(SUGGESTIONS_REGEX);
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.role === 'assistant' && lastMessage.content) {
+      const match = lastMessage.content.match(SUGGESTIONS_REGEX);
       if (match) {
-        try { return JSON.parse(match[1]) as string[]; } catch { /* JSON invalide : on garde les suggestions par défaut */ }
+        try {
+          const parsed: unknown = JSON.parse(match[1]);
+          if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
+            return parsed.slice(0, 3) as string[];
+          }
+        } catch { /* Le contenu invalide ne doit pas casser la conversation. */ }
       }
     }
-    return suggestions;
-  }, [messages, suggestions]);
+    return hasConversation ? [] : suggestions;
+  }, [messages, suggestions, hasConversation]);
 
   const displayMessages = useMemo(
     () => skipFirstMessage ? messages.slice(1) : messages,
@@ -256,16 +283,28 @@ export function ChatInterface({
       : 'Réflexion en cours...';
   const processingAriaLabel = processingLabel.replace(/\.\.\.$/, '');
   const showProcessingIndicator = isSavingRecipe || Boolean(toolActivity) || showThinkingIndicator;
-  const showSuggestions = activeSuggestions.length > 0
-    && input.length === 0
-    && !selectedImage;
+  const hasDraft = Boolean(input.trim() || selectedImage);
+  const showSuggestions = activeSuggestions.length > 0 && !isStreaming;
+  const suggestionButtons = showSuggestions && (hasConversation || !welcomeSuggestionsDismissed) ? (
+    <div className="flex flex-wrap gap-2" data-no-swipe-nav data-testid="chat-suggestions" role="group" aria-label="Suggestions">
+      {activeSuggestions.map((suggestion, index) => (
+        <Button
+          key={`${suggestion}-${index}`}
+          variant="outline"
+          onClick={() => sendMessage(suggestion)}
+          className="min-h-11 h-auto max-w-full rounded-2xl px-4 py-2 text-left text-sm whitespace-normal"
+        >
+          {suggestion}
+        </Button>
+      ))}
+    </div>
+  ) : null;
 
-  // Une activité déclenchée depuis une carte peut se situer sous le bord visible
-  // de l'historique. On la rend immédiatement lisible si l'utilisateur suivait
-  // déjà le dernier échange.
+  // L'activité et les relances peuvent apparaître sans nouveau message ([DONE]).
+  // Garder le dernier échange visible uniquement si le lecteur le suivait déjà.
   useEffect(() => {
-    if (showProcessingIndicator) scrollToBottom();
-  }, [showProcessingIndicator, scrollToBottom]);
+    if (showProcessingIndicator || showSuggestions) scrollToBottom();
+  }, [showProcessingIndicator, showSuggestions, scrollToBottom]);
 
   return (
     <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
@@ -273,7 +312,12 @@ export function ChatInterface({
 
       {/* Main content */}
       {showWelcomeScreen && !hasConversation ? (
-        welcomeContent
+        <div className="flex min-h-0 flex-1 flex-col">
+          {welcomeContent}
+          {!welcomeSuggestionsDismissed && (
+            <div className="shrink-0 px-4 pb-4">{suggestionButtons}</div>
+          )}
+        </div>
       ) : (
         <ScrollArea className="flex-1" ref={scrollRef}>
           {/* px-4 porté par le contenu, pas par la racine : une marge négative
@@ -289,7 +333,7 @@ export function ChatInterface({
                 <motion.div
                   key={message.id}
                   variants={messageVariants}
-                  initial="initial"
+                  initial={prefersReducedMotion ? false : 'initial'}
                   animate="animate"
                   transition={messageTransition}
                   className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
@@ -373,11 +417,15 @@ export function ChatInterface({
 
             {showProcessingIndicator && (
               <div className="flex justify-start" role="status" aria-live="polite" aria-label={processingAriaLabel}>
-                <TextShimmer className="font-mono text-sm" duration={1}>
-                  {processingLabel}
-                </TextShimmer>
+                {prefersReducedMotion ? <p className="text-sm text-muted-foreground">{processingLabel}</p> : (
+                  <TextShimmer className="font-mono text-sm" duration={1}>
+                    {processingLabel}
+                  </TextShimmer>
+                )}
               </div>
             )}
+
+            {suggestionButtons}
 
             {isListening && partialTranscript && (
               <div className="flex justify-end">
@@ -391,50 +439,10 @@ export function ChatInterface({
       )}
 
       {/* Bottom area */}
-      <div className="relative z-10 shrink-0 border-t border-border bg-background/80 p-4 backdrop-blur-xs">
-        {/* Quick suggestions */}
-        <AnimatePresence initial={false}>
-          {showSuggestions && (
-            <motion.div
-              key="chat-suggestions"
-              initial={prefersReducedMotion ? false : { height: 0, y: 24, opacity: 0 }}
-              animate={{ height: 'auto', y: 0, opacity: 1 }}
-              exit={prefersReducedMotion
-                ? { height: 0, opacity: 0, transition: { duration: 0 } }
-                : {
-                    height: 0,
-                    y: 32,
-                    opacity: 0,
-                    transition: { duration: 0.24, ease: 'easeInOut' },
-                  }}
-              className="relative z-0 overflow-hidden"
-              data-testid="suggestions-collapse"
-            >
-              <div className="pb-3">
-                <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-no-swipe-nav data-testid="suggestions-scroll">
-                  <div className="flex w-max gap-2">
-                    {activeSuggestions.map((suggestion, i) => (
-                      <Button
-                        key={i}
-                        variant={hasConversation ? 'ghost' : 'outline'}
-                        size="sm"
-                        onClick={() => sendMessage(suggestion)}
-                        disabled={isStreaming}
-                        className="h-auto shrink-0 whitespace-nowrap rounded-2xl border-border/50 px-4 py-2 text-sm hover:bg-muted"
-                      >
-                        {suggestion}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
+      <div className="relative z-10 shrink-0 border-t border-border bg-background/80 p-4 backdrop-blur-xs" data-no-swipe-nav>
         {/* Input container */}
         <div
-          className="relative z-10 mx-auto w-full max-w-[800px] rounded-[24px] border border-border/50 bg-muted px-3 pb-2 pt-3 transition-shadow focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/30"
+          className="relative z-10 mx-auto w-full max-w-[800px] rounded-[24px] border border-border/50 bg-muted px-3 pb-2 pt-3 transition-shadow motion-reduce:transition-none focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/30"
           data-testid="chat-composer"
         >
           {selectedImage && (
@@ -453,7 +461,9 @@ export function ChatInterface({
           <textarea
             ref={inputRef}
             value={input}
+            onFocus={() => setWelcomeSuggestionsDismissed(true)}
             onChange={e => {
+              setWelcomeSuggestionsDismissed(true);
               setInput(e.target.value);
               const target = e.target;
               target.style.height = 'auto';
@@ -462,10 +472,15 @@ export function ChatInterface({
             onKeyDown={handleKeyDown}
             placeholder={isListening ? 'Parlez...' : placeholder}
             aria-label={isListening ? 'Parlez...' : placeholder}
+            aria-describedby={keyboardHelpId}
+            enterKeyHint={isMobileInput ? 'enter' : 'send'}
             className="max-h-[120px] min-h-7 w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-0 text-base leading-6 text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
             rows={1}
-            disabled={isStreaming || isListening}
+            disabled={isListening}
           />
+          <p id={keyboardHelpId} className="sr-only">
+            {isMobileInput ? 'Retour pour une nouvelle ligne. Utilisez le bouton Envoyer pour envoyer le message.' : 'Entrée pour envoyer. Majuscule et Entrée pour une nouvelle ligne.'}
+          </p>
 
           <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageSelect} className="hidden" aria-hidden="true" tabIndex={-1} />
 
@@ -501,67 +516,31 @@ export function ChatInterface({
               </Popover>
             </TooltipProvider>
 
-            {/* Mic / Send button */}
-            <div className="flex items-center gap-2">
-              <AnimatePresence mode="popLayout" initial={false}>
-                {isStreaming && stopGeneration ? (
-                  <motion.button
-                    key="stop"
-                    initial={{ scale: 0.7, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.7, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    onClick={stopGeneration}
-                    className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/90"
-                    title="Arrêter la génération"
-                    aria-label="Arrêter la génération"
-                  >
-                    <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                  </motion.button>
-                ) : !input.trim() && !selectedImage ? (
-                  <motion.button
-                    key="mic"
-                    initial={{ scale: 0.7, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.7, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    onClick={() => {
-                      if (!voiceEnabled) { enableAndListen(); }
-                      else if (isListening) stopListening();
-                      else startListening();
-                    }}
-                    disabled={isStreaming || isConnecting}
-                    className={`flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full transition-colors ${isListening ? 'bg-primary text-primary-foreground' : isConnecting ? 'bg-muted animate-pulse' : 'hover:bg-accent text-foreground'}`}
-                    title={isConnecting ? 'Connexion...' : isListening ? "Arrêter l'écoute" : 'Dicter'}
-                    aria-label={isConnecting ? 'Connexion en cours...' : isListening ? "Arrêter l'écoute" : 'Dicter un message'}
-                    aria-pressed={isListening}
-                  >
-                    {isConnecting ? (
-                      <Mic className="h-5 w-5 text-muted-foreground" />
-                    ) : isListening ? (
-                      <SoundWaveIndicator />
-                    ) : (
-                      <Mic className="h-5 w-5" />
-                    )}
-                  </motion.button>
-                ) : (
-                  <motion.button
-                    key="send"
-                    initial={{ scale: 0.7, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.7, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    onClick={handleSubmit}
-                    disabled={isStreaming}
-                    className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/90"
-                    title="Envoyer"
-                    aria-label="Envoyer le message"
-                  >
-                    <ArrowUp className="h-5 w-5" aria-hidden="true" />
-                  </motion.button>
-                )}
-              </AnimatePresence>
-            </div>
+            {/* Une cible stable évite de déplacer le focus lors du changement d'action. */}
+            <button
+              type="button"
+              onPointerDown={event => {
+                // L'envoi et l'arrêt ne doivent pas voler le focus au brouillon.
+                if (isStreaming || hasDraft) event.preventDefault();
+              }}
+              onClick={() => {
+                if (isStreaming) { stopGeneration?.(); return; }
+                if (hasDraft) { handleSubmit(); return; }
+                if (!voiceEnabled) enableAndListen();
+                else if (isListening) stopListening();
+                else startListening();
+              }}
+              disabled={isStreaming ? !stopGeneration : isConnecting}
+              className={`flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full transition-colors motion-reduce:transition-none ${isStreaming || hasDraft ? 'bg-foreground text-background hover:bg-foreground/90' : isListening ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-accent'}`}
+              title={isStreaming ? 'Arrêter la génération' : hasDraft ? 'Envoyer' : isConnecting ? 'Connexion...' : isListening ? "Arrêter l'écoute" : 'Dicter'}
+              aria-label={isStreaming ? 'Arrêter la génération' : hasDraft ? 'Envoyer le message' : isConnecting ? 'Connexion en cours...' : isListening ? "Arrêter l'écoute" : 'Dicter un message'}
+              aria-pressed={!isStreaming && !hasDraft ? isListening : undefined}
+            >
+              {isStreaming ? <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                : hasDraft ? <ArrowUp className="h-5 w-5" aria-hidden="true" />
+                : isListening ? <SoundWaveIndicator />
+                : <Mic className="h-5 w-5" aria-hidden="true" />}
+            </button>
           </div>
         </div>
 
@@ -569,10 +548,10 @@ export function ChatInterface({
         <AnimatePresence>
           {isSpeaking && (
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.3, ease: 'easeInOut' }}
               className="mt-3 flex items-center justify-center gap-2"
             >
               <button onClick={stopSpeaking} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10">
@@ -587,10 +566,10 @@ export function ChatInterface({
         <AnimatePresence>
           {voiceEnabled && !isSpeaking && !isListening && (
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.3, ease: 'easeInOut' }}
               className="mt-3 flex items-center justify-center"
             >
               <button onClick={toggleVoice} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted" title="Désactiver le mode vocal" aria-label="Désactiver le mode vocal" aria-pressed={true}>

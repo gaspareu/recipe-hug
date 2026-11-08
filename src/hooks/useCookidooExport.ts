@@ -14,6 +14,8 @@ export interface CookidooAdaptation {
   blockers: string[];
   error_code: string | null;
   reused: boolean;
+  retry_at?: string | null;
+  started_at?: string;
   request_context?: { technical_water_ml?: number; clarifications?: string[] };
   confirmation: { token: string; expires_at: number } | null;
 }

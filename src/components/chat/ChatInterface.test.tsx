@@ -3,6 +3,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 
 // --- mocks hoistés ---
+const inputDevice = vi.hoisted(() => ({ mobile: false, reducedMotion: false }));
+vi.mock('@/hooks/use-mobile', () => ({ useIsMobileInput: () => inputDevice.mobile }));
+beforeEach(() => {
+  inputDevice.mobile = false;
+  inputDevice.reducedMotion = false;
+  vi.clearAllMocks();
+});
 vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),
 }));
@@ -53,7 +60,7 @@ vi.mock("framer-motion", async () => {
   return {
     AnimatePresence: ({ children }: { children: React.ReactNode }) => createElement(Fragment, null, children),
     motion: motionFn,
-    useReducedMotion: () => false,
+    useReducedMotion: () => inputDevice.reducedMotion,
   };
 });
 
@@ -122,58 +129,40 @@ const defaultProps = {
 
 describe("ChatInterface — responsive", () => {
   describe("zone de suggestions", () => {
-    it("affiche la zone de suggestions scrollable avec les classes responsive correctes", () => {
+    it("présente les suggestions d'accueil", () => {
       render(<ChatInterface {...defaultProps} />);
-      const scrollZone = screen.getByTestId("suggestions-scroll");
-      expect(scrollZone).toBeInTheDocument();
-      expect(scrollZone.className).toContain("overflow-x-auto");
-      expect(scrollZone.className).toContain("[&::-webkit-scrollbar]:hidden");
+      expect(screen.getByRole('group', { name: 'Suggestions' })).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Suggestion 1' })).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Suggestion 2' })).toBeVisible();
     });
 
-    it("n'a pas la classe scrollbar-none (classe custom inexistante dans le projet)", () => {
+    it("retire les suggestions au focus sans les réafficher à l'effacement ou au blur", () => {
       render(<ChatInterface {...defaultProps} />);
-      const scrollZone = screen.getByTestId("suggestions-scroll");
-      expect(scrollZone.className).not.toContain("scrollbar-none");
-    });
-
-    it("affiche les suggestions", () => {
-      render(<ChatInterface {...defaultProps} />);
-      expect(screen.getByText("Suggestion 1")).toBeInTheDocument();
-      expect(screen.getByText("Suggestion 2")).toBeInTheDocument();
-    });
-
-    it("intègre l'espace sous les suggestions dans le conteneur animé", () => {
-      render(<ChatInterface {...defaultProps} />);
-
-      const collapse = screen.getByTestId("suggestions-collapse");
-      expect(collapse).toHaveClass("overflow-hidden");
-      expect(collapse.firstElementChild).toHaveClass("pb-3");
-      expect(collapse.parentElement).not.toHaveClass("space-y-3");
-    });
-
-    it("masque les suggestions pendant la saisie et les réaffiche lorsque le composeur est vidé", () => {
-      render(<ChatInterface {...defaultProps} />);
-      const input = screen.getByRole("textbox", { name: "Poser une question" });
-
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
-      expect(screen.getByTestId("suggestions-scroll")).toBeInTheDocument();
-
-      fireEvent.change(input, { target: { value: "Je veux une tarte" } });
-      expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
-
-      fireEvent.change(input, { target: { value: "" } });
-      expect(screen.getByTestId("suggestions-scroll")).toBeInTheDocument();
-    });
-
-    it("ne réaffiche pas les suggestions au blur quand le texte n'est pas vide", () => {
-      render(<ChatInterface {...defaultProps} />);
-      const input = screen.getByRole("textbox", { name: "Poser une question" });
-
-      fireEvent.focus(input);
-      fireEvent.change(input, { target: { value: "Une tarte" } });
+      fireEvent.change(input, { target: { value: 'Une tarte' } });
+      fireEvent.change(input, { target: { value: '' } });
       fireEvent.blur(input);
+      expect(screen.queryByRole('group', { name: 'Suggestions' })).not.toBeInTheDocument();
+    });
 
-      expect(screen.queryByTestId("suggestions-scroll")).not.toBeInTheDocument();
+    it("ne réintroduit pas les suggestions d'accueil après une réponse", () => {
+      const { rerender } = render(<ChatInterface {...defaultProps} />);
+      rerender(<ChatInterface {...defaultProps} messages={[
+        makeMessage({ id: 'u', role: 'user' }),
+        makeMessage({ id: 'a', role: 'assistant', content: 'Voici une idée.' }),
+      ]} />);
+      expect(screen.queryByText('Suggestion 1')).not.toBeInTheDocument();
+    });
+
+    it("rétablit les suggestions lors d'une nouvelle conversation", () => {
+      const { rerender } = render(<ChatInterface {...defaultProps} />);
+      fireEvent.focus(screen.getByRole('textbox'));
+      rerender(<ChatInterface {...defaultProps} messages={[
+        makeMessage({ id: 'u' }), makeMessage({ id: 'a', role: 'assistant' }),
+      ]} />);
+      rerender(<ChatInterface {...defaultProps} />);
+      expect(screen.getByText('Suggestion 1')).toBeVisible();
     });
   });
 
@@ -595,5 +584,129 @@ describe("ChatInterface — accessibilité", () => {
         expect(stopBtn).toHaveAttribute("aria-label", "Arrêter la génération");
       }
     });
+  });
+});
+
+
+describe('ChatInterface — clavier et brouillon', () => {
+  it('envoie avec Entrée sur ordinateur et conserve Maj+Entrée', () => {
+    const sendMessage = vi.fn();
+    render(<ChatInterface {...defaultProps} sendMessage={sendMessage} />);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'Bonjour' } });
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+    expect(sendMessage).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(sendMessage).toHaveBeenCalledWith('Bonjour', undefined);
+    expect(input).toHaveValue('');
+  });
+
+  it('réserve Entrée au retour à la ligne sur mobile et envoie avec le bouton', () => {
+    inputDevice.mobile = true;
+    const sendMessage = vi.fn();
+    render(<ChatInterface {...defaultProps} sendMessage={sendMessage} />);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'Deux lignes' } });
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    fireEvent(input, event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer le message' }));
+    expect(sendMessage).toHaveBeenCalledWith('Deux lignes', undefined);
+  });
+
+  it('ne soumet pas une composition IME', () => {
+    const sendMessage = vi.fn();
+    render(<ChatInterface {...defaultProps} sendMessage={sendMessage} />);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'Texte en composition' } });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(input).toHaveValue('Texte en composition');
+  });
+
+  it('préserve le brouillon et le focus pendant la réponse puis permet son envoi', () => {
+    const sendMessage = vi.fn();
+    const stopGeneration = vi.fn();
+    const messages = [makeMessage({ id: 'u' }), makeMessage({ id: 'a', role: 'assistant' })];
+    const { rerender } = render(<ChatInterface {...defaultProps} messages={messages} sendMessage={sendMessage} isStreaming stopGeneration={stopGeneration} />);
+    const input = screen.getByRole('textbox');
+    input.focus();
+    expect(input).toBeEnabled();
+    fireEvent.change(input, { target: { value: 'Ma précision' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(input).toHaveValue('Ma précision');
+    fireEvent.click(screen.getByRole('button', { name: 'Arrêter la génération' }));
+    expect(stopGeneration).toHaveBeenCalledOnce();
+    rerender(<ChatInterface {...defaultProps} messages={messages} sendMessage={sendMessage} stopGeneration={stopGeneration} />);
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue('Ma précision');
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer le message' }));
+    expect(sendMessage).toHaveBeenCalledWith('Ma précision', undefined);
+  });
+
+  it('ne remonte pas la cible lorsque le micro devient envoyer puis arrêter', () => {
+    const { rerender } = render(<ChatInterface {...defaultProps} stopGeneration={vi.fn()} />);
+    const action = screen.getByRole('button', { name: 'Dicter un message' });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Ma demande' } });
+    expect(screen.getByRole('button', { name: 'Envoyer le message' })).toBe(action);
+    rerender(<ChatInterface {...defaultProps} isStreaming stopGeneration={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Arrêter la génération' })).toBe(action);
+  });
+
+  it('ne garde pas les suggestions d’une réponse précédente pendant un nouveau tour', () => {
+    render(<ChatInterface {...defaultProps} messages={[
+      makeMessage({ id: 'a', role: 'assistant', content: 'Idée [suggestions]["Ancienne"][/suggestions]' }),
+      makeMessage({ id: 'u', role: 'user' }),
+    ]} />);
+    expect(screen.queryByText('Ancienne')).not.toBeInTheDocument();
+  });
+
+  it('ignore les suggestions mal typées et limite les relances à trois', () => {
+    const { rerender } = render(<ChatInterface {...defaultProps} messages={[
+      makeMessage({ id: 'u' }), makeMessage({ id: 'a', role: 'assistant', content: '[suggestions][{}][/suggestions]' }),
+    ]} />);
+    expect(screen.queryByRole('group', { name: 'Suggestions' })).not.toBeInTheDocument();
+    rerender(<ChatInterface {...defaultProps} messages={[
+      makeMessage({ id: 'u' }), makeMessage({ id: 'a', role: 'assistant', content: '[suggestions]["Un", "Deux", "Trois", "Quatre"][/suggestions]' }),
+    ]} />);
+    expect(screen.getByRole('button', { name: 'Trois' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Quatre' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ChatInterface — ancrage des relances en fin de flux', () => {
+  it.each([
+    { position: 800, suitLeFil: true },
+    { position: 200, suitLeFil: false },
+  ])('affiche les relances sans déplacer un lecteur remonté dans le fil : $suitLeFil', ({ position, suitLeFil }) => {
+    // Les messages ne changent plus : seul [DONE] fait passer isStreaming à false.
+    const messages = [
+      makeMessage({ id: 'u', role: 'user', content: 'Ma demande' }),
+      makeMessage({ id: 'a', role: 'assistant', content: 'Une réponse longue. [suggestions]["Préciser", "Autre idée"][/suggestions]' }),
+    ];
+    const { container, rerender } = render(<ChatInterface {...defaultProps} messages={messages} isStreaming />);
+    const viewport = container.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')!;
+    Object.defineProperties(viewport, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: {
+        configurable: true,
+        get: () => screen.queryByRole('group', { name: 'Suggestions' }) ? 1200 : 1000,
+      },
+    });
+    viewport.scrollTop = position;
+    fireEvent.scroll(viewport);
+    expect(screen.queryByRole('group', { name: 'Suggestions' })).not.toBeInTheDocument();
+
+    rerender(<ChatInterface {...defaultProps} messages={messages} isStreaming={false} />);
+
+    expect(screen.getByRole('group', { name: 'Suggestions' })).toBeVisible();
+    if (suitLeFil) {
+      expect(viewport.scrollTop).toBeGreaterThanOrEqual(viewport.scrollHeight - viewport.clientHeight);
+    } else {
+      expect(viewport.scrollTop).toBe(position);
+    }
   });
 });

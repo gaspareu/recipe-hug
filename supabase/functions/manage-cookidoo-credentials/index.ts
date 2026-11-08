@@ -4,7 +4,7 @@
 //   POST   → upsert { email, password, country } (password chiffré)
 //   DELETE → supprime les identifiants
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { createClient } from "npm:@supabase/supabase-js@2.89.0";
 import { encryptValue, maskApiKey } from "../_shared/decrypt-keys.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 

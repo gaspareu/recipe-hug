@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
+import { createClient } from 'npm:@supabase/supabase-js@2.89.0';
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { rankPairings, type PairingConstraints, type PairingMetadata, type PairingRecipe } from '../_shared/pairing-rank.ts';

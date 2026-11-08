@@ -1,5 +1,5 @@
 import { renderHook, act } from "@testing-library/react";
-import { useIsMobile } from "./use-mobile";
+import { useIsMobile, useIsMobileInput } from "./use-mobile";
 
 function setWindowWidth(width: number) {
   Object.defineProperty(window, "innerWidth", {
@@ -64,5 +64,24 @@ describe("useIsMobile", () => {
     });
 
     expect(result.current).toBe(true);
+  });
+});
+
+
+describe('useIsMobileInput', () => {
+  it('reconnaît le clavier tactile sur une tablette ou un téléphone en paysage', () => {
+    setWindowWidth(1024);
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('pointer: coarse'),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    }));
+    const { result } = renderHook(() => useIsMobileInput());
+    expect(result.current).toBe(true);
+  });
+
+  it('conserve Entrée pour envoyer sur un ordinateur sans pointeur tactile', () => {
+    setWindowWidth(1280);
+    const { result } = renderHook(() => useIsMobileInput());
+    expect(result.current).toBe(false);
   });
 });

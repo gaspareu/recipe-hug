@@ -5,7 +5,7 @@ export const COOKIDOO_ERRORS: Record<string, string> = {
   decrypt_failed: 'Reconnectez votre compte Cookidoo depuis votre profil.',
   not_configured: 'Connectez votre compte Cookidoo pour envoyer cette recette.',
   ip_blocked: 'Cookidoo est momentanément indisponible. Votre version adaptée est conservée.',
-  rate_limited: 'Cookidoo reçoit trop de demandes. Votre version adaptée est conservée. Réessayez plus tard.',
+  rate_limited: 'Cookidoo reçoit trop de demandes. Votre version adaptée est conservée. Vous pouvez tenter un nouvel envoi dans une minute (délai indicatif).',
   preparation_rate_limited: 'La limite d’adaptation est atteinte. Réessayez plus tard. Les versions déjà préparées restent disponibles.',
   source_changed: 'La recette a changé. Actualisez la version Cookidoo avant de l’envoyer.',
   preview_expired: 'Actualisez l’aperçu avant de confirmer l’envoi. La version adaptée reste conservée.',
@@ -22,7 +22,17 @@ export const COOKIDOO_ERRORS: Record<string, string> = {
   backend_updating: 'Le service d’adaptation est en cours de mise à jour. Réessayez dans quelques instants.',
   not_found: 'Cette recette n’est plus disponible.',
 };
-export function cookidooErrorMessage(code?: string | null): string {
+export function cookidooErrorMessage(code?: string | null, retryAt?: string | null, now = Date.now()): string {
+  if (code === 'preparation_rate_limited' && retryAt && Number.isFinite(Date.parse(retryAt))) {
+    const remaining = Math.max(0, Math.ceil((Date.parse(retryAt) - now) / 1000));
+    if (!remaining) return 'Vous pouvez réessayer l’adaptation maintenant. Les versions déjà préparées restent disponibles.';
+    const hours = Math.floor(remaining / 3600);
+    const minutes = Math.floor((remaining % 3600) / 60);
+    const seconds = remaining % 60;
+    const delay = hours ? `${hours} h ${minutes} min` : minutes ? `${minutes} min ${seconds} s` : `${seconds} s`;
+    const date = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(retryAt));
+    return `Limite d’adaptation atteinte. Nouvelle tentative dans ${delay}, le ${date}. Les versions déjà préparées restent disponibles.`;
+  }
   return COOKIDOO_ERRORS[code ?? ''] ?? 'Le service est momentanément indisponible. Votre recette est conservée. Réessayez plus tard.';
 }
 export const COOKIDOO_WARNINGS: Record<string, string> = {

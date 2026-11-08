@@ -215,13 +215,35 @@ Export d'une recette recipe-hug vers le compte Cookidoo de l'utilisateur (« Mes
     ajoutée seule après vidage du bol et réservée à la vapeur. L'aperçu reste à vérifier par
     l'utilisateur : les contrôles structurels ne prouvent pas la réussite culinaire.
 
-    **Contrat compact v3** : les étapes manuelles peuvent référencer `source_parts`
-    (numéro source + index de fragment), recopiés par le serveur. Un ingrédient ajouté
+    **Contrat compact v5** : chaque fragment `source_parts` (numéro source + index)
+    est conservé (`keep`) ou remplacé (`replace`) une seule fois. Les transferts
+    et opérations techniques sont explicites ; `preparation_from` réutilise une
+    préparation sans ajouter ses ingrédients une seconde fois. Une transformation
+    consomme les anciennes références ; un transfert du bol déplace tout son contenu.
+    Le lavage et l'ajout d'eau vapeur exigent un bol vide. Une décision manuelle
+    devient `manual_only` dans la copie et ne déclenche pas le fallback machine du mapper.
+    Les fragments manuels sont recopiés par le serveur. Un ingrédient ajouté
     une seule fois peut omettre sa quantité ; plusieurs ajouts exigent une répartition
     explicite et une somme exacte. `machine-contract.ts` porte le schéma, les règles
     fermées et leur description pour le prompt, distincts des conseils TM7 généraux.
     L'API Anthropic reçoit `ADAPTATION_JSON_SCHEMA` ; les autres fournisseurs gardent
     le contrat JSON demandé dans le prompt et la même validation serveur.
+
+    **Autocorrection bornée** : une proposition exploitable avec erreur localisable
+    autorise jusqu'à trois patchs des indices signalés, via `ADAPTATION_REPAIR_JSON_SCHEMA`.
+    Les autres étapes et métadonnées restent identiques ; le plan entier, les quantités
+    et le payload sont revalidés. Chaque tour repart du dernier candidat et de ses
+    indices actuels. Les diagnostics d'ingrédients distinguent référence de préparation,
+    aliment absent, mesure et somme. Un cycle ou le même diagnostic répété arrête la
+    boucle. Génération et corrections partagent le délai de 60 s, au plus quatre appels.
+    Une erreur fournisseur ou un JSON sans périmètre fiable ne déclenche pas de
+    régénération aveugle. Un échec technique produit `failed`, sans recette exécutable
+    ni confirmation d'envoi, avec une explication issue des codes fermés et de la source.
+    L'interface permet une relance sans eau ni commentaire. `needs_input` est réservé
+    aux blocages culinaires du plan validé. Les diagnostics journalisés ne contiennent
+    que codes fermés et indices ; le détail destiné au propriétaire n'est pas journalisé.
+    Le suivi des fragments et des préparations, ainsi que les noms simples d'ingrédients,
+    ne prouvent pas toute la sémantique culinaire d'une phrase composite.
 
     Le contrôle appareil reçoit les instructions attendues et compare l'intention
     (notamment `cooking-mode/Dough`) et la durée, en plus de la présence du guidage.
