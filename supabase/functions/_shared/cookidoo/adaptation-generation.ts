@@ -98,6 +98,7 @@ export async function generateAdaptation(options: Options) {
   const sourceWithWater = withTechnicalWater(source, technicalWaterMl);
   let pendingMessages = messages;
   let phase: GenerationPhase = "generate";
+  let replanned = false;
   for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS + 1; attempt++) {
     signal.throwIfAborted();
     onEvent?.({ event: "generation", attempt });
@@ -153,7 +154,18 @@ export async function generateAdaptation(options: Options) {
       ? repairScope(failure, steps.length)
       : [];
     const candidateKey = await fingerprint(candidate);
-    const failureKey = await fingerprint(diagnostic);
+    const dependencyFailure = diagnostic.reason === "preparation_unavailable" ||
+      ("rule" in diagnostic &&
+        diagnostic.rule === "preparation_reference_required");
+    // Comparer la dépendance et son consommateur : les index peuvent être décalés
+    // par un patch, et deux étapes distinctes peuvent viser la même préparation.
+    const consumer = Array.isArray(steps) ? steps[scope[0]] : undefined;
+    const failureKey = await fingerprint(
+      dependencyFailure && "source_parts" in diagnostic &&
+        diagnostic.source_parts.length && consumer !== undefined
+        ? { ...diagnostic, step_indexes: undefined, consumer }
+        : diagnostic,
+    );
     signal.throwIfAborted();
     stop ??= !scope.length || diagnostic.reason === "unexpected_error"
       ? "unrepairable"
@@ -164,6 +176,29 @@ export async function generateAdaptation(options: Options) {
       : attempt > MAX_REPAIR_ATTEMPTS
       ? "limit"
       : undefined;
+    // Un patch local peut garder des dépendances incompatibles entre plusieurs
+    // étapes. Réserver une reconstruction complète au premier blocage répété
+    // de ce type, dans le même budget d’appels et avec le même validateur.
+    if (
+      !replanned && attempt <= MAX_REPAIR_ATTEMPTS &&
+      (stop === "same_failure" || stop === "cycle") &&
+      dependencyFailure
+    ) {
+      replanned = true;
+      pendingMessages = [
+        ...messages,
+        {
+          role: "user",
+          content: JSON.stringify({
+            instruction:
+              "Reconstruis le plan complet depuis la source. Conserve ensemble les gestes d’une même préparation. Vérifie dans l’ordre la production, le transfert et la consommation de chaque préparation. Pour les cuissons difficiles à transposer, conserve les gestes source.",
+            diagnostic,
+          }),
+        },
+      ];
+      phase = "generate";
+      continue;
+    }
     if (stop) {
       onEvent?.({
         event: "repair_stopped",

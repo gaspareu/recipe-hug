@@ -2,8 +2,17 @@ import type { Recipe } from "./types.ts";
 
 /** Découpe stable sans demander au modèle de compter des caractères ni de recopier. */
 export function sourceParts(text: string): string[] {
-  return text.trim().split(/(?<=[.!?])\s+(?=\p{Lu})|\n+/u).map((s) => s.trim())
-    .filter(Boolean);
+  const parts = text.trim().split(/(?<=[.!?])\s+(?=\p{Lu})|\n+/u)
+    .map((part) => part.trim()).filter(Boolean);
+  // Le mélange dans le plat suivi de son enfournement forme un seul rôtissage.
+  if (
+    parts.length === 3 &&
+    /^pr[ée]chauff\p{L}*\s+(?:le\s+)?four\b/iu.test(parts[0]) &&
+    /\bdans (?:un|le) plat\b/iu.test(parts[1]) &&
+    /\bm[ée]lang\p{L}*\b/iu.test(parts[1]) &&
+    /^enfourn\p{L}*\b/iu.test(parts[2])
+  ) return [text.trim()];
+  return parts;
 }
 
 export function adaptationInput(source: Recipe): unknown {
