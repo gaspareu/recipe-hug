@@ -7,6 +7,7 @@ const { mockSupabase } = vi.hoisted(() => ({
   mockSupabase: { from: vi.fn(), auth: { getUser: vi.fn(), getSession: vi.fn() } },
 }));
 
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 
 import { useMealPlans, useAddMealPlan, useDeleteMealPlan } from "./useMealPlans";
@@ -44,6 +45,22 @@ describe("useMealPlans", () => {
     expect(result.current.data?.entries[0].recipe_title).toBe("Tarte");
     expect(result.current.data?.entries[1].recipe_title).toBeUndefined();
     expect(result.current.data?.recipesMap["r1"].title).toBe("Tarte");
+  });
+
+  it("signale une erreur si les ingrédients des recettes liées sont indisponibles", async () => {
+    const error = { message: "Recettes indisponibles" };
+    installSupabase({
+      resultsByTable: {
+        meal_plans: { data: [{ id: "m1", recipe_id: "r1" }], error: null },
+        recipes: { data: null, error },
+      },
+    });
+    const { result } = renderHook(() => useMealPlans("2026-01-05"), {
+      wrapper: createQueryWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.error).toEqual(error));
+    expect(result.current.data).toBeUndefined();
   });
 });
 

@@ -1,7 +1,7 @@
-import { memo, useState, useRef, useEffect, useCallback, useMemo, useId } from 'react';
+import { memo, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, useId } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { Plus, Mic, MicOff, ArrowUp, X, Camera, Image, Copy, RotateCw, Square } from 'lucide-react';
+import { Plus, Mic, MicOff, ArrowUp, ArrowDown, X, Camera, Image, Copy, RotateCw, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -107,10 +107,12 @@ export function ChatInterface({
   const keyboardHelpId = useId();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const imageReadRef = useRef<FileReader | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMessageRef = useRef<string>('');
   const shouldAutoScrollRef = useRef(true);
+  const [following, setFollowing] = useState(true);
   const hasConversation = messages.length > 1;
   const [previousHasConversation, setPreviousHasConversation] = useState(hasConversation);
   const prefersReducedMotion = useReducedMotion();
@@ -126,11 +128,20 @@ export function ChatInterface({
   }
   useEffect(() => {
     if (!hasConversation && inputRef.current) inputRef.current.style.height = 'auto';
+    if (imageReadRef.current?.readyState === FileReader.LOADING && !hasConversation) imageReadRef.current.abort();
   }, [hasConversation]);
 
-  // Voice mode
+  useEffect(() => () => {
+    if (imageReadRef.current?.readyState === FileReader.LOADING) imageReadRef.current.abort();
+  }, []);
+
+  // Mode vocal
   const handleVoiceTranscript = useCallback((text: string) => {
-    if (text.trim()) sendMessage(text);
+    if (text.trim()) {
+      shouldAutoScrollRef.current = true;
+      setFollowing(true);
+      sendMessage(text);
+    }
   }, [sendMessage]);
 
   const {
@@ -151,48 +162,52 @@ export function ChatInterface({
 
   const scrollToBottom = useCallback(() => {
     if (!shouldAutoScrollRef.current) return;
-    const el = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]');
-    if (el) el.scrollTop = el.scrollHeight;
+    const viewport = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]');
+    if (viewport) viewport.scrollTop = viewport.scrollHeight;
   }, []);
 
-  // Keep the user anchored only while they are already reading the latest
-  // exchange. Classic chat behavior must not pull someone away from history.
-  useEffect(() => {
+  const resumeFollowing = () => {
+    shouldAutoScrollRef.current = true;
+    setFollowing(true);
+    scrollToBottom();
+  };
+
+  useLayoutEffect(() => {
     const viewport = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]');
     if (!viewport) return;
     const handleScroll = () => {
-      shouldAutoScrollRef.current = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 80;
+      const nearEnd = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 80;
+      shouldAutoScrollRef.current = nearEnd;
+      setFollowing(nearEnd);
     };
-    handleScroll();
     viewport.addEventListener('scroll', handleScroll, { passive: true });
-    return () => viewport.removeEventListener('scroll', handleScroll);
-  }, [hasConversation]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
-
-  // The virtual keyboard changes the visible viewport without scrolling the
-  // conversation. Re-anchor only if the reader was already at the latest turn.
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    viewport.addEventListener('resize', scrollToBottom);
-    return () => viewport.removeEventListener('resize', scrollToBottom);
-  }, [scrollToBottom]);
+    // Réagit au clavier, au composeur, aux images et aux cartes qui changent de taille.
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scrollToBottom);
+    observer?.observe(viewport);
+    if (viewport.firstElementChild) observer?.observe(viewport.firstElementChild);
+    return () => {
+      observer?.disconnect();
+      viewport.removeEventListener('scroll', handleScroll);
+    };
+  }, [hasConversation, showWelcomeScreen, scrollToBottom]);
 
   // Auto-speak new assistant messages
   useEffect(() => {
     const last = messages[messages.length - 1];
-    if (shouldSpeakMessage(last, { voiceEnabled, isStreaming, lastSpokenContent: lastMessageRef.current })) {
+    if (!last?.delivery && shouldSpeakMessage(last, { voiceEnabled, isStreaming, lastSpokenContent: lastMessageRef.current })) {
       lastMessageRef.current = last.content;
       speak(last.content);
     }
   }, [messages, isStreaming, voiceEnabled, speak]);
 
+  const sendAndFollow = (text: string, image?: string) => {
+    resumeFollowing();
+    sendMessage(text, image);
+  };
+
   const handleSubmit = () => {
     if ((!input.trim() && !selectedImage) || isStreaming) return;
-    sendMessage(input, selectedImage || undefined);
+    sendAndFollow(input, selectedImage || undefined);
     setInput('');
     setSelectedImage(null);
     if (inputRef.current) inputRef.current.style.height = 'auto';
@@ -200,6 +215,7 @@ export function ChatInterface({
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
       toast('Choisis une image JPEG, PNG ou WebP');
@@ -209,10 +225,12 @@ export function ChatInterface({
       toast("L'image ne peut pas dépasser 5 Mo");
       return;
     }
+    if (imageReadRef.current?.readyState === FileReader.LOADING) imageReadRef.current.abort();
     const reader = new FileReader();
+    imageReadRef.current = reader;
+    reader.onerror = () => toast("Impossible de lire cette image");
     reader.onload = event => setSelectedImage(event.target?.result as string);
     reader.readAsDataURL(file);
-    e.target.value = '';
   };
 
   const handleCopy = useCallback(async (content: string) => {
@@ -236,7 +254,7 @@ export function ChatInterface({
   // Suggestions dynamiques extraites du dernier message assistant (SUGGESTIONS_REGEX = constante module-level)
   const activeSuggestions = useMemo(() => {
     const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.role === 'assistant' && lastMessage.content) {
+    if (lastMessage?.role === 'assistant' && !lastMessage.delivery && lastMessage.content) {
       const match = lastMessage.content.match(SUGGESTIONS_REGEX);
       if (match) {
         try {
@@ -291,7 +309,7 @@ export function ChatInterface({
         <Button
           key={`${suggestion}-${index}`}
           variant="outline"
-          onClick={() => sendMessage(suggestion)}
+          onClick={() => sendAndFollow(suggestion)}
           className="min-h-11 h-auto max-w-full rounded-2xl px-4 py-2 text-left text-sm whitespace-normal"
         >
           {suggestion}
@@ -300,11 +318,12 @@ export function ChatInterface({
     </div>
   ) : null;
 
-  // L'activité et les relances peuvent apparaître sans nouveau message ([DONE]).
-  // Garder le dernier échange visible uniquement si le lecteur le suivait déjà.
-  useEffect(() => {
-    if (showProcessingIndicator || showSuggestions) scrollToBottom();
-  }, [showProcessingIndicator, showSuggestions, scrollToBottom]);
+  useLayoutEffect(scrollToBottom, [messages, showProcessingIndicator, showSuggestions, partialTranscript, scrollToBottom]);
+
+  const retry = () => {
+    resumeFollowing();
+    regenerateResponse?.();
+  };
 
   return (
     <div className={`flex flex-col flex-1 min-h-0 ${className}`}>
@@ -319,123 +338,141 @@ export function ChatInterface({
           )}
         </div>
       ) : (
-        <ScrollArea className="flex-1" ref={scrollRef}>
-          {/* px-4 porté par le contenu, pas par la racine : une marge négative
-              (rangée d'actions) sortirait à gauche de l'origine du scroller et
-              serait clippée sans possibilité de défiler jusqu'à elle. */}
-          <div role="log" aria-label="Conversation" aria-live={isStreaming ? 'off' : 'polite'} aria-busy={isStreaming} className="flex flex-col justify-end min-h-full px-4 py-4 space-y-6">
-            {displayMessages.map(message => {
-              const displayContent = getDisplayContent(message);
-              const isLast = message.id === messages[messages.length - 1]?.id;
-              const showCaret = isStreaming && isLast && message.role === 'assistant' && displayContent !== '';
-              const showActions = message.role === 'assistant' && displayContent !== '' && !(isStreaming && isLast);
-              return (
-                <motion.div
-                  key={message.id}
-                  variants={messageVariants}
-                  initial={prefersReducedMotion ? false : 'initial'}
-                  animate="animate"
-                  transition={messageTransition}
-                  className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
-                >
-                  <div className={`min-w-0 wrap-break-word ${message.role === 'user' ? 'max-w-[80%] bg-muted rounded-3xl px-4 py-3' : 'max-w-full sm:max-w-[85%]'}`}>
-                    {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
-                    {message.role === 'assistant' ? (
-                      <AssistantMarkdown content={displayContent} showCaret={showCaret} />
-                    ) : message.content && message.content !== '📷 Image envoyée' && (
-                      <p className="text-base whitespace-pre-wrap text-foreground">{message.content}</p>
-                    )}
-                    {showActions && (
-                      <div className="flex items-center gap-1 mt-1 -ml-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleCopy(displayContent)}
-                          title="Copier le message"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </Button>
-                        {isLast && regenerateResponse && (
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <ScrollArea className="flex-1" ref={scrollRef}>
+            {/* px-4 porté par le contenu, pas par la racine : une marge négative
+                (rangée d'actions) sortirait à gauche de l'origine du scroller et
+                serait clippée sans possibilité de défiler jusqu'à elle. */}
+            <div role="log" aria-label="Conversation" aria-live={isStreaming ? 'off' : 'polite'} aria-busy={isStreaming} className="flex flex-col justify-end min-h-full px-4 py-4 space-y-6">
+              {displayMessages.map(message => {
+                const displayContent = getDisplayContent(message);
+                const isLast = message.id === messages[messages.length - 1]?.id;
+                const showCaret = isStreaming && isLast && message.role === 'assistant' && displayContent !== '';
+                const showActions = message.role === 'assistant' && !message.delivery && displayContent !== '' && !(isStreaming && isLast);
+                return (
+                  <motion.div
+                    key={message.id}
+                    variants={messageVariants}
+                    initial={prefersReducedMotion ? false : 'initial'}
+                    animate="animate"
+                    transition={messageTransition}
+                    className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
+                  >
+                    <div className={`min-w-0 wrap-break-word ${message.role === 'user' ? 'max-w-[80%] bg-muted rounded-3xl px-4 py-3' : 'max-w-full sm:max-w-[85%]'}`}>
+                      {message.imageUrl && <img src={message.imageUrl} alt="Image envoyée" className="max-w-full max-h-64 rounded-2xl mb-2 object-cover" />}
+                      {message.role === 'assistant' ? (
+                        message.delivery === 'failed' ? <p role="alert" className="text-sm text-destructive">{displayContent}</p>
+                          : <AssistantMarkdown content={displayContent} showCaret={showCaret} />
+                      ) : message.content && message.content !== '📷 Image envoyée' && (
+                        <p className="text-base whitespace-pre-wrap text-foreground">{message.content}</p>
+                      )}
+                      {showActions && (
+                        <div className="flex items-center gap-1 mt-1 -ml-2">
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={regenerateResponse}
-                            disabled={isStreaming}
-                            title="Relancer la réponse"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => handleCopy(displayContent)}
+                            title="Copier le message" aria-label="Copier le message"
+                            className="h-11 w-11 text-muted-foreground hover:text-foreground"
                           >
-                            <RotateCw className="h-3.5 w-3.5" />
+                            <Copy className="h-3.5 w-3.5" />
                           </Button>
-                        )}
-                      </div>
+                          {isLast && regenerateResponse && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={retry}
+                              disabled={isStreaming}
+                              title="Relancer la réponse" aria-label="Relancer la réponse"
+                              className="h-11 w-11 text-muted-foreground hover:text-foreground"
+                            >
+                              <RotateCw className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      {message.delivery === 'interrupted' && <p role="status" className="text-sm text-muted-foreground">Réponse interrompue.</p>}
+                      {message.delivery && message.retryBlocked && (
+                        <p className="text-sm text-muted-foreground">Une action a pu être appliquée. Vérifie les changements avant de refaire ta demande.</p>
+                      )}
+                      {message.delivery && !message.retryBlocked && isLast && regenerateResponse && !isStreaming && (
+                        <Button type="button" variant="outline" onClick={retry} className="mt-2 min-h-11">
+                          Réessayer
+                        </Button>
+                      )}
+                      {message.recipeCard && (
+                        <RecipeChatCard
+                          card={message.recipeCard}
+                          isSaving={isSavingRecipe}
+                          onCreate={(data) => onCreateRecipe?.(message.id, { servings: data.servings, ingredients: data.ingredients })}
+                          onStartCooking={(recipeId, servings) => {
+                            // servings est transmis par la carte ; consommé par l'écran mode cuisine (plan séparé)
+                            onStartCooking?.(recipeId, servings);
+                          }}
+                          onOpenDetail={handleOpenRecipe}
+                          className="mt-2"
+                        />
+                      )}
+                      {message.recipeCards && message.recipeCards.length > 0 && (
+                        <div className="mt-2 flex flex-col gap-3">
+                          {message.recipeCards.map((card) => (
+                            <RecipeChatCard
+                              key={card.id}
+                              card={card}
+                              onCreate={() => { /* cartes saved : pas de création */ }}
+                              onStartCooking={(recipeId, servings) => {
+                                // servings transmis par la carte ; consommé par l'écran mode cuisine (plan séparé)
+                                onStartCooking?.(recipeId, servings);
+                              }}
+                              onOpenDetail={handleOpenRecipe}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {message.role === 'user' && message.content && message.content !== '📷 Image envoyée' && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleCopy(message.content)}
+                        title="Copier le message" aria-label="Copier le message"
+                        className="h-11 w-11 mt-1 text-muted-foreground hover:text-foreground"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
                     )}
-                    {message.recipeCard && (
-                      <RecipeChatCard
-                        card={message.recipeCard}
-                        isSaving={isSavingRecipe}
-                        onCreate={(data) => onCreateRecipe?.(message.id, { servings: data.servings, ingredients: data.ingredients })}
-                        onStartCooking={(recipeId, servings) => {
-                          // servings est transmis par la carte ; consommé par l'écran mode cuisine (plan séparé)
-                          onStartCooking?.(recipeId, servings);
-                        }}
-                        onOpenDetail={handleOpenRecipe}
-                        className="mt-2"
-                      />
-                    )}
-                    {message.recipeCards && message.recipeCards.length > 0 && (
-                      <div className="mt-2 flex flex-col gap-3">
-                        {message.recipeCards.map((card) => (
-                          <RecipeChatCard
-                            key={card.id}
-                            card={card}
-                            onCreate={() => { /* cartes saved : pas de création */ }}
-                            onStartCooking={(recipeId, servings) => {
-                              // servings transmis par la carte ; consommé par l'écran mode cuisine (plan séparé)
-                              onStartCooking?.(recipeId, servings);
-                            }}
-                            onOpenDetail={handleOpenRecipe}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {message.role === 'user' && message.content && message.content !== '📷 Image envoyée' && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleCopy(message.content)}
-                      title="Copier le message"
-                      className="h-7 w-7 mt-1 text-muted-foreground hover:text-foreground"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
+                  </motion.div>
+                );
+              })}
+
+              {showProcessingIndicator && (
+                <div className="flex justify-start" role="status" aria-live="polite" aria-label={processingAriaLabel}>
+                  {prefersReducedMotion ? <p className="text-sm text-muted-foreground">{processingLabel}</p> : (
+                    <TextShimmer className="font-mono text-sm" duration={1}>
+                      {processingLabel}
+                    </TextShimmer>
                   )}
-                </motion.div>
-              );
-            })}
-
-            {showProcessingIndicator && (
-              <div className="flex justify-start" role="status" aria-live="polite" aria-label={processingAriaLabel}>
-                {prefersReducedMotion ? <p className="text-sm text-muted-foreground">{processingLabel}</p> : (
-                  <TextShimmer className="font-mono text-sm" duration={1}>
-                    {processingLabel}
-                  </TextShimmer>
-                )}
-              </div>
-            )}
-
-            {suggestionButtons}
-
-            {isListening && partialTranscript && (
-              <div className="flex justify-end">
-                <div className="bg-muted/50 rounded-3xl px-4 py-3 max-w-[85%]">
-                  <p className="text-sm italic text-muted-foreground">{partialTranscript}...</p>
                 </div>
-              </div>
-            )}
-          </div>
-        </ScrollArea>
+              )}
+
+              {suggestionButtons}
+
+              {isListening && partialTranscript && (
+                <div className="flex justify-end">
+                  <div className="bg-muted/50 rounded-3xl px-4 py-3 max-w-[85%]">
+                    <p className="text-sm italic text-muted-foreground">{partialTranscript}...</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+          {!following && (
+            <Button type="button" variant="outline" size="icon" aria-label="Revenir au dernier message"
+              onClick={resumeFollowing} className="absolute bottom-3 left-1/2 z-10 h-11 w-11 -translate-x-1/2 rounded-full bg-background shadow-sm">
+              <ArrowDown aria-hidden="true" className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       )}
 
       {/* Bottom area */}
@@ -449,7 +486,10 @@ export function ChatInterface({
             <div className="pb-2">
               <div className="relative inline-block">
                 <img src={selectedImage} alt="Aperçu" className="h-20 w-20 object-cover rounded-xl" />
-                <button onClick={() => setSelectedImage(null)} aria-label="Supprimer l'image" className="absolute -top-2 -right-2 h-6 w-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center shadow-md hover:bg-destructive/90 touch-manipulation">
+                <button onClick={() => {
+                  if (imageReadRef.current?.readyState === FileReader.LOADING) imageReadRef.current.abort();
+                  setSelectedImage(null);
+                }} aria-label="Supprimer l'image" className="absolute -top-2 -right-2 h-11 w-11 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center shadow-md hover:bg-destructive/90 touch-manipulation">
                   <X className="h-3 w-3" aria-hidden="true" />
                 </button>
               </div>
@@ -490,7 +530,7 @@ export function ChatInterface({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <PopoverTrigger asChild>
-                      <button aria-label="Ajouter une pièce jointe" aria-haspopup="true" className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full border border-border transition-colors hover:bg-accent" disabled={isStreaming || isListening}>
+                      <button aria-label="Ajouter une pièce jointe" aria-haspopup="true" className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full border border-border transition-colors hover:bg-accent" disabled={isListening}>
                         <Plus className="h-5 w-5 text-foreground" aria-hidden="true" />
                       </button>
                     </PopoverTrigger>
@@ -505,10 +545,10 @@ export function ChatInterface({
                         fileInputRef.current.click();
                         fileInputRef.current.removeAttribute('capture');
                       }
-                    }} className="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground">
+                    }} className="flex min-h-11 items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground">
                       <Camera className="h-4 w-4" /><span>Prendre une photo</span>
                     </button>
-                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground">
+                    <button onClick={() => fileInputRef.current?.click()} className="flex min-h-11 items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-foreground">
                       <Image className="h-4 w-4" /><span>Ajouter une image</span>
                     </button>
                   </div>

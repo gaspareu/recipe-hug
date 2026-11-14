@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ChefHat, Pencil, Trash2 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { QueryError } from '@/components/ui/query-error';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ServingsControl } from '@/components/recipes/ServingsControl';
 import { IngredientChecklist } from '@/components/recipes/IngredientChecklist';
-import { useComposition, useCompositions, useDeleteComposition } from '@/hooks/useCompositions';
-import { useRecipes } from '@/hooks/useRecipes';
+import { useComposition, useDeleteComposition } from '@/hooks/useCompositions';
+import { useCompositionRecipes } from '@/hooks/useCompositionRecipes';
 import { useDetailServings } from '@/hooks/useDetailServings';
 import { ComposedCookingMode } from '@/components/cooking/ComposedCookingMode';
 import { resolveCookingRun, aggregateCookingIngredients } from '@/lib/resolve-cooking-run';
@@ -18,9 +19,10 @@ import type { Recipe } from '@/types/recipe';
 export default function CompositionDetail() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
-  const { data: composition, isLoading, isError } = useComposition(id);
-  const { data: compositions = [] } = useCompositions();
-  const { data: recipes = [], isLoading: recipesLoading, isError: recipesError } = useRecipes();
+  const { state } = useLocation();
+  const returnToBook = () => state?.fromBook === true ? navigate(-1) : navigate('/dashboard');
+  const { data: composition, compositions = [], isLoading, isError, refetch, isFetching } = useComposition(id);
+  const { data: recipes = [], isLoading: recipesLoading, isError: recipesError, refetch: refetchRecipes } = useCompositionRecipes([id], compositions);
   const deleteComposition = useDeleteComposition();
   const { servings, setServings } = useDetailServings(id, composition?.servings);
   const [session, setSession] = useState<{ target: CookingTarget; recipes: Recipe[]; compositions: Composition[] } | null>(null);
@@ -39,13 +41,13 @@ export default function CompositionDetail() {
     catch { toast('Cette composition est utilisée dans un menu ou un planning. Retirez d’abord ces références.'); }
   };
   if (isLoading) return <MainLayout><p role="status">Chargement de la composition…</p></MainLayout>;
-  if (isError) return <MainLayout><p role="alert">Impossible de charger cette composition. <Link to="/dashboard">Retour au Livre</Link></p></MainLayout>;
+  if (isError && !composition) return <MainLayout><QueryError message="Impossible de charger cette composition." onRetry={() => void refetch()} retrying={isFetching} /></MainLayout>;
   if (!composition) return <MainLayout><p>Composition introuvable. <Link to="/dashboard">Retour au Livre</Link></p></MainLayout>;
   const isMenu = composition.kind === 'menu';
 
   return <MainLayout>
     <div className="mx-auto max-w-5xl space-y-8 pb-32">
-      <Button asChild variant="ghost" className="min-h-11 px-0"><Link to="/dashboard"><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Retour au livre</Link></Button>
+      <Button onClick={returnToBook} variant="ghost" className="min-h-11 px-0"><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Retour au livre</Button>
       <header className="max-w-2xl space-y-3">
         <p className="text-sm font-medium text-primary">{isMenu ? 'Menu' : 'Plat composé'}</p>
         <h1 className="font-solitreo text-3xl leading-tight sm:text-4xl">{composition.title}</h1>
@@ -82,7 +84,7 @@ export default function CompositionDetail() {
           <ServingsControl value={servings} onChange={setServings} />
           <h2 id="composition-ingredients" className="border-t border-border pt-5 font-solitreo text-2xl">Ingrédients</h2>
           {recipesLoading && <p role="status">Chargement des fiches liées…</p>}
-          {recipesError && <p role="alert" className="text-destructive">Impossible de charger les fiches liées.</p>}
+          {recipesError && <QueryError message="Impossible de charger les fiches liées." onRetry={() => void refetchRecipes()} />}
           {previewError && <p role="alert" className="text-sm text-destructive">{previewError}</p>}
           {preview && <Tabs defaultValue="all" key={id}>
             <TabsList className="h-auto w-full"><TabsTrigger value="all" className="min-h-11 flex-1">Ensemble</TabsTrigger><TabsTrigger value="segments" className="min-h-11 flex-1">Par préparation</TabsTrigger></TabsList>

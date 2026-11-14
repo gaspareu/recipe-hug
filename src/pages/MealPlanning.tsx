@@ -11,7 +11,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRecipes } from '@/hooks/useRecipes';
+import { useAuth } from '@/hooks/useAuth';
+import { useRecipeCards } from '@/hooks/useRecipeCards';
+import { QueryError } from '@/components/ui/query-error';
+import { useCompositionRecipes } from '@/hooks/useCompositionRecipes';
 import { useCompositions } from '@/hooks/useCompositions';
 import { resolveCookingRun } from '@/lib/resolve-cooking-run';
 import { useMealPlans, useAddMealPlan, useDeleteMealPlan, type MealPlansData } from '@/hooks/useMealPlans';
@@ -34,6 +37,7 @@ interface AddingMeal {
 export default function MealPlanning() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const reduceMotion = useReducedMotion();
   const addMealPlan = useAddMealPlan();
   const deleteMealPlan = useDeleteMealPlan();
@@ -44,27 +48,27 @@ export default function MealPlanning() {
     return format(ws, 'yyyy-MM-dd');
   }, [currentDate]);
 
-  const { data, isLoading } = useMealPlans(weekStart);
+  const weekKey = ['meal_plans', weekStart, user?.id];
+  const { data, isLoading, isError, isFetching, refetch } = useMealPlans(weekStart);
   const meals = useMemo(() => data?.entries ?? [], [data]);
   const recipesMap = useMemo(() => data?.recipesMap ?? {}, [data]);
 
-  const { data: allRecipes = [] } = useRecipes();
-  const { data: compositions = [] } = useCompositions();
+  const [addingMeal, setAddingMeal] = useState<AddingMeal | null>(null);
+  const compositionIds = meals.flatMap(meal => meal.composition_id ? [meal.composition_id] : []);
+  const { data: compositions = [], isLoading: compositionsLoading } = useCompositions(true, compositionIds);
+  const { data: choices = [], isLoading: choicesLoading, isError: choicesError, refetch: refetchChoices } = useCompositions(!!addingMeal);
+  const { data: allRecipes = [], isLoading: linkedRecipesLoading } = useCompositionRecipes(compositionIds, compositions);
   const compositionsMap = useMemo(() => new Map(compositions.map(composition => [composition.id, composition])), [compositions]);
 
-  // Add meal dialog state
-  const [addingMeal, setAddingMeal] = useState<AddingMeal | null>(null);
+  // Sélecteur de repas
   const [recipeSearch, setRecipeSearch] = useState('');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [selectedCompositionId, setSelectedCompositionId] = useState<string | null>(null);
   const [customMealText, setCustomMealText] = useState('');
   const isAdding = addMealPlan.isPending;
 
-  const filteredRecipes = useMemo(() => {
-    if (!recipeSearch.trim()) return allRecipes.slice(0, 8);
-    const q = recipeSearch.toLowerCase();
-    return allRecipes.filter(r => r.title.toLowerCase().includes(q)).slice(0, 8);
-  }, [allRecipes, recipeSearch]);
+  const picker = useRecipeCards({ search: recipeSearch, titleOnly: true }, !!addingMeal);
+  const filteredRecipes = picker.isSearchPending ? [] : picker.data?.pages.flatMap(page => page.rows) ?? [];
 
   const openAddDialog = (dayIndex: number, mealType: string) => {
     setAddingMeal({ dayIndex, mealType });
@@ -116,6 +120,8 @@ export default function MealPlanning() {
             category: ing.category || 'Autres',
           });
         }
+      } else if (meal.recipe_id) {
+        customMeals.push('Recette inaccessible (ingrédients à vérifier)');
       } else if (meal.composition_id) {
         const composition = compositionsMap.get(meal.composition_id);
         if (!composition) { customMeals.push('Composition inaccessible (ingrédients à vérifier)'); continue; }
@@ -147,10 +153,10 @@ export default function MealPlanning() {
 
   const deleteMeal = (mealId: string) => {
     // Snapshot for undo
-    const previousData = queryClient.getQueryData(['meal_plans', weekStart]);
+    const previousData = queryClient.getQueryData(weekKey);
 
     // Optimistic remove
-    queryClient.setQueryData(['meal_plans', weekStart], (old: MealPlansData | undefined) => {
+    queryClient.setQueryData(weekKey, (old: MealPlansData | undefined) => {
       if (!old) return old;
       return { ...old, entries: old.entries.filter(e => e.id !== mealId) };
     });
@@ -161,7 +167,7 @@ export default function MealPlanning() {
         await deleteMealPlan.mutateAsync(mealId);
       } catch (error) {
         console.error('Erreur suppression:', error);
-        queryClient.setQueryData(['meal_plans', weekStart], previousData);
+        queryClient.setQueryData(weekKey, previousData);
         toast('Erreur lors de la suppression');
       }
     };
@@ -170,7 +176,7 @@ export default function MealPlanning() {
       action: {
         label: 'Annuler',
         onClick: () => {
-          queryClient.setQueryData(['meal_plans', weekStart], previousData);
+          queryClient.setQueryData(weekKey, previousData);
         },
       },
       onDismiss: commitDelete,
@@ -196,7 +202,7 @@ export default function MealPlanning() {
             <GroceryListSheet
               ingredients={groceryData.ingredients}
               customMeals={groceryData.customMeals}
-              hasMeals={meals.length > 0}
+              hasMeals={meals.length > 0 && !compositionsLoading && !linkedRecipesLoading}
             />
             <Button variant="ghost" size="icon" onClick={() => navigate('/home')} aria-label="Demander à Chef" className="h-11 w-11">
               <Utensils className="h-4 w-4" />
@@ -226,13 +232,11 @@ export default function MealPlanning() {
 
       {/* Planning grid */}
       <div className="flex-1 container max-w-4xl mx-auto px-4 pb-6">
-        {isLoading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 rounded-xl" />
-            ))}
-          </div>
-        ) : (
+        {isError && (
+          <QueryError message="Impossible de charger cette semaine." onRetry={() => void refetch()} retrying={isFetching} />
+        )}
+        {isLoading && <p role="status" className="sr-only">Chargement de la semaine…</p>}
+        {(isLoading || data) && (
           <div className="space-y-3">
             {weekDays.map((day, dayIndex) => {
               const dayMeals = MEAL_TYPES.map(mt => ({ ...mt, meal: getMeal(dayIndex, mt.key) }));
@@ -265,6 +269,7 @@ export default function MealPlanning() {
 
                     <div className="space-y-1.5">
                       {dayMeals.map(({ key, label, icon, meal }) => {
+                        if (isLoading) return <Skeleton key={key} className="h-11" />;
                         if (meal) {
                           const title = meal.recipe_title || (meal.composition_id ? compositionsMap.get(meal.composition_id)?.title : null) || meal.custom_meal || 'Repas';
                           return (
@@ -338,6 +343,7 @@ export default function MealPlanning() {
               <p className="text-sm font-medium text-foreground">Choisir une recette</p>
               <Input
                 className="rounded-2xl focus-visible:ring-accent"
+                aria-label="Rechercher une recette"
                 placeholder="Rechercher…"
                 value={recipeSearch}
                 onChange={e => {
@@ -346,6 +352,12 @@ export default function MealPlanning() {
                   setSelectedCompositionId(null);
                 }}
               />
+              {(picker.isPending || picker.isSearchPending) && <p role="status" className="text-sm text-muted-foreground">Recherche de recettes…</p>}
+              {picker.isError && <QueryError message="Impossible de charger les recettes." retrying={picker.isFetching}
+                onRetry={() => void (picker.isFetchNextPageError ? picker.fetchNextPage() : picker.refetch())} />}
+              {!picker.isPending && !picker.isSearchPending && !picker.isError && filteredRecipes.length === 0 && (
+                <p className="text-sm text-muted-foreground">Aucune recette trouvée.</p>
+              )}
               {filteredRecipes.length > 0 && (
                 <div className="border rounded-md divide-y max-h-44 overflow-y-auto">
                   {filteredRecipes.map(recipe => (
@@ -357,19 +369,25 @@ export default function MealPlanning() {
                         setRecipeSearch(recipe.title);
                         setCustomMealText('');
                       }}
-                      className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-accent ${selectedRecipeId === recipe.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
+                      className={`min-h-11 w-full text-left px-3 py-2 text-sm transition-colors hover:bg-accent ${selectedRecipeId === recipe.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
                     >
                       {recipe.title}
                     </button>
                   ))}
+                  {picker.hasNextPage && !picker.isFetchNextPageError && <Button type="button" variant="ghost" className="min-h-11 w-full"
+                    disabled={picker.isFetching} onClick={() => void picker.fetchNextPage()}>
+                    {picker.isFetchingNextPage ? 'Chargement…' : 'Afficher plus de recettes'}
+                  </Button>}
                 </div>
               )}
             </div>
 
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">Plat composé ou menu</p>
+              {choicesLoading && <p role="status" className="text-sm text-muted-foreground">Chargement des compositions…</p>}
+              {choicesError && <QueryError message="Impossible de charger les compositions." onRetry={() => void refetchChoices()} />}
               <div className="max-h-36 divide-y overflow-y-auto rounded-md border">
-                {compositions.filter(composition => composition.title.toLowerCase().includes(recipeSearch.toLowerCase())).map(composition => <button key={composition.id} type="button"
+                {choices.filter(composition => composition.title.toLowerCase().includes(recipeSearch.toLowerCase())).map(composition => <button key={composition.id} type="button"
                   className={`min-h-11 w-full px-3 text-left text-sm ${selectedCompositionId === composition.id ? 'bg-primary/10 font-semibold text-primary' : 'hover:bg-muted'}`}
                   onClick={() => { setSelectedCompositionId(composition.id); setSelectedRecipeId(null); setRecipeSearch(composition.title); setCustomMealText(''); }}>
                   {composition.title} · {composition.kind === 'menu' ? 'menu' : 'plat composé'}

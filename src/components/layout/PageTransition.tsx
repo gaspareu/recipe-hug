@@ -7,22 +7,17 @@ interface PageTransitionProps {
 }
 
 /**
- * Enveloppe une page pour animer son entrée/sortie sous <AnimatePresence>.
- * Respecte prefers-reduced-motion (simple fondu sans glissement).
+ * Anime brièvement l’entrée de la page.
+ * Respecte la préférence de réduction des mouvements.
  */
 export function PageTransition({ children }: PageTransitionProps) {
   const reduceMotion = useReducedMotion();
 
-  const variants = reduceMotion
-    ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } }
-    : pageVariants;
-
   return (
     <motion.div
-      variants={variants}
-      initial="initial"
+      variants={pageVariants}
+      initial={reduceMotion ? false : "initial"}
       animate="animate"
-      exit="exit"
       transition={pageTransition}
       className="min-h-dvh"
     >

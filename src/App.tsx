@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useLayoutEffect } from "react";
 import * as Sentry from "@sentry/react";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,11 +9,12 @@ import {
   Navigate,
   useOutlet,
   useLocation,
+  useNavigationType,
 } from "react-router-dom";
-import { AnimatePresence } from "framer-motion";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { RouteLoading } from '@/components/layout/RouteLoading';
 import { PageTransition } from "@/components/layout/PageTransition";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { RouteError } from "@/components/RouteError";
@@ -34,24 +35,18 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
-const SuspenseFallback = () => (
-  <div className="min-h-dvh flex items-center justify-center">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-  </div>
-);
-
-// Outlet animé : conserve les transitions de page (AnimatePresence keyé par pathname)
-// tout en s'appuyant sur le data router (requis par useBlocker dans RecipeEdit).
+// Le data router est requis par useBlocker dans RecipeEdit.
 const AnimatedOutlet = () => {
-  const location = useLocation();
+  const { pathname } = useLocation();
+  const navigationType = useNavigationType();
+  useLayoutEffect(() => {
+    if (pathname === '/dashboard' && navigationType !== 'PUSH') return;
+    if (window.scrollY !== 0) window.scrollTo(0, 0);
+  }, [pathname, navigationType]);
   const element = useOutlet();
   return (
-    <Suspense fallback={<SuspenseFallback />}>
-      <AnimatePresence mode="wait">
-        <div key={location.pathname} className="contents">
-          {element}
-        </div>
-      </AnimatePresence>
+    <Suspense fallback={<RouteLoading label="Chargement de la page…" />}>
+      <div key={pathname} className="contents">{element}</div>
     </Suspense>
   );
 };

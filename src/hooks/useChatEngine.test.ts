@@ -84,6 +84,25 @@ describe("sendMessage — streaming", () => {
     expect(result.current.isStreaming).toBe(false);
   });
 
+  it("permet de relancer un arrêt avant le premier fragment avec la même image", async () => {
+    fetchMock.mockImplementationOnce((_url: string, { signal }: { signal: AbortSignal }) =>
+      new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true })),
+    );
+    const { result, buildRequest } = setup();
+
+    act(() => { void result.current.sendMessage("Analyse cette photo", "data:image/png;base64,xyz"); });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    act(() => result.current.stopGeneration());
+    await waitFor(() => expect(lastMessage(result.current.messages)).toMatchObject({ delivery: "interrupted", content: "" }));
+
+    fetchMock.mockResolvedValueOnce(sseResponse([contentEvent("Réponse disponible")]));
+    await act(() => result.current.regenerateResponse());
+
+    expect(buildRequest.mock.calls[1][0].apiMessages).toEqual(buildRequest.mock.calls[0][0].apiMessages);
+    expect(result.current.messages.filter(message => message.role === "user")).toHaveLength(1);
+    expect(lastMessage(result.current.messages).content).toBe("Réponse disponible");
+  });
+
   it("envoie la requête construite par buildRequest avec le token de session", async () => {
     fetchMock.mockResolvedValue(sseResponse([contentEvent("Ok")]));
     const { result, buildRequest } = setup();
@@ -205,7 +224,7 @@ describe("sendMessage — streaming", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     // welcome + user + message d'erreur affiché dans le fil
     expect(result.current.messages).toHaveLength(3);
-    expect(result.current.messages[2].content).toBe("⚠️ Vous devez être connecté");
+    expect(result.current.messages[2]).toMatchObject({ delivery: "failed", content: "Vous devez être connecté" });
     expect(result.current.isStreaming).toBe(false);
   });
 
@@ -216,7 +235,7 @@ describe("sendMessage — streaming", () => {
     await act(() => result.current.sendMessage("Salut"));
 
     expect(result.current.messages.map((m) => m.role)).toEqual(["assistant", "user", "assistant"]);
-    expect(result.current.messages[2].content).toBe("⚠️ boom");
+    expect(result.current.messages[2]).toMatchObject({ delivery: "failed", content: "boom" });
     expect(result.current.isStreaming).toBe(false);
   });
 
@@ -226,7 +245,7 @@ describe("sendMessage — streaming", () => {
 
     await act(() => result.current.sendMessage("Salut"));
 
-    expect(result.current.messages[2].content).toBe("⚠️ Erreur de communication avec l'assistant");
+    expect(result.current.messages[2]).toMatchObject({ delivery: "failed", content: "Erreur de communication avec l'assistant" });
     expect(result.current.isStreaming).toBe(false);
   });
 });

@@ -6,9 +6,9 @@ import type { Composition } from '@/types/livre';
 
 const state = vi.hoisted(() => ({ recipes: [] as Recipe[], compositions: [] as Composition[], loading: false, error: false }));
 vi.mock('@/components/layout/MainLayout', () => ({ MainLayout: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
-vi.mock('@/hooks/useRecipes', () => ({ useRecipes: () => ({ data: state.recipes, isLoading: state.loading, isError: state.error }) }));
+vi.mock('@/hooks/useCompositionRecipes', () => ({ useCompositionRecipes: () => ({ data: state.recipes, isLoading: state.loading, isError: state.error }) }));
 vi.mock('@/hooks/useCompositions', () => ({
-  useComposition: () => ({ data: state.compositions[0], isLoading: false }),
+  useComposition: () => ({ data: state.compositions[0], compositions: state.compositions, isLoading: false }),
   useCompositions: () => ({ data: state.compositions }),
   useDeleteComposition: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
