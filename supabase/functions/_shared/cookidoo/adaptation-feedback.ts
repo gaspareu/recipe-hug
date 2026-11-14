@@ -56,13 +56,13 @@ export function adaptationBlockers(
     : [];
   return [
     stop === "limit"
-      ? "La correction automatique a atteint sa limite de trois corrections. Aucun envoi n’a été effectué."
+      ? "La correction automatique a atteint sa limite de tentatives. Aucun envoi n’a été effectué."
       : stop === "same_failure" || stop === "cycle"
       ? "La correction automatique a été arrêtée car elle répétait un blocage. Aucun envoi n’a été effectué."
       : "La correction automatique n’a pas pu poursuivre la validation. Aucun envoi n’a été effectué.",
     `${cause}${
       ingredients.length ? ` Ingrédient(s) : ${ingredients.join(", ")}.` : ""
     }${orders.length ? ` Étape(s) source : ${orders.join(", ")}.` : ""}`,
-    "Vous pouvez réessayer l’adaptation sans ajouter d’eau ni de commentaire pour contourner ce blocage technique.",
+    "Vous pouvez relancer l’adaptation depuis cette recette.",
   ];
 }

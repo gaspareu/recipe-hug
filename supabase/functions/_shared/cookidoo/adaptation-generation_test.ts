@@ -67,7 +67,7 @@ function setup(outputs: Array<string | Error>) {
       generate,
       onEvent: (e) => events.push(e),
     });
-  return { calls, events, run };
+  return { calls, events, generate, run };
 }
 
 Deno.test("plan valide : un appel et recette source intacte", async () => {
@@ -456,4 +456,102 @@ Deno.test("expiration pendant une réparation : aucun appel ultérieur", async (
     })
   );
   assertEquals(calls, 2);
+});
+
+Deno.test("velouté : le rôtissage reste entier et un blocage de dépendance déclenche un nouveau plan", async () => {
+  const roast =
+    "Préchauffe le four à 200 °C. Dans un plat, mélange le butternut avec 2 cuillères à soupe d’huile. Enfourne jusqu’à ce que les dés soient tendres.";
+  const veloute = {
+    title: "Velouté de butternut rôti",
+    ingredients: [
+      { name: "butternut", quantity: 1000, unit: "g" },
+      { name: "huile d’olive", quantity: 3, unit: "c. à soupe" },
+      { name: "oignon", quantity: 1, unit: "pièce" },
+    ],
+    steps: [
+      { order: 1, text: roast },
+      { order: 2, text: "Faire suer l’oignon dans l’huile restante." },
+      { order: 3, text: "Mixer le butternut rôti avec l’oignon." },
+    ],
+  };
+  const roasted = { order: 1, part: 0 };
+  const onion = { order: 2, part: 0 };
+  const plan = {
+    ...candidate(),
+    steps: [
+      {
+        kind: "keep",
+        source_orders: [1],
+        source_parts: [roasted],
+        tm7: null,
+        uses: [{ ingredient_index: 0 }, { ingredient_index: 1, quantity: 2 }],
+      },
+      {
+        kind: "replace",
+        source_orders: [2],
+        source_parts: [onion],
+        tm7: { mode: "cook", seconds: 300, speed: "1", temperature: 100 },
+        uses: [{ ingredient_index: 2 }, { ingredient_index: 1, quantity: 1 }],
+      },
+      {
+        kind: "transfer",
+        source_orders: [1],
+        source_parts: [],
+        preparation_from: [roasted],
+        manual_action: "transfer_to_bowl",
+        tm7: null,
+        uses: [],
+      },
+      {
+        kind: "replace",
+        source_orders: [3],
+        source_parts: [{ order: 3, part: 0 }],
+        preparation_from: [roasted, onion],
+        tm7: { mode: "mix", seconds: 30, speed: "5" },
+        uses: [],
+      },
+    ],
+  };
+  const transfer = plan.steps[2];
+  const invalidTransfer = {
+    ...transfer,
+    preparation_from: [{ order: 1, part: 2 }],
+  };
+  const roastWithoutOil = {
+    ...plan.steps[0],
+    uses: [{ ingredient_index: 0 }],
+  };
+  const test = setup([
+    JSON.stringify({
+      ...plan,
+      steps: [roastWithoutOil, plan.steps[1], invalidTransfer, plan.steps[3]],
+    }),
+    patch([plan.steps[0]]),
+    patch([invalidTransfer], 2),
+    JSON.stringify(plan),
+  ]);
+  const before = JSON.stringify(veloute);
+  const result = await generateAdaptation({
+    source: veloute,
+    signal: new AbortController().signal,
+    generate: (messages, signal, phase) => {
+      const step = JSON.parse(String(messages[1].content)).recipe.steps[0];
+      assertEquals(step.parts, [roast]);
+      return test.generate(messages, signal, phase);
+    },
+  });
+  assertEquals(test.calls.map((call) => call.phase), [
+    "generate",
+    "repair",
+    "repair",
+    "generate",
+  ]);
+  assertEquals(result.status, "ready");
+  assertEquals(result.recipe?.steps[0].text.includes(roast), true);
+  assertEquals(result.recipe?.steps[0].manual_only, true);
+  assertEquals(result.recipe?.steps[0].text.includes("2 c. à soupe"), true);
+  assertEquals(result.recipe?.steps[1].text.includes("1 c. à soupe"), true);
+  assertEquals(result.recipe?.steps[3].tm7?.mode, "mix");
+  assertEquals(result.recipe?.ingredients, veloute.ingredients);
+  assertEquals(JSON.stringify(veloute), before);
 });

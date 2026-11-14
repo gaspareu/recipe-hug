@@ -56,6 +56,14 @@ Deno.test("contrat compact : référence manuelle exacte, total unique repris sa
   );
 });
 
+Deno.test("le pétrissage reste convertible entre préchauffage et enfournement", () => {
+  assertEquals(sourceParts("Préchauffe le four. Pétris la pâte. Enfourne."), [
+    "Préchauffe le four.",
+    "Pétris la pâte.",
+    "Enfourne.",
+  ]);
+});
+
 Deno.test("fragments manuels : servir avant cuisson est rejeté, y compris entre deux étapes", () => {
   const manualSource = {
     ...source,
