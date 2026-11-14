@@ -29,11 +29,15 @@ export interface RecipeCard {
   isUpdate: boolean;
 }
 
+const USER_STOP = new DOMException('Réponse interrompue', 'AbortError');
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   imageUrl?: string;
+  delivery?: 'interrupted' | 'failed';
+  retryBlocked?: boolean;
   timestamp: Date;
   /** Carte de recette affichée après création/mise à jour, avec lien vers la fiche */
   recipeCard?: RecipeCard;
@@ -160,10 +164,14 @@ export function useChatEngine(config: ChatEngineConfig) {
     activeRecipeRef.current = activeRecipe;
   });
 
+  const retryBlockedRef = useRef(false);
   const runToolAction = useCallback(async (
     action: ToolCallAction,
     activeRecipe: ActiveRecipeData | null,
   ): Promise<unknown> => {
+    if (action.type === 'save_meal_plan' || action.type === 'update_preferences' || action.type === 'save_recipe') {
+      retryBlockedRef.current = true;
+    }
     const activityId = ++toolActivityIdRef.current;
     const startedAt = Date.now();
     if (toolActivityClearTimerRef.current !== null) {
@@ -282,6 +290,7 @@ export function useChatEngine(config: ChatEngineConfig) {
     reader: ReadableStreamDefaultReader<Uint8Array>,
     assistantMessageId: string,
     userContent: string,
+    signal: AbortSignal,
   ) => {
     const decoder = new TextDecoder();
     let buffer = '';
@@ -322,6 +331,7 @@ export function useChatEngine(config: ChatEngineConfig) {
       for (const { name, arguments: args } of [...toolCalls.entries()]
         .sort(([left], [right]) => left - right)
         .map(([, toolCall]) => toolCall)) {
+        signal.throwIfAborted();
         if (name && args) {
           assistantContent = await executeToolCall(name, args, assistantMessageId, assistantContent);
         }
@@ -396,6 +406,7 @@ export function useChatEngine(config: ChatEngineConfig) {
     flushPendingContent();
 
     // Fallback: parse actions from text
+    signal.throwIfAborted();
     assistantContent = parseTextActions(assistantContent, assistantMessageId);
 
     return assistantContent;
@@ -404,7 +415,7 @@ export function useChatEngine(config: ChatEngineConfig) {
   // Convertit les messages du fil en messages au format attendu par l'API.
   const toApiMessages = useCallback((chatMessages: ChatMessage[]): Array<{ role: string; content: MessageContent }> => {
     const recentMessages = chatMessages
-      .filter(m => m.id !== 'welcome')
+      .filter(m => m.id !== 'welcome' && !(m.delivery && !m.content) && m.delivery !== 'failed')
       .slice(-MAX_API_MESSAGES);
     // Do not start a provider conversation with an orphan assistant response.
     if (recentMessages[0]?.role === 'assistant') recentMessages.shift();
@@ -433,6 +444,7 @@ export function useChatEngine(config: ChatEngineConfig) {
   ) => {
     if (isStreamingRef.current) return;
     isStreamingRef.current = true;
+    retryBlockedRef.current = false;
     setIsStreaming(true);
     setSearchResults([]);
     retryWithRecipeRef.current = null;
@@ -440,6 +452,7 @@ export function useChatEngine(config: ChatEngineConfig) {
     const assistantMessageId = `assistant-${Date.now()}`;
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
+    let currentMessageId = assistantMessageId;
     let timedOut = false;
     const timeoutId = window.setTimeout(() => {
       timedOut = true;
@@ -448,6 +461,7 @@ export function useChatEngine(config: ChatEngineConfig) {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      abortController.signal.throwIfAborted();
       if (!session?.access_token) throw new Error('Vous devez être connecté');
 
       const { endpoint, body } = await buildRequestRef.current({ apiMessages, activeRecipe });
@@ -468,7 +482,8 @@ export function useChatEngine(config: ChatEngineConfig) {
       setMessages(prev => [...prev, { id: assistantMessageId, role: 'assistant', content: '', timestamp: new Date() }]);
 
       const reader = response.body.getReader();
-      await parseSSEStream(reader, assistantMessageId, lastUserContent);
+      await parseSSEStream(reader, assistantMessageId, lastUserContent, abortController.signal);
+      abortController.signal.throwIfAborted();
 
       // Auto-retry: if the AI called get_recipe_details, re-run the same request
       // with the recipe now available as activeRecipe in the system prompt.
@@ -492,13 +507,24 @@ export function useChatEngine(config: ChatEngineConfig) {
         }
         if (!response2.body) throw new Error('No response body');
         const retryMessageId = `assistant-${Date.now()}`;
+        currentMessageId = retryMessageId;
         setMessages(prev => [...prev, { id: retryMessageId, role: 'assistant', content: '', timestamp: new Date() }]);
         const reader2 = response2.body.getReader();
-        await parseSSEStream(reader2, retryMessageId, lastUserContent);
+        await parseSSEStream(reader2, retryMessageId, lastUserContent, abortController.signal);
+        abortController.signal.throwIfAborted();
       }
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError' && !timedOut) {
-        // Arrêt volontaire : on garde le contenu déjà streamé tel quel.
+      const retryBlocked = retryBlockedRef.current;
+      if (abortController.signal.aborted && !timedOut) {
+        if (abortController.signal.reason !== USER_STOP) return;
+        setMessages(prev => {
+          const last = prev.at(-1);
+          if (last?.id !== currentMessageId && last?.role !== 'user') return prev;
+          if (last?.id === currentMessageId) return [
+            ...prev.slice(0, -1), { ...last, delivery: 'interrupted', retryBlocked },
+          ];
+          return [...prev, { id: currentMessageId, role: 'assistant', content: '', delivery: 'interrupted', retryBlocked, timestamp: new Date() }];
+        });
         return;
       }
       console.error('Chat error:', error);
@@ -508,8 +534,8 @@ export function useChatEngine(config: ChatEngineConfig) {
         ? "La réponse a pris trop de temps. Réessaie."
         : error instanceof Error ? error.message : "Erreur de communication avec l'assistant";
       setMessages(prev => [
-        ...prev.filter(m => m.id !== assistantMessageId),
-        { id: `error-${Date.now()}`, role: 'assistant', content: `⚠️ ${message}`, timestamp: new Date() },
+        ...prev.filter(m => m.id !== currentMessageId),
+        { id: `error-${Date.now()}`, role: 'assistant', content: message, delivery: 'failed', retryBlocked, timestamp: new Date() },
       ]);
     } finally {
       window.clearTimeout(timeoutId);
@@ -523,7 +549,7 @@ export function useChatEngine(config: ChatEngineConfig) {
 
   // Interrompt la réponse en cours de génération.
   const stopGeneration = useCallback(() => {
-    abortControllerRef.current?.abort();
+    abortControllerRef.current?.abort(USER_STOP);
   }, []);
 
   // Cleanup au démontage : abandonne toute requête de streaming en cours pour
@@ -560,7 +586,7 @@ export function useChatEngine(config: ChatEngineConfig) {
   // messages assistant qui suivent le dernier message utilisateur et on
   // renvoie la même requête.
   const regenerateResponse = useCallback(async () => {
-    if (isStreaming || isStreamingRef.current) return;
+    if (isStreaming || isStreamingRef.current || messages.at(-1)?.retryBlocked) return;
 
     const lastUserIndex = messages.map(m => m.role).lastIndexOf('user');
     if (lastUserIndex === -1) return;

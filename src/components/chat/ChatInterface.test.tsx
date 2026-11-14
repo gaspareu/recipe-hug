@@ -707,6 +707,24 @@ describe('ChatInterface — ancrage des relances en fin de flux', () => {
       expect(viewport.scrollTop).toBeGreaterThanOrEqual(viewport.scrollHeight - viewport.clientHeight);
     } else {
       expect(viewport.scrollTop).toBe(position);
+      fireEvent.click(screen.getByRole('button', { name: 'Revenir au dernier message' }));
+      expect(viewport.scrollTop).toBeGreaterThanOrEqual(viewport.scrollHeight - viewport.clientHeight);
+      expect(screen.queryByRole('button', { name: 'Revenir au dernier message' })).not.toBeInTheDocument();
     }
   });
+});
+
+
+it.each(['interrupted', 'failed'] as const)('permet de relancer un tour %s en conservant le brouillon', delivery => {
+  const regenerateResponse = vi.fn();
+  const messages = [
+    makeMessage({ id: 'u' }),
+    makeMessage({ id: 'a', role: 'assistant', content: delivery === 'failed' ? 'Connexion indisponible' : '', delivery }),
+  ];
+  render(<ChatInterface {...defaultProps} messages={messages} regenerateResponse={regenerateResponse} />);
+  const draft = screen.getByRole('textbox');
+  fireEvent.change(draft, { target: { value: 'Mon brouillon' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+  expect(regenerateResponse).toHaveBeenCalledOnce();
+  expect(draft).toHaveValue('Mon brouillon');
 });

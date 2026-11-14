@@ -3,7 +3,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Heart, Loader2 } from 'lucide-react';
 import { getPlaceholderForRecipe } from '@/lib/recipePlaceholder';
 import { useIsGeneratingImage } from '@/lib/imageGenerationStore';
@@ -16,11 +16,12 @@ export interface GalleryItem {
 }
 interface ImageGalleryProps {
   items: GalleryItem[];
+  onOpen?: () => void;
   onToggleFavorite?: (id: string, isFavorite: boolean) => void;
   isTogglingFavorite?: boolean;
 }
 
-export function ImageGallery({ items, onToggleFavorite, isTogglingFavorite }: ImageGalleryProps) {
+export function ImageGallery({ items, onOpen, onToggleFavorite, isTogglingFavorite }: ImageGalleryProps) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:gap-3 lg:grid-cols-4">
       {items.map((item) => (
@@ -32,6 +33,7 @@ export function ImageGallery({ items, onToggleFavorite, isTogglingFavorite }: Im
           fallback={getPlaceholderForRecipe(item.id)}
           title={item.title}
           isFavorite={item.isFavorite}
+          onOpen={onOpen}
           onToggleFavorite={onToggleFavorite}
           isTogglingFavorite={isTogglingFavorite}
         />
@@ -47,6 +49,7 @@ interface AnimatedImageProps {
   fallback: string;
   title: string;
   isFavorite?: boolean;
+  onOpen?: () => void;
   onToggleFavorite?: (id: string, isFavorite: boolean) => void;
   isTogglingFavorite?: boolean;
 }
@@ -60,10 +63,12 @@ function AnimatedImage({
   fallback,
   title,
   isFavorite,
+  onOpen,
   onToggleFavorite,
   isTogglingFavorite,
 }: AnimatedImageProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isLoading, setIsLoading] = React.useState(true);
   const [imgSrc, setImgSrc] = React.useState(src);
   // Génération d'image IA en cours : seulement pertinent tant qu'aucune image
@@ -86,7 +91,10 @@ function AnimatedImage({
     import('@/pages/RecipeDetail');
   };
 
-  const goToDetail = () => navigate(`/recipes/${id}`);
+  const goToDetail = () => {
+    onOpen?.();
+    navigate(`/recipes/${id}`, { state: { fromBook: location.pathname === '/dashboard' } });
+  };
 
   const triggerLike = () => {
     if (onToggleFavorite && !isTogglingFavorite && !isFavorite) {
@@ -100,6 +108,11 @@ function AnimatedImage({
     // Préserve l'ouverture dans un nouvel onglet / clic modifié.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
     e.preventDefault();
+
+    if (e.detail === 0) {
+      goToDetail();
+      return;
+    }
 
     const now = Date.now();
     if (now - lastTapRef.current < DOUBLE_TAP_MS) {

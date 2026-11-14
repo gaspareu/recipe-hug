@@ -11,11 +11,10 @@ export const easeStandard = [0.4, 0, 0.2, 1] as const;
 export const pageVariants = {
   initial: { opacity: 0, y: 8 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
 } as const;
 
 /** Transition par défaut pour les pages. */
-export const pageTransition = { duration: 0.22, ease: easeStandard } as const;
+export const pageTransition = { duration: 0.15, ease: easeStandard } as const;
 
 /** Variants d'entrée d'un message de chat. */
 export const messageVariants = {

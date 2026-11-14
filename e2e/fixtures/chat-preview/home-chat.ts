@@ -28,7 +28,14 @@ export function useHomeChat() {
   return {
     messages, isStreaming, sendMessage,
     resetChat: () => { cancel(); setMessages([welcome]); },
-    stopGeneration: cancel,
+    stopGeneration: () => {
+      cancel();
+      setMessages(previous => {
+        const last = previous.at(-1);
+        if (last?.role === 'assistant') return [...previous.slice(0, -1), { ...last, delivery: 'interrupted' }];
+        return [...previous, { id: 'interrupted', role: 'assistant', content: '', delivery: 'interrupted', timestamp: new Date() }];
+      });
+    },
     regenerateResponse: () => sendMessage('Une autre réponse'),
     createProposedRecipe: noop,
     cookingRecipeId: null, cookingServings: undefined,

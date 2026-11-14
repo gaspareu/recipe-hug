@@ -1,7 +1,7 @@
 import { recipeMetadataPatch } from '@/lib/recipe-metadata';
 import { useCallback, useState, useMemo } from 'react';
 import { toast } from '@/components/ui/sonner';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, ListChecks, ChefHat, History, MessageCircle } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RecipeImageDisplay } from '@/components/recipes/RecipeImageDisplay';
@@ -16,6 +16,7 @@ import { RecipeStepsList } from '@/components/recipes/RecipeStepsList';
 import { RecipeVersionHistory } from '@/components/recipes/RecipeVersionHistory';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { QueryError } from '@/components/ui/query-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -141,8 +142,10 @@ function RecipeDetailAssistant({
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { state } = useLocation();
+  const returnToBook = () => state?.fromBook === true ? navigate(-1) : navigate('/dashboard');
   const { user } = useAuth();
-  const { data: recipe, isLoading } = useRecipe(id || '');
+  const { data: recipe, isLoading, isError, refetch, isFetching } = useRecipe(id || '');
   const toggleFavorite = useToggleFavorite();
   const updateRecipe = useUpdateRecipe();
   const generateImage = useGenerateRecipeImage();
@@ -205,6 +208,10 @@ export default function RecipeDetail() {
   if (isLoading) {
     return <MainLayout><div className="max-w-2xl mx-auto space-y-6"><Skeleton className="h-10 w-48" /><Skeleton className="h-[200px]" /><Skeleton className="h-[200px]" /></div></MainLayout>;
   }
+  if (isError && !recipe) {
+    return <MainLayout><QueryError message="Impossible de charger cette recette." onRetry={() => void refetch()} retrying={isFetching} /></MainLayout>;
+  }
+
   if (!recipe) {
     return <MainLayout><div className="text-center py-12"><p className="text-muted-foreground">Recette introuvable</p><Button asChild className="mt-4"><Link to="/dashboard">Retour au Livre</Link></Button></div></MainLayout>;
   }
@@ -223,7 +230,7 @@ export default function RecipeDetail() {
     <MainLayout>
       <div className="mx-auto max-w-5xl space-y-8 pb-32">
         <nav className="flex items-center justify-between gap-2" aria-label="Actions de la fiche">
-          <Button variant="ghost" onClick={() => navigate('/dashboard')} className="min-h-11 px-0"><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Retour au livre</Button>
+          <Button variant="ghost" onClick={returnToBook} className="min-h-11 px-0"><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Retour au livre</Button>
           <div className="flex items-center gap-1" data-testid="action-buttons">
             <TooltipProvider>
               <FavoriteToggle isFavorite={recipe.is_favorite} onToggle={handleToggleFavorite} disabled={toggleFavorite.isPending} tooltipText={recipe.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} />

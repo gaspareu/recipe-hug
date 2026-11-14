@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { Ingredient } from '@/types/recipe';
 import type { Json } from '@/integrations/supabase/types';
@@ -27,22 +28,27 @@ export interface MealPlansData {
 
 /** Repas planifiés de la semaine + recettes liées (pour titres et liste de courses). */
 export function useMealPlans(weekStart: string) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['meal_plans', weekStart],
+    queryKey: ['meal_plans', weekStart, user?.id],
+    enabled: !!user,
+    staleTime: 30_000,
     queryFn: async (): Promise<MealPlansData> => {
+      if (!user) throw new Error('Non authentifié');
       const { data, error } = await supabase
         .from('meal_plans')
         .select('id, day_of_week, meal_type, recipe_id, composition_id, custom_meal, notes')
-        .eq('week_start', weekStart);
+        .eq('week_start', weekStart).eq('user_id', user.id);
       if (error) throw error;
 
       const recipeIds = (data || []).filter(m => m.recipe_id).map(m => m.recipe_id!);
       let recipesMap: Record<string, RecipeWithIngredients> = {};
       if (recipeIds.length > 0) {
-        const { data: recipes } = await supabase
+        const { data: recipes, error: recipesError } = await supabase
           .from('recipes')
-          .select('id, title, ingredients')
+          .select('id, title, ingredients').eq('user_id', user.id)
           .in('id', recipeIds);
+        if (recipesError) throw recipesError;
         if (recipes) {
           recipesMap = Object.fromEntries(recipes.map(r => [r.id, r as unknown as RecipeWithIngredients]));
         }

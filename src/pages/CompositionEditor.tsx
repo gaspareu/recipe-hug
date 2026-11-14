@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { QueryError } from '@/components/ui/query-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -98,6 +99,7 @@ export default function CompositionEditor() {
   };
 
   if (id && existing.isLoading) return <MainLayout><p>Chargement de la composition…</p></MainLayout>;
+  if (id && existing.isError && !existing.data) return <MainLayout><QueryError message="Impossible de charger cette composition." onRetry={() => void existing.refetch()} retrying={existing.isFetching} /></MainLayout>;
   if (id && !existing.data) return <MainLayout><p>Composition introuvable.</p></MainLayout>;
 
   return (

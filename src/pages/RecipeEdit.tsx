@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { QueryError } from '@/components/ui/query-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { IngredientEditor } from '@/components/recipes/IngredientEditor';
 import { StepsEditor } from '@/components/recipes/StepsEditor';
@@ -47,7 +48,7 @@ export default function RecipeEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { data: recipe, isLoading } = useRecipe(id || '');
+  const { data: recipe, isLoading, isError, refetch, isFetching } = useRecipe(id || '');
   const updateRecipe = useUpdateRecipe();
   const deleteRecipe = useDeleteRecipe();
   const reduceMotion = useReducedMotion();
@@ -143,6 +144,10 @@ export default function RecipeEdit() {
         </div>
       </MainLayout>
     );
+  }
+
+  if (isError && !recipe) {
+    return <MainLayout><QueryError message="Impossible de charger cette recette." onRetry={() => void refetch()} retrying={isFetching} /></MainLayout>;
   }
 
   if (!recipe) {

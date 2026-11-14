@@ -35,8 +35,8 @@ beforeEach(() => {
 describe("ProtectedRoute", () => {
   it("affiche un indicateur de chargement tant que l'auth se résout", () => {
     mockAuth.loading = true;
-    const { container } = renderProtected();
-    expect(container.querySelector(".animate-spin")).toBeInTheDocument();
+    renderProtected();
+    expect(screen.getByRole("status")).toHaveTextContent("Vérification de la session…");
     expect(screen.queryByText("Contenu protégé")).not.toBeInTheDocument();
   });
 

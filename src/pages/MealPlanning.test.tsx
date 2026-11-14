@@ -9,7 +9,9 @@ const fixtures = vi.hoisted(() => ({ recipes: [] as unknown[], compositions: [] 
   id: 'repas-1', day_of_week: 0, meal_type: 'lunch', recipe_id: 'recette-1', composition_id: null as string | null,
   recipe_title: 'Soupe de légumes', custom_meal: null, notes: null,
 }] }));
-vi.mock('@/hooks/useRecipes', () => ({ useRecipes: () => ({ data: fixtures.recipes }) }));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
+vi.mock('@/hooks/useRecipeCards', () => ({ useRecipeCards: () => ({ data: { pages: [{ rows: [] }] } }) }));
+vi.mock('@/hooks/useCompositionRecipes', () => ({ useCompositionRecipes: () => ({ data: fixtures.recipes }) }));
 vi.mock('@/hooks/useCompositions', () => ({ useCompositions: () => ({ data: fixtures.compositions }) }));
 vi.mock('@/hooks/useMealPlans', () => ({
   useMealPlans: () => ({
