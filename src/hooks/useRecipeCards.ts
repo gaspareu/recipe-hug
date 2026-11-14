@@ -36,9 +36,13 @@ export function useRecipeCards(filters: RecipeCardFilters, enabled = true) {
       if (criteria.favoritesOnly) query = query.eq('is_favorite', true);
 
       if (search) {
-        // Échapper le motif PostgreSQL puis le littéral de la grammaire PostgREST.
-        const escapedRegex = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const quoted = '"' + escapedRegex.replace(/["\\]/g, '\\$&') + '"';
+        // Construire le littéral PostgREST et son motif PostgreSQL en un passage.
+        const encoded = search.replace(/[.*+?^${}()|[\]\\"]/g, character => {
+          if (character === '\\') return '\\\\\\\\';
+          if (character === '"') return '\\"';
+          return '\\\\' + character;
+        });
+        const quoted = '"' + encoded + '"';
         const columns = criteria.titleOnly ? ['title'] : ['title', 'ai_summary', 'recipe_ingredient_names'];
         query = query.or(columns.map(column => `${column}.imatch.${quoted}`).join(','));
       }
